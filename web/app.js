@@ -1,3 +1,5 @@
+import { applyTranslations, getLocale, setLocale, t } from "./i18n.js";
+
 const products = [
   { id: "p1", title: "ThinkPad X1 Carbon", category: "Computing", condition: "Very good", seller: "northstar", price: 320 },
   { id: "p2", title: "Mirrorless Camera Body", category: "Cameras", condition: "Good", seller: "silverframe", price: 410 },
@@ -9,34 +11,26 @@ const products = [
   { id: "p8", title: "Heavy Cotton Jacket", category: "Clothing", condition: "Very good", seller: "morrow", price: 80 }
 ];
 
-const state = { cart: [] };
+const state = { cart: [], locale: getLocale() };
 const productGrid = document.querySelector("#productGrid");
 const resultCount = document.querySelector("#resultCount");
 const cartCount = document.querySelector("#cartCount");
 const cartDialog = document.querySelector("#cartDialog");
 const cartItems = document.querySelector("#cartItems");
 const cartTotal = document.querySelector("#cartTotal");
+const languageSelect = document.querySelector("#languageSelect");
 
 function escapeHtml(value) {
   return value.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[ch]));
 }
 
 function renderProducts(list) {
-  resultCount.textContent = `${list.length} listings`;
+  resultCount.textContent = `${list.length} ${t("listings", state.locale)}`;
   productGrid.replaceChildren();
   for (const product of list) {
     const card = document.createElement("article");
     card.className = "product";
-    card.innerHTML = `
-      <div class="product-art" aria-hidden="true">MERCORA</div>
-      <div class="product-body">
-        <h3 class="product-title">${escapeHtml(product.title)}</h3>
-        <div class="product-meta">${escapeHtml(product.category)} · ${escapeHtml(product.condition)}<br>Seller: ${escapeHtml(product.seller)}</div>
-        <div class="product-footer">
-          <span class="price">€${product.price.toLocaleString("en-IE")}</span>
-          <button class="add" data-id="${product.id}" type="button">ADD</button>
-        </div>
-      </div>`;
+    card.innerHTML = `<div class="product-art" aria-hidden="true">MERCORA</div><div class="product-body"><h3 class="product-title">${escapeHtml(product.title)}</h3><div class="product-meta">${escapeHtml(product.category)} · ${escapeHtml(product.condition)}<br>${escapeHtml(t("seller", state.locale))}: ${escapeHtml(product.seller)}</div><div class="product-footer"><span class="price">€${product.price.toLocaleString(state.locale)}</span><button class="add" data-id="${product.id}" type="button">${escapeHtml(t("product.add", state.locale))}</button></div></div>`;
     productGrid.appendChild(card);
   }
 }
@@ -49,16 +43,23 @@ function renderCart() {
     total += item.price;
     const line = document.createElement("div");
     line.className = "cart-line";
-    line.innerHTML = `<span>${escapeHtml(item.title)}</span><strong>€${item.price}</strong>`;
+    line.innerHTML = `<span>${escapeHtml(item.title)}</span><strong>€${item.price.toLocaleString(state.locale)}</strong>`;
     cartItems.appendChild(line);
   }
-  cartTotal.textContent = `€${total.toLocaleString("en-IE")}`;
+  cartTotal.textContent = `€${total.toLocaleString(state.locale)}`;
   if (!state.cart.length) {
     const empty = document.createElement("p");
     empty.className = "muted";
-    empty.textContent = "Your cart is empty.";
+    empty.textContent = t("cart.empty", state.locale);
     cartItems.appendChild(empty);
   }
+}
+
+function rerender() {
+  applyTranslations(state.locale);
+  languageSelect.value = state.locale;
+  renderProducts(products);
+  renderCart();
 }
 
 productGrid.addEventListener("click", (event) => {
@@ -91,5 +92,9 @@ document.querySelectorAll(".category").forEach((button) => {
   button.addEventListener("click", () => renderProducts(products.filter((item) => item.category === button.dataset.category)));
 });
 
-renderProducts(products);
-renderCart();
+languageSelect.addEventListener("change", () => {
+  state.locale = setLocale(languageSelect.value);
+  rerender();
+});
+
+rerender();
