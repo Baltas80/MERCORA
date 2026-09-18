@@ -56,6 +56,13 @@ function contentType(file) {
   return "application/octet-stream";
 }
 
+function sendJson(res, status, payload) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8"
+  });
+  return res.end(JSON.stringify(payload));
+}
+
 const server = http.createServer(async (req, res) => {
   for (const [name, value] of Object.entries(securityHeaders())) res.setHeader(name, value);
 
@@ -70,6 +77,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   const url = new URL(req.url ?? "/", "http://localhost");
+
+  if (url.pathname === "/api/healthz") {
+    return sendJson(res, 200, { status: "ok" });
+  }
+
+  if (url.pathname === "/api/version") {
+    return sendJson(res, 200, { service: "mercora", api: "v1" });
+  }
+
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
 
   if (requested.includes("..") || requested.includes("\\") || requested.includes("%")) {
