@@ -20,22 +20,29 @@ class HealthEndpointTests(unittest.TestCase):
         cls.server.server_close()
         cls.thread.join(timeout=2)
 
-    def request(self, path):
+    def request(self, path, headers=None):
         conn = HTTPConnection("127.0.0.1", self.server.server_port, timeout=2)
-        conn.request("GET", path)
+        conn.request("GET", path, headers=headers or {})
         response = conn.getresponse()
         body = response.read()
+        result = (response.status, json.loads(body), dict(response.getheaders()))
         conn.close()
-        return response.status, json.loads(body)
+        return result
 
     def test_health(self):
-        self.assertEqual(self.request("/healthz"), (200, {"status": "ok"}))
+        status, body, headers = self.request("/healthz")
+        self.assertEqual((status, body), (200, {"status": "ok"}))
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(headers["X-Frame-Options"], "DENY")
 
     def test_readiness(self):
-        self.assertEqual(self.request("/readyz"), (200, {"status": "ready"}))
+        status, body, _ = self.request("/readyz")
+        self.assertEqual((status, body), (200, {"status": "ready"}))
 
     def test_unknown_path(self):
-        self.assertEqual(self.request("/unknown"), (404, {"error": "not_found"}))
+        status, body, _ = self.request("/unknown")
+        self.assertEqual((status, body), (404, {"error": "not_found"}))
 
 
 if __name__ == "__main__":
