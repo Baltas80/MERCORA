@@ -1,0 +1,13 @@
+{
+  "name": "mercora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Privacy-first second-hand marketplace core for a Tor Onion Service.",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
