@@ -44,6 +44,14 @@ jobs:
           POSTGRES_PASSWORD: ci-only-invalid-placeholder
         run: docker compose config --quiet
 
+      - name: Install application dependencies
+        shell: bash
+        working-directory: app
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
+          python3 -m pip check
+
       - name: Test application
         shell: bash
         run: python3 -m unittest discover -s app -p 'test_*.py' -v
@@ -51,6 +59,23 @@ jobs:
       - name: Build application container
         shell: bash
         run: docker build --file app/Dockerfile --tag mercora-app:ci app
+
+      - name: Validate database migrations
+        shell: bash
+        env:
+          POSTGRES_PASSWORD: ci-only-invalid-placeholder
+        run: |
+          set -euo pipefail
+          trap 'docker compose down -v' EXIT
+          docker compose up -d postgres
+          for _ in $(seq 1 30); do
+            if docker compose exec -T postgres pg_isready -U mercora -d mercora >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker compose exec -T postgres psql -U mercora -d mercora < db/migrations/001_initial.sql
+          docker compose exec -T postgres psql -U mercora -d mercora < db/migrations/002_authentication.sql
 
       - name: Check repository hygiene
         shell: bash
