@@ -1,6 +1,5 @@
 import http from "node:http";
 import { readFile } from "node:fs/promises";
-import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,7 +24,7 @@ function securityHeaders() {
       "base-uri 'none'",
       "form-action 'self'",
       "frame-ancestors 'none'",
-      "object-src 'none'
+      "object-src 'none'"
     ].join("; "),
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
@@ -36,8 +35,6 @@ function securityHeaders() {
 }
 
 function clientKey(req) {
-  // Do not trust X-Forwarded-For for identity or logging.
-  // Behind Tor, the application is intentionally bound to loopback.
   return req.socket.remoteAddress ?? "local";
 }
 
@@ -56,27 +53,24 @@ function contentType(file) {
   if (file.endsWith(".html")) return "text/html; charset=utf-8";
   if (file.endsWith(".css")) return "text/css; charset=utf-8";
   if (file.endsWith(".js")) return "text/javascript; charset=utf-8";
-  if (file.endsWith(".json")) return "application/json; charset=utf-8";
   return "application/octet-stream";
 }
 
 const server = http.createServer(async (req, res) => {
-  const headers = securityHeaders();
-  for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
+  for (const [name, value] of Object.entries(securityHeaders())) res.setHeader(name, value);
 
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(405, { Allow: "GET, HEAD" });
     return res.end();
   }
 
-  const key = clientKey(req);
-  if (!rateAllowed(key)) {
+  if (!rateAllowed(clientKey(req))) {
     res.writeHead(429, { "Retry-After": "60" });
     return res.end("Too Many Requests");
   }
 
   const url = new URL(req.url ?? "/", "http://localhost");
-  let requested = url.pathname === "/" ? "/index.html" : url.pathname;
+  const requested = url.pathname === "/" ? "/index.html" : url.pathname;
 
   if (requested.includes("..") || requested.includes("\\") || requested.includes("%")) {
     res.writeHead(400);
@@ -108,6 +102,5 @@ setInterval(() => {
 }, WINDOW_MS).unref();
 
 server.listen(PORT, HOST, () => {
-  const fingerprint = createHash("sha256").update(randomUUID()).digest("hex").slice(0, 12);
-  console.log(`MERCORA listening on http://${HOST}:${PORT} (process=${fingerprint})`);
+  console.log(`MERCORA listening on http://${HOST}:${PORT}`);
 });
