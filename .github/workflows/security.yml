@@ -68,14 +68,23 @@ jobs:
           set -euo pipefail
           trap 'docker compose down -v' EXIT
           docker compose up -d postgres
+          ready=0
           for _ in $(seq 1 30); do
             if docker compose exec -T postgres pg_isready -U mercora -d mercora >/dev/null 2>&1; then
+              ready=1
               break
             fi
             sleep 2
           done
-          docker compose exec -T postgres psql -U mercora -d mercora < db/migrations/001_initial.sql
-          docker compose exec -T postgres psql -U mercora -d mercora < db/migrations/002_authentication.sql
+          test "$ready" -eq 1
+          for migration in db/migrations/*.sql; do
+            echo "Applying $migration"
+            docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U mercora -d mercora < "$migration"
+          done
+          docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U mercora -d mercora -c "\dt"
+          docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U mercora -d mercora -c "\d listing_inventory"
+          docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U mercora -d mercora -c "\d fee_policies"
+          docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U mercora -d mercora -c "\d order_fee_entries"
 
       - name: Check repository hygiene
         shell: bash
@@ -87,6 +96,9 @@ jobs:
           test -f docs/ARCHITECTURE.md
           test -f docs/DEPENDENCY_POLICY.md
           test -f docs/AUTHENTICATION.md
+          test -f docs/FEES_AND_CHECKOUT.md
           test ! -f app/schema.sql
           test -f db/migrations/001_initial.sql
           test -f db/migrations/002_authentication.sql
+          test -f db/migrations/003_inventory_orders_fees.sql
+          test -f db/migrations/004_inventory_backfill_fee_ledger.sql
