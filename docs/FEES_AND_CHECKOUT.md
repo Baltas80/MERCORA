@@ -1,0 +1,52 @@
+# MERCORA fees and checkout integrity
+
+## Fee model
+
+MERCORA supports two independent platform commission rates:
+
+- Buyer commission.
+- Seller commission.
+
+The rates are represented as integer basis points (bps), where 100 bps = 1%.
+
+No fee percentage is hard-coded into application logic. A versioned fee policy is stored separately so historical orders retain the exact policy that was applied at checkout.
+
+For each order, the system must persist:
+
+- fee policy version;
+- buyer fee amount;
+- seller fee amount;
+- subtotal;
+- buyer total;
+- seller net amount.
+
+Fee amounts are calculated server-side in integer minor currency units. Floating-point arithmetic is prohibited for monetary calculations.
+
+## Important product decision
+
+The actual buyer and seller commission percentages are not set yet. They must be approved before production payment activation and then captured by policy version.
+
+Changing a future commission must never rewrite the economics of an existing order.
+
+## Checkout invariants
+
+1. Inventory reservation and order creation occur inside a database transaction.
+2. Inventory rows are locked before availability is committed.
+3. The client never supplies the authoritative fee amount.
+4. The client never supplies the authoritative order total.
+5. The server calculates all monetary amounts.
+6. Payment confirmation comes from the payment adapter/node, never from browser input.
+7. A retry of the same checkout request must be idempotent.
+8. Failed or expired payment intents release reservations according to an explicit state transition.
+9. Settlement cannot proceed against an order whose payment state is unverified.
+10. Seller fee accounting and buyer fee accounting remain separate ledger entries.
+
+## Concurrency threat model
+
+Two concurrent buyers attempting to reserve the final unit must not both succeed.
+
+The intended transaction uses row-level locking with SELECT ... FOR UPDATE and only decrements available inventory after the locked row is verified.
+
+## Privacy
+
+The order model does not require client IP or user-agent fields. Payment metadata must be kept separate from the buyer account model and limited to what reconciliation and legal obligations require.
