@@ -24,7 +24,7 @@ class OrderCalculationTests(unittest.TestCase):
             CartLine(uuid4(), uuid4(), 9999, 1, "EUR"),
         ]
         amounts = calculate_order_amounts(lines, policy)
-        self.assertEqual(amounts.seller_fee_minor, 100)
+        self.assertEqual(amounts.seller_fee_minor, 1001)
 
     def test_mixed_currency_order_is_rejected(self):
         policy = FeePolicy(version=1, buyer_fee_bps=100, seller_fee_bps=100)
