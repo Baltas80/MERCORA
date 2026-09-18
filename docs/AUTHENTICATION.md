@@ -20,21 +20,19 @@
 - Sessions have an absolute expiration and an explicit revocation field.
 - The database does not store client IP addresses or user-agent strings in the session record.
 
-## HTTP boundary requirements
+## HTTP boundary
 
-The eventual browser-facing API must add, at minimum:
+The current API exposes `/auth/register`, `/auth/login`, `/auth/me` and `/auth/logout` through FastAPI.
 
-- 'HttpOnly' session cookies;
-- 'Secure' cookies in production;
-- 'SameSite=Strict' where compatible with the application flow;
-- CSRF protection for every cookie-authenticated state change;
-- generic login failure responses;
-- account/login rate limiting outside the database transaction;
-- session rotation after authentication and privilege changes;
-- forced revocation for password reset and security events;
-- no authentication secrets in URLs.
+- Session cookies are `HttpOnly`, `Secure` and `SameSite=Strict`.
+- State-changing cookie-authenticated requests require a double-submit CSRF token.
+- Login failures use a generic response to avoid account-existence disclosure through the authentication result.
+- Login attempts are rate-limited outside the database transaction.
+- A valid pre-existing session is revoked when a new successful login is established for that account, preventing session fixation through reuse of an old credential.
+- Authentication secrets are never accepted through URLs.
+- OpenAPI/interactive documentation is disabled on the deployed application boundary.
 
-These controls are requirements, not claims about the current prototype server.
+The prototype rate limiter is process-local. Production deployment must replace it with shared, bounded state (for example Redis) so limits remain effective across replicas and restarts.
 
 ## Authorization
 
