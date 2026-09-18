@@ -28,5 +28,5 @@ ALTER TABLE orders
     CHECK (char_length(idempotency_key) BETWEEN 16 AND 128);
 
 ALTER TABLE order_items
-    ADD CONSTRAINT order_items_currency_consistency_check
+    ADD CONSTRAINT order_items_title_length_check
     CHECK (char_length(title_snapshot) BETWEEN 1 AND 500);
