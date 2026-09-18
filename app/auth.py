@@ -24,10 +24,9 @@ class AuthenticatedAccount:
 def validate_pseudonym(pseudonym: str) -> str:
     if not isinstance(pseudonym, str):
         raise ValueError("invalid_pseudonym")
-    value = pseudonym.strip()
-    if not PSEUDONYM_RE.fullmatch(value):
+    if not PSEUDONYM_RE.fullmatch(pseudonym):
         raise ValueError("invalid_pseudonym")
-    return value
+    return pseudonym
 
 
 def validate_password(password: str) -> str:
@@ -69,8 +68,7 @@ def register_account(conn, pseudonym: str, password: str) -> AuthenticatedAccoun
 def authenticate_account(conn, pseudonym: str, password: str) -> AuthenticatedAccount | None:
     if not isinstance(pseudonym, str) or not isinstance(password, str):
         return None
-    value = pseudonym.strip()
-    if not PSEUDONYM_RE.fullmatch(value) or not password or len(password) > MAX_PASSWORD_LENGTH:
+    if not PSEUDONYM_RE.fullmatch(pseudonym) or not password or len(password) > MAX_PASSWORD_LENGTH:
         return None
 
     with conn.cursor() as cur:
@@ -81,7 +79,7 @@ def authenticate_account(conn, pseudonym: str, password: str) -> AuthenticatedAc
             WHERE lower(pseudonym) = lower(%s)
             LIMIT 1
             """,
-            (value,),
+            (pseudonym,),
         )
         row = cur.fetchone()
 
@@ -93,7 +91,8 @@ def authenticate_account(conn, pseudonym: str, password: str) -> AuthenticatedAc
         return None
     if status != "active":
         return None
-    return AuthenticatedAccount(UUID(account_id), stored_pseudonym, role)
+    normalized_id = account_id if isinstance(account_id, UUID) else UUID(account_id)
+    return AuthenticatedAccount(normalized_id, stored_pseudonym, role)
 
 
 def create_session(conn, account_id: UUID, ttl_seconds: int = DEFAULT_SESSION_TTL_SECONDS) -> str:
@@ -133,7 +132,8 @@ def resolve_session(conn, raw_token: str) -> AuthenticatedAccount | None:
         row = cur.fetchone()
     if row is None:
         return None
-    return AuthenticatedAccount(UUID(row[0]), row[1], row[2])
+    account_id = row[0] if isinstance(row[0], UUID) else UUID(row[0])
+    return AuthenticatedAccount(account_id, row[1], row[2])
 
 
 def revoke_session(conn, raw_token: str) -> None:
