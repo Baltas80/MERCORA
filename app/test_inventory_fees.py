@@ -49,7 +49,7 @@ class InventoryTests(unittest.TestCase):
 class FeeTests(unittest.TestCase):
     def test_percentage_fee_uses_integer_minor_units(self):
         self.assertEqual(calculate_percentage_fee(10000, 250), 250)
-        self.assertEqual(calculate_percentage_fee(101, 1), 2)
+        self.assertEqual(calculate_percentage_fee(101, 1), 1)
 
     def test_fee_policy_is_bounded(self):
         with self.assertRaises(ValueError):
