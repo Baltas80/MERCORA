@@ -11,6 +11,10 @@ COPY --chown=mercora:mercora db.py ./db.py
 COPY --chown=mercora:mercora domain.py ./domain.py
 COPY --chown=mercora:mercora passwords.py ./passwords.py
 COPY --chown=mercora:mercora auth.py ./auth.py
+COPY --chown=mercora:mercora inventory.py ./inventory.py
+COPY --chown=mercora:mercora fees.py ./fees.py
+COPY --chown=mercora:mercora orders.py ./orders.py
+COPY --chown=mercora:mercora checkout.py ./checkout.py
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
