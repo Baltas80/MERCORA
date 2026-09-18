@@ -136,6 +136,23 @@ def resolve_session(conn, raw_token: str) -> AuthenticatedAccount | None:
     return AuthenticatedAccount(account_id, row[1], row[2])
 
 
+def touch_session(conn, raw_token: str) -> None:
+    """Update activity metadata without extending the absolute expiry."""
+    if not isinstance(raw_token, str) or len(raw_token) > 128:
+        return
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE sessions
+            SET last_seen_at = now()
+            WHERE token_hash = %s
+              AND revoked_at IS NULL
+              AND expires_at > now()
+            """,
+            (_token_hash(raw_token),),
+        )
+
+
 def revoke_session(conn, raw_token: str) -> None:
     if not isinstance(raw_token, str) or not raw_token:
         return
@@ -149,3 +166,19 @@ def revoke_session(conn, raw_token: str) -> None:
             """,
             (_token_hash(raw_token),),
         )
+
+
+def revoke_all_sessions(conn, account_id: UUID) -> int:
+    """Revoke every active session, e.g. after a credential/security reset."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE sessions
+            SET revoked_at = now()
+            WHERE account_id = %s
+              AND revoked_at IS NULL
+              AND expires_at > now()
+            """,
+            (account_id,),
+        )
+        return int(cur.rowcount)
