@@ -16,6 +16,7 @@ COPY --chown=mercora:mercora fees.py ./fees.py
 COPY --chown=mercora:mercora orders.py ./orders.py
 COPY --chown=mercora:mercora checkout.py ./checkout.py
 COPY --chown=mercora:mercora rate_limit.py ./rate_limit.py
+COPY --chown=mercora:mercora payments.py ./payments.py
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
