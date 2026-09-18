@@ -5,7 +5,8 @@
   "description": "Privacy-first second-hand marketplace core for a Tor Onion Service.",
   "type": "module",
   "scripts": {
-    "start": "node server/server.js"
+    "start": "node server/server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
