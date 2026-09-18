@@ -1,0 +1,61 @@
+name: Security baseline
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-security:
+    name: Repository security checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect committed secret-like files
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden='(^|/)(\.env|.*\.(pem|key|seed|secret))$|(^|/)private_key$|(^|/)authorized_clients/.*\.auth$'
+          if git ls-files | grep -E "$forbidden"; then
+            echo "Forbidden secret-like file is tracked by git."
+            exit 1
+          fi
+
+      - name: Detect obvious hard-coded credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AKIA[0-9A-Z]{16}|postgres(ql)?://[^[:space:]]+:[^@[:space:]]+@' -- ':!docs/THREAT-MODEL.md' ':!docs/SECURITY_MODEL.md'; then
+            echo "Potential hard-coded credential detected. Review the match before merging."
+            exit 1
+          fi
+
+      - name: Validate Docker Compose configuration
+        shell: bash
+        env:
+          POSTGRES_PASSWORD: ci-only-invalid-placeholder
+        run: docker compose config --quiet
+
+      - name: Test application
+        shell: bash
+        run: python3 -m unittest discover -s app -p 'test_*.py'
+
+      - name: Build application container
+        shell: bash
+        run: docker build --file app/Dockerfile --tag mercora-app:ci app
+
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -f SECURITY.md
+          test -f docs/THREAT-MODEL.md
+          test -f docs/ARCHITECTURE.md
+          test -f docs/DEPENDENCY_POLICY.md

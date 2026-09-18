@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.git-credentials
+.github
+node_modules
+__pycache__
+*.pyc
+*.pyo
+*.log
+coverage
+.pytest_cache
+.mypy_cache
+.ruff_cache
