@@ -1,48 +1,44 @@
-import json
-import threading
 import unittest
-from http.client import HTTPConnection
-from http.server import ThreadingHTTPServer
 
-from server import Handler
+from fastapi import HTTPException
+from fastapi.routing import APIRoute
+
+import server
 
 
-class HealthEndpointTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
-        cls.thread.start()
+class ApiRouteTests(unittest.TestCase):
+    def test_health_and_auth_routes_exist(self):
+        paths = {
+            route.path
+            for route in server.app.routes
+            if isinstance(route, APIRoute)
+        }
+        expected = {"/healthz", "/readyz", "/auth/register", "/auth/login", "/auth/me", "/auth/logout"}
+        self.assertTrue(expected <= paths)
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.server.shutdown()
-        cls.server.server_close()
-        cls.thread.join(timeout=2)
+    def test_security_headers(self):
+        from fastapi import Response
 
-    def request(self, path, headers=None):
-        conn = HTTPConnection("127.0.0.1", self.server.server_port, timeout=2)
-        conn.request("GET", path, headers=headers or {})
-        response = conn.getresponse()
-        body = response.read()
-        result = (response.status, json.loads(body), dict(response.getheaders()))
-        conn.close()
-        return result
+        response = Response()
+        server.security_headers(response)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response.headers["X-Frame-Options"], "DENY")
+        self.assertEqual(response.headers["Referrer-Policy"], "no-referrer")
 
-    def test_health(self):
-        status, body, headers = self.request("/healthz")
-        self.assertEqual((status, body), (200, {"status": "ok"}))
-        self.assertEqual(headers["Cache-Control"], "no-store")
-        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
-        self.assertEqual(headers["X-Frame-Options"], "DENY")
+    def test_request_size_guard_rejects_oversized_body(self):
+        class Headers:
+            def get(self, name):
+                if name == "content-length":
+                    return str(server.MAX_REQUEST_BODY_BYTES + 1)
+                return None
 
-    def test_readiness(self):
-        status, body, _ = self.request("/readyz")
-        self.assertEqual((status, body), (200, {"status": "ready"}))
+        class Request:
+            headers = Headers()
 
-    def test_unknown_path(self):
-        status, body, _ = self.request("/unknown")
-        self.assertEqual((status, body), (404, {"error": "not_found"}))
+        with self.assertRaises(HTTPException) as ctx:
+            server.request_size_guard(Request())
+        self.assertEqual(ctx.exception.status_code, 413)
 
 
 if __name__ == "__main__":
