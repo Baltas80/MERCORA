@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.seed
+*.secret
+
+# Tor private service material
+**/private_key
+**/authorized_clients/*.auth
+**/onion_service_keys/
+
+# Databases and local state
+*.db
+*.sqlite
+*.sqlite3
+data/
+postgres-data/
+
+# Build output
+.next/
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
