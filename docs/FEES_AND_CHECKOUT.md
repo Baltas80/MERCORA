@@ -20,6 +20,10 @@ For each order, the system must persist:
 - buyer total;
 - seller net amount.
 
+The buyer commission is added to the amount charged to the buyer. The seller commission is deducted from the seller's settlement amount. These are economically distinct charges and must remain separately visible and auditable.
+
+Seller commission is calculated from each order line before aggregation. Buyer commission is calculated from the order subtotal.
+
 Fee amounts are calculated server-side in integer minor currency units. Floating-point arithmetic is prohibited for monetary calculations.
 
 ## Important product decision
@@ -46,6 +50,12 @@ Changing a future commission must never rewrite the economics of an existing ord
 Two concurrent buyers attempting to reserve the final unit must not both succeed.
 
 The intended transaction uses row-level locking with SELECT ... FOR UPDATE and only decrements available inventory after the locked row is verified.
+
+When multiple listings are reserved in one order, the service should lock them in deterministic order to reduce deadlock risk.
+
+## Inventory authority
+
+After migration 004, listing_inventory is the authoritative inventory state. The legacy listings.quantity column exists only as a migration seed value and must not be used by checkout logic.
 
 ## Privacy
 
