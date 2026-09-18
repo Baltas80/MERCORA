@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="MERCORA — private second-hand marketplace">
+  <title>MERCORA — Marketplace</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="MERCORA home">MERCORA</a>
+      <form id="searchForm" class="search" role="search">
+        <input id="searchInput" name="q" type="search" maxlength="120" placeholder="Search products..." autocomplete="off">
+        <button type="submit">SEARCH</button>
+      </form>
+      <nav class="nav">
+        <a href="#categories">Categories</a>
+        <a href="#sell">Sell</a>
+        <a href="#wallet">Wallet</a>
+        <a href="#account">Account</a>
+        <button id="cartButton" class="cart-button" type="button">Cart <span id="cartCount">0</span></button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">PRIVATE MARKETPLACE · ONION SERVICE</p>
+          <h1>Buy. Sell. Keep control.</h1>
+          <p class="hero-copy">A second-hand marketplace built around privacy, strong security boundaries and a clean buying experience.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#catalog">Browse listings</a>
+            <a class="button button-ghost" href="#sell">List an item</a>
+          </div>
+        </div>
+        <aside class="system-panel">
+          <div class="panel-title">SYSTEM STATUS</div>
+          <div class="status-row"><span>Onion service</span><strong>READY</strong></div>
+          <div class="status-row"><span>External trackers</span><strong>NONE</strong></div>
+          <div class="status-row"><span>Payments</span><strong>BTC · XMR · LTC</strong></div>
+        </aside>
+      </section>
+
+      <section id="categories" class="section">
+        <div class="section-head">
+          <div><p class="eyebrow">EXPLORE</p><h2>Categories</h2></div>
+        </div>
+        <div class="category-grid">
+          <button class="category" data-category="Electronics">Electronics</button>
+          <button class="category" data-category="Computing">Computing</button>
+          <button class="category" data-category="Cameras">Cameras</button>
+          <button class="category" data-category="Home">Home</button>
+          <button class="category" data-category="Collectibles">Collectibles</button>
+          <button class="category" data-category="Tools">Tools</button>
+          <button class="category" data-category="Clothing">Clothing</button>
+          <button class="category" data-category="Other">Other</button>
+        </div>
+      </section>
+
+      <section id="catalog" class="section">
+        <div class="section-head">
+          <div><p class="eyebrow">CURATED LISTINGS</p><h2>Featured</h2></div>
+          <span id="resultCount" class="muted"></span>
+        </div>
+        <div id="productGrid" class="product-grid"></div>
+      </section>
+
+      <section id="wallet" class="section split">
+        <div>
+          <p class="eyebrow">MERCORA CUSTODY</p>
+          <h2>Wallets & payments</h2>
+          <p class="muted">The interface is prepared for isolated payment adapters. No production keys or wallet secrets are stored in the application source.</p>
+        </div>
+        <div class="wallet-strip">
+          <span>BTC</span><span>XMR</span><span>LTC</span>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>MERCORA</span>
+      <span>Privacy-first marketplace</span>
+    </footer>
+  </div>
+
+  <dialog id="cartDialog">
+    <div class="dialog-head"><h2>Your cart</h2><button id="closeCart" type="button">Close</button></div>
+    <div id="cartItems"></div>
+    <div class="cart-total"><span>Total</span><strong id="cartTotal">€0</strong></div>
+    <button id="checkoutButton" class="button button-primary" type="button">Continue to checkout</button>
+  </dialog>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
