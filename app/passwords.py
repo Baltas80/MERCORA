@@ -1,7 +1,13 @@
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
 
-_hasher = PasswordHasher()
+_hasher = PasswordHasher(
+    time_cost=3,
+    memory_cost=65536,
+    parallelism=4,
+    hash_len=32,
+    salt_len=16,
+)
 
 
 def hash_password(password: str) -> str:
@@ -11,6 +17,8 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, encoded_hash: str) -> bool:
+    if not isinstance(password, str) or not isinstance(encoded_hash, str):
+        return False
     if not password or not encoded_hash:
         return False
     try:
