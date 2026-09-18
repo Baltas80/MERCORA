@@ -10,9 +10,9 @@
 ## Phase 1 — Application core
 - [ ] Frontend shell and dark marketplace UI
 - [ ] Backend API skeleton
-- [ ] PostgreSQL schema and migrations
+- [x] PostgreSQL schema and migrations
 - [ ] Authentication and sessions
-- [ ] Authorization model
+- [x] Initial authorization model
 
 ## Phase 2 — Marketplace
 - [ ] Seller profiles
