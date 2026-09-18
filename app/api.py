@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import secrets
-from uuid import UUID
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -52,14 +51,13 @@ async def security_headers(request: Request, call_next):
 
 
 def _set_auth_cookies(response: Response, session_token: str) -> None:
-    secure = True
     csrf_token = secrets.token_urlsafe(32)
     response.set_cookie(
         SESSION_COOKIE,
         session_token,
         max_age=SESSION_TTL_SECONDS,
         httponly=True,
-        secure=secure,
+        secure=True,
         samesite="strict",
         path="/",
     )
@@ -68,7 +66,7 @@ def _set_auth_cookies(response: Response, session_token: str) -> None:
         csrf_token,
         max_age=SESSION_TTL_SECONDS,
         httponly=False,
-        secure=secure,
+        secure=True,
         samesite="strict",
         path="/",
     )
@@ -114,29 +112,25 @@ async def register(credentials: Credentials):
 
 
 @app.post("/auth/login")
-async def login(credentials: Credentials, response: Response):
+async def login(request: Request, credentials: Credentials, response: Response):
     try:
         pseudonym = validate_pseudonym(credentials.pseudonym)
         password = validate_password(credentials.password)
     except ValueError:
         return _generic_auth_failure()
 
-    limiter_key = pseudonym.casefold()
-    if not login_limiter.allow(limiter_key):
+    if not login_limiter.allow(pseudonym.casefold()):
         return JSONResponse({"error": "too_many_attempts"}, status_code=429, headers={"Retry-After": "60"})
 
     with connection() as conn:
         account = authenticate_account(conn, pseudonym, password)
         if account is None:
             return _generic_auth_failure()
-        old_token = None
-        # A prior valid session is rotated away before issuing a new credential.
-        # The raw token is never persisted; only its digest is stored by auth.py.
+        previous_token = request.cookies.get(SESSION_COOKIE)
+        if previous_token and resolve_session(conn, previous_token) is not None:
+            revoke_session(conn, previous_token)
         session_token = create_session(conn, account.id, SESSION_TTL_SECONDS)
 
-    if old_token:
-        with connection() as conn:
-            revoke_session(conn, old_token)
     _set_auth_cookies(response, session_token)
     return {"id": str(account.id), "pseudonym": account.pseudonym, "role": account.role}
 
