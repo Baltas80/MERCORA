@@ -8,6 +8,9 @@ RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
 
 COPY --chown=mercora:mercora server.py ./server.py
 COPY --chown=mercora:mercora db.py ./db.py
+COPY --chown=mercora:mercora domain.py ./domain.py
+COPY --chown=mercora:mercora passwords.py ./passwords.py
+COPY --chown=mercora:mercora auth.py ./auth.py
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
