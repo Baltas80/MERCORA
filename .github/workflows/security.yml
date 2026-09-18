@@ -13,9 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Detect committed secret-like files
         shell: bash
@@ -31,7 +32,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -nE 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AKIA[0-9A-Z]{16}|postgres(ql)?://[^[:space:]]+:[^@[:space:]]+@' -- ':!docs/THREAT-MODEL.md' ':!docs/SECURITY_MODEL.md'; then
+          pattern='BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AKIA[0-9A-Z]{16}|postgres(ql)?://[^[:space:]]+:[^$@[:space:]]+@'
+          if git grep -nE "$pattern" -- ':!docs/THREAT-MODEL.md' ':!docs/SECURITY_MODEL.md'; then
             echo "Potential hard-coded credential detected. Review the match before merging."
             exit 1
           fi
@@ -44,7 +46,7 @@ jobs:
 
       - name: Test application
         shell: bash
-        run: python3 -m unittest discover -s app -p 'test_*.py'
+        run: python3 -m unittest discover -s app -p 'test_*.py' -v
 
       - name: Build application container
         shell: bash
@@ -59,3 +61,7 @@ jobs:
           test -f docs/THREAT-MODEL.md
           test -f docs/ARCHITECTURE.md
           test -f docs/DEPENDENCY_POLICY.md
+          test -f docs/AUTHENTICATION.md
+          test ! -f app/schema.sql
+          test -f db/migrations/001_initial.sql
+          test -f db/migrations/002_authentication.sql
