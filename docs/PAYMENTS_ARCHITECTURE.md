@@ -32,6 +32,14 @@ A payment is not considered confirmed because a transaction ID was submitted by 
 
 The adapter must obtain payment state from its authoritative server-side node/service and apply the required confirmation policy before settlement.
 
+## Seller escrow boundary
+
+For new sellers, server-verified payment confirmation is not sufficient to release the seller's settlement.
+
+When an applicable escrow policy is active, the payment-confirmed transaction must atomically create the seller escrow hold(s). The payout layer may only release seller funds after the escrow state reaches released.
+
+Escrow is a settlement control, not a replacement for payment confirmation and not a buyer-facing wallet balance.
+
 ## Fees
 
 Platform commissions are independent from blockchain/network fees.
@@ -44,6 +52,8 @@ MERCORA has two separate platform charges:
 The applicable percentages are represented as versioned basis-point policies and are snapshotted into the order.
 
 Actual production commission rates remain a product/legal decision and are intentionally not hard-coded.
+
+The seller escrow amount is the seller net after the seller commission. The buyer commission never enters seller escrow.
 
 ## Custody boundary
 
@@ -59,7 +69,7 @@ The application receives only the minimum information needed to create and verif
 
 ## Recovery and reconciliation
 
-Every balance-affecting payment transition must be:
+Every balance-affecting payment and escrow transition must be:
 
 - idempotent;
 - auditable;
@@ -67,7 +77,7 @@ Every balance-affecting payment transition must be:
 - recoverable after restart;
 - reconciliable against authoritative node state.
 
-Emergency freeze must fail closed: when payment state is uncertain, settlement remains blocked.
+Emergency freeze must fail closed: when payment or escrow state is uncertain, settlement remains blocked.
 
 ## Privacy
 

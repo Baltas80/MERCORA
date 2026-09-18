@@ -26,6 +26,22 @@ Seller commission is calculated from each order line before aggregation. Buyer c
 
 Fee amounts are calculated server-side in integer minor currency units. Floating-point arithmetic is prohibited for monetary calculations.
 
+## Seller escrow
+
+New sellers are protected by a separate seller-escrow policy.
+
+For a seller who has not yet reached the policy's successful-order threshold:
+
+- payment must still be server-verified normally;
+- the seller net settlement is held in escrow;
+- release is blocked until delivery/settlement conditions and the escrow delay are satisfied;
+- a dispute freezes the escrow;
+- release/refund is idempotent and auditable.
+
+The escrow policy is versioned separately from the platform fee policy. Changing either policy must not rewrite historical orders.
+
+The escrow model is documented in docs/ESCROW.md.
+
 ## Important product decision
 
 The actual buyer and seller commission percentages are not set yet. They must be approved before production payment activation and then captured by policy version.
@@ -44,6 +60,8 @@ Changing a future commission must never rewrite the economics of an existing ord
 8. Failed or expired payment intents release reservations according to an explicit state transition.
 9. Settlement cannot proceed against an order whose payment state is unverified.
 10. Seller fee accounting and buyer fee accounting remain separate ledger entries.
+11. For new sellers, server-verified payment confirmation and seller escrow creation occur atomically.
+12. A seller payout cannot bypass an applicable escrow row.
 
 ## Concurrency threat model
 
@@ -59,4 +77,4 @@ After migration 004, listing_inventory is the authoritative inventory state. The
 
 ## Privacy
 
-The order model does not require client IP or user-agent fields. Payment metadata must be kept separate from the buyer account model and limited to what reconciliation and legal obligations require.
+The order model does not require client IP or user-agent fields. Payment and escrow metadata must be kept separate from the buyer account model and limited to what reconciliation, dispute handling, security and applicable legal obligations require.

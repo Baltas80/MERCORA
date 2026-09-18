@@ -9,9 +9,9 @@
 
 ## Phase 1 — Application core
 - [ ] Frontend shell and dark marketplace UI
-- [ ] Backend API skeleton
+- [x] Backend API skeleton
 - [x] PostgreSQL schema and migrations
-- [ ] Authentication and sessions
+- [x] Authentication and sessions
 - [x] Initial authorization model
 
 ## Phase 2 — Marketplace
@@ -19,18 +19,22 @@
 - [ ] Listings and categories
 - [ ] Search and filtering
 - [ ] Cart and checkout
-- [ ] Orders and inventory
+- [x] Orders and inventory foundation
 - [ ] Ratings/reputation
 - [ ] Moderation and reporting
 - [ ] Messaging
 
-## Phase 3 — Payments
-- [ ] Payment adapter interface
+## Phase 3 — Payments and settlement
+- [x] Payment adapter interface
 - [ ] Bitcoin integration
 - [ ] Litecoin integration
 - [ ] Monero integration
-- [ ] Confirmation/state machine
+- [ ] Lightning integration
+- [x] Payment confirmation/state-machine foundation
+- [x] Seller escrow policy and ledger foundation
+- [ ] Transactional payment-confirmed -> escrow creation flow
 - [ ] Reconciliation and audit controls
+- [ ] Seller balance ledger and payout service
 
 ## Phase 4 — Tor and infrastructure
 - [ ] Hardened Onion Service deployment
@@ -47,5 +51,6 @@
 - [ ] DAST
 - [ ] Authentication/authorization abuse tests
 - [ ] Resource exhaustion tests
+- [ ] Escrow concurrency/idempotency tests
 - [ ] Tor-specific privacy review
 - [ ] Production readiness review
