@@ -4,8 +4,8 @@
 - [x] Secure repository baseline
 - [x] Security-first architecture
 - [x] Initial threat model
-- [ ] CI security gates
-- [ ] Dependency policy
+- [x] Initial CI security/repository gates
+- [x] Dependency policy
 
 ## Phase 1 — Application core
 - [ ] Frontend shell and dark marketplace UI
