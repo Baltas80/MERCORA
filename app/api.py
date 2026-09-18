@@ -83,12 +83,12 @@ def _generic_auth_failure() -> JSONResponse:
 
 
 @app.get("/healthz")
-async def healthz():
+def healthz():
     return {"status": "ok"}
 
 
 @app.get("/readyz")
-async def readyz():
+def readyz():
     try:
         with connection() as conn:
             with conn.cursor() as cur:
@@ -100,7 +100,7 @@ async def readyz():
 
 
 @app.post("/auth/register", status_code=status.HTTP_201_CREATED)
-async def register(credentials: Credentials):
+def register(credentials: Credentials):
     try:
         pseudonym = validate_pseudonym(credentials.pseudonym)
         password = validate_password(credentials.password)
@@ -112,7 +112,7 @@ async def register(credentials: Credentials):
 
 
 @app.post("/auth/login")
-async def login(request: Request, credentials: Credentials, response: Response):
+def login(request: Request, credentials: Credentials, response: Response):
     try:
         pseudonym = validate_pseudonym(credentials.pseudonym)
         password = validate_password(credentials.password)
@@ -136,7 +136,7 @@ async def login(request: Request, credentials: Credentials, response: Response):
 
 
 @app.get("/auth/me")
-async def me(request: Request):
+def me(request: Request):
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
         return JSONResponse({"error": "not_authenticated"}, status_code=401)
@@ -148,7 +148,7 @@ async def me(request: Request):
 
 
 @app.post("/auth/logout")
-async def logout(request: Request, response: Response):
+def logout(request: Request, response: Response):
     token = request.cookies.get(SESSION_COOKIE)
     if token and not _csrf_ok(request):
         return JSONResponse({"error": "csrf_failed"}, status_code=403)
