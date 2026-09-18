@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  security-events: write
 
 jobs:
   static-security:
@@ -18,7 +19,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE --exclude-dir=.git --exclude='*.md'             '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' .; then
+          if grep -RInE --exclude-dir=.git --exclude='*.md' \
+            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' .; then
             echo "Potential secret material detected."
             exit 1
           fi
@@ -42,5 +44,23 @@ jobs:
       - name: Check frontend syntax
         run: node --check web/app.js
 
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
       - name: Run unit tests
         run: npm test
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+      - uses: github/codeql-action/analyze@v3
