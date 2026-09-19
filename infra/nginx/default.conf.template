@@ -20,6 +20,14 @@ server {
   add_header Permissions-Policy "camera=(),geolocation=(),microphone=(),payment=(),usb=()" always;
   add_header Cache-Control "no-store" always;
 
+  location = /readyz {
+    return 404;
+  }
+
+  location ^~ /internal/ {
+    return 404;
+  }
+
   location / {
     root /usr/share/nginx/html;
     try_files $uri $uri/ @api;
