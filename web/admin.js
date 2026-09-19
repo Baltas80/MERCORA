@@ -12,6 +12,7 @@ const sections = {
   points: ["Points & levels", "Point ledger, level thresholds, rewards, deductions and eligibility."],
   payouts: ["Payout modes", "Standard escrow, limited early release and advance payout requests."],
   moderation: ["Moderation", "Reports, blocked listings, seller actions and review queues."],
+  disputes: ["Disputes", "Open cases, evidence, mediation, decisions, appeals and financial outcome status."],
   promos: ["Promotion codes", "Create, revoke and inspect seller-store promotion codes."],
   audit: ["Audit log", "Administrative decisions and security-relevant actions."],
   emergency: ["Emergency controls", "Fail-closed freeze/recovery workflow with independent authorization."]
