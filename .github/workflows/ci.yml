@@ -1,14 +1,15 @@
 name: MERCORA CI
+
 on:
   push:
     branches: [master, feat/mercora-canonical]
   pull_request:
-permissions:
-  contents: read
-  security-events: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     services:
       postgres:
         image: postgres:18-alpine
@@ -22,14 +23,22 @@ jobs:
           --health-interval 10s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://mercora:postgres@127.0.0.1:5432/mercora
-      MERCORA_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
-      MERCORA_PAYMENT_INGEST_SECRET: test-payment-secret
       MERCORA_ENV: development
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
+      - name: Generate ephemeral CI secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_ENV"
+          import base64, secrets
+          print("MERCORA_ENCRYPTION_KEY_B64=" + base64.b64encode(secrets.token_bytes(32)).decode())
+          print("MERCORA_PAYMENT_INGEST_SECRET=" + secrets.token_hex(32))
+          print("MERCORA_FINANCE_CALLBACK_SECRET=" + secrets.token_hex(32))
+          PY
       - name: Install
         run: pip install -r app/requirements.txt
       - name: Migration smoke test
@@ -42,6 +51,7 @@ jobs:
         run: PYTHONPATH=app python -m unittest discover -s app -p 'test_*.py'
       - name: HTTP security smoke test
         run: |
+          set -euo pipefail
           PYTHONPATH=app uvicorn app.server:app --host 127.0.0.1 --port 8090 >/tmp/mercora-api.log 2>&1 &
           PID=$!
           trap 'kill $PID 2>/dev/null || true' EXIT
@@ -59,9 +69,10 @@ jobs:
           test ! -e .env
           test ! -d tor/keys
       - name: Dependency audit
-        run: pip install pip-audit && pip-audit -r app/requirements.txt
+        run: pip install --no-cache-dir pip-audit && pip-audit -r app/requirements.txt
       - name: Backup and restore smoke test
         run: |
+          set -euo pipefail
           pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > /tmp/mercora.dump
           psql "$DATABASE_URL" -c "CREATE DATABASE mercora_restore"
           pg_restore --no-owner --no-privileges --dbname=postgresql://mercora:postgres@127.0.0.1:5432/mercora_restore /tmp/mercora.dump
@@ -70,8 +81,12 @@ jobs:
         run: docker build -f app/Dockerfile .
       - name: DAST smoke
         run: python app/dast_smoke.py http://127.0.0.1:8090
+
   codeql:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v3
