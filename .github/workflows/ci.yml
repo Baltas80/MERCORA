@@ -34,12 +34,12 @@ jobs:
         run: |
           set -euo pipefail
           values="$(python - <<'PY'
-import base64, secrets
-print(base64.b64encode(secrets.token_bytes(32)).decode())
-print(secrets.token_hex(32))
-print(secrets.token_hex(32))
-PY
-)"
+          import base64, secrets
+          print(base64.b64encode(secrets.token_bytes(32)).decode())
+          print(secrets.token_hex(32))
+          print(secrets.token_hex(32))
+          PY
+          )"
           mapfile -t secret_values <<< "$values"
           encryption_key="${secret_values[0]}"
           ingest_secret="${secret_values[1]}"
