@@ -36,7 +36,8 @@ def run_once()->int:
                                        WHERE status IN('awaiting_buyer','awaiting_seller')
                                          AND ((response_deadline IS NOT NULL AND response_deadline<=now())
                                            OR (decision_deadline IS NOT NULL AND decision_deadline<=now()))""")
-                    cur.execute("UPDATE jobs SET status='succeeded',updated_at=now() WHERE id=%s",(job_id,))
+                    delay = "1 minute" if job_type in {"expire_sessions","expire_promos"} else "30 seconds"
+                    cur.execute("UPDATE jobs SET status='queued',run_at=now()+%s::interval,locked_at=NULL,locked_by=NULL,last_error=NULL,updated_at=now() WHERE id=%s",(delay,job_id))
                 except Exception as exc:
                     cur.execute("UPDATE jobs SET status=CASE WHEN attempts>=5 THEN 'dead' ELSE 'queued' END,last_error=%s,run_at=now()+interval '5 minutes',updated_at=now() WHERE id=%s",(type(exc).__name__,job_id))
         conn.commit()

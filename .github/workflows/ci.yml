@@ -23,6 +23,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://mercora:postgres@127.0.0.1:5432/mercora
       MERCORA_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      MERCORA_PAYMENT_INGEST_SECRET: test-payment-secret
       MERCORA_ENV: development
     steps:
       - uses: actions/checkout@v4
@@ -35,8 +36,18 @@ jobs:
         run: PYTHONPATH=app python app/migrate.py
       - name: Python syntax
         run: python -m compileall -q app
-      - name: Unit tests
-        run: python -m unittest discover -s app -p 'test_*.py'
+      - name: JavaScript syntax
+        run: for f in web/*.js; do node --check "$f"; done
+      - name: Unit and integration tests
+        run: PYTHONPATH=app python -m unittest discover -s app -p 'test_*.py'
+      - name: HTTP security smoke test
+        run: |
+          PYTHONPATH=app uvicorn app.server:app --host 127.0.0.1 --port 8090 >/tmp/mercora-api.log 2>&1 &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 10); do curl -fsS http://127.0.0.1:8090/healthz >/dev/null && break; sleep 1; done
+          curl -fsSI http://127.0.0.1:8090/healthz | grep -qi 'x-content-type-options: nosniff'
+          curl -fsSI http://127.0.0.1:8090/healthz | grep -qi 'referrer-policy: no-referrer'
       - name: Secret pattern scan
         shell: bash
         run: |

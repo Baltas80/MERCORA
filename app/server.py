@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -17,14 +18,17 @@ from db import connection
 from dispute_policy import can_transition, valid_decision
 from fees import calculate_percentage_fee
 from inventory import commit_inventory_sale, reserve_inventory, release_inventory
-from ledger import customer_liability
+from ledger import customer_liability, create_balanced_transaction, ensure_ledger_account, create_balanced_transaction, ensure_ledger_account
 from payments import PaymentMethod, PaymentStatus, can_transition as payment_can_transition
 from recovery import use_recovery_code
 from security import audit, csrf_account, current_account, financial_open, guard_size, headers, permission_set, request_id, require_permission
 from seller_store import normalize_name, normalize_slug, promo_hash
 from settlement_service import confirm_payment_and_create_escrow
-from storage import MAX_BYTES, store_clean_image
+from storage import MAX_BYTES, store_upload
 from rate_limit import FixedWindowRateLimiter
+from mfa import generate_secret, provisioning_uri, verify_code, encrypt_secret, decrypt_secret
+from reconciliation import record_asset_reconciliation, all_assets_reconciled
+from risk import current_level
 
 app = FastAPI(title="MERCORA API", docs_url=None, redoc_url=None, openapi_url=None)
 COOKIE_SECURE = os.environ.get("MERCORA_ENV", "production") != "development"
@@ -108,8 +112,41 @@ class AdminActionIn(BaseModel):
     permission_code: str
     reason: str = Field(min_length=10, max_length=2000)
     step_up_password: str = Field(min_length=12, max_length=1024)
+    mfa_code: str | None = Field(default=None, min_length=6, max_length=6)
     resource_type: str | None = None
     resource_id: UUID | None = None
+
+class ApprovalIn(BaseModel):
+    mfa_code: str = Field(min_length=6, max_length=6)
+
+class MFAEnrollIn(BaseModel):
+    password: str = Field(min_length=12, max_length=1024)
+
+class WithdrawalIn(BaseModel):
+    asset_code: str = Field(min_length=3, max_length=3)
+    amount_atomic: int = Field(gt=0)
+    destination_ref: str = Field(min_length=8, max_length=512)
+    idempotency_key: str = Field(min_length=16, max_length=128)
+
+class PayoutIn(BaseModel):
+    asset_code: str = Field(min_length=3, max_length=3)
+    amount_atomic: int = Field(gt=0)
+    mode: str
+    idempotency_key: str = Field(min_length=16, max_length=128)
+
+class ReconcileIn(BaseModel):
+    asset_code: str = Field(min_length=3, max_length=3)
+    network: str = Field(min_length=2, max_length=64)
+    onchain_atomic: int = Field(ge=0)
+    internal_liability_atomic: int = Field(ge=0)
+
+class PromoIn(BaseModel):
+    benefit_type: str
+    benefit_asset_code: str | None = None
+    benefit_atomic: int | None = Field(default=None, gt=0)
+    benefit_percent: int | None = Field(default=None, ge=1, le=100)
+    max_uses: int = Field(default=1, ge=1, le=100000)
+    expires_at: datetime | None = None
 
 class EmergencyIn(BaseModel):
     reason: str = Field(min_length=10, max_length=2000)
@@ -429,6 +466,8 @@ async def create_quote(body: QuoteIn, request: Request, account: Annotated[Authe
     asset = body.asset_code.upper()
     with connection() as conn:
         with conn.cursor() as cur:
+            if not financial_open(cur):
+                raise HTTPException(503, "financial_operations_frozen")
             cur.execute("SELECT total_minor,currency FROM orders WHERE id=%s AND buyer_id=%s", (body.order_id, account.id))
             order = cur.fetchone()
             if not order: raise HTTPException(404, "order_not_found")
@@ -450,10 +489,12 @@ async def create_payment_intent(body: PaymentIntentIn, request: Request, account
     await csrf_account(request, account)
     with connection() as conn:
         with conn.cursor() as cur:
+            if not financial_open(cur):
+                raise HTTPException(503, "financial_operations_frozen")
             cur.execute("""SELECT id,order_id,account_id,asset_code,asset_atomic,valid_until FROM payment_quotes
                            WHERE id=%s AND account_id=%s""", (body.quote_id, account.id))
             q = cur.fetchone()
-            if not q or q[5] <= __import__('datetime').datetime.now(__import__('datetime').timezone.utc):
+            if not q or q[5] <= datetime.now(timezone.utc):
                 raise HTTPException(400, "quote_expired")
             cur.execute("SELECT id FROM payment_intents WHERE idempotency_key=%s", (body.idempotency_key,))
             existing = cur.fetchone()
@@ -644,11 +685,11 @@ async def upload_image(request:Request,account:Annotated[AuthenticatedAccount,De
     media=request.headers.get("content-type","").split(";")[0].lower()
     data=await request.body()
     if len(data)>MAX_BYTES: raise HTTPException(413,"upload_too_large")
-    try:key,size,digest=store_clean_image(data,media,"listing_image",STORAGE_ROOT)
+    try:key,size,digest,scan=store_upload(data,media,"listing_image",STORAGE_ROOT)
     except Exception as exc: raise HTTPException(400,"upload_rejected") from exc
     with connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("INSERT INTO uploads(owner_account_id,object_key,media_type,byte_size,sha256,purpose,scan_status) VALUES(%s,%s,%s,%s,%s,'listing_image','clean') RETURNING id",(account.id,key,media,size,digest))
+            cur.execute("INSERT INTO uploads(owner_account_id,object_key,media_type,byte_size,sha256,purpose,scan_status) VALUES(%s,%s,%s,%s,%s,'listing_image',%s) RETURNING id",(account.id,key,media,size,digest,scan))
             uid=cur.fetchone()[0]; conn.commit()
     return {"id":str(uid),"object_key":key}
 
@@ -747,6 +788,228 @@ async def notifications(account:Annotated[AuthenticatedAccount,Depends(current_a
         with conn.cursor() as cur:
             cur.execute("SELECT id,type,payload,read_at,created_at FROM notifications WHERE account_id=%s ORDER BY created_at DESC LIMIT 100",(account.id,))
             return {"items":[{"id":str(r[0]),"type":r[1],"payload":r[2],"read_at":r[3],"created_at":r[4]} for r in cur.fetchall()]}
+
+@app.post("/auth/admin/mfa/enroll")
+async def admin_mfa_enroll(body:MFAEnrollIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    from passwords import verify_password
+    if not verify_password(body.password,_admin_password_hash(account.id)): raise HTTPException(403,"invalid_credentials")
+    with connection() as conn:
+        with conn.cursor() as cur:
+            require_permission(cur,account,"settings.manage",request_id(request),"admin_mfa")
+            cur.execute("SELECT 1 FROM admin_mfa_credentials WHERE account_id=%s",(account.id,))
+            if cur.fetchone(): raise HTTPException(409,"mfa_already_enrolled")
+            secret=generate_secret()
+            cur.execute("INSERT INTO admin_mfa_credentials(account_id,encrypted_secret) VALUES(%s,%s)",(account.id,encrypt_secret(secret)))
+            conn.commit()
+    return {"secret":secret,"otpauth_uri":provisioning_uri(secret,account.pseudonym)}
+
+@app.post("/wallet/withdrawals",status_code=201)
+async def request_withdrawal(body:WithdrawalIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    asset=body.asset_code.upper()
+    if asset not in {"BTC","LTC","XMR"}: raise HTTPException(400,"unsupported_asset")
+    with connection() as conn:
+        with conn.cursor() as cur:
+            if not financial_open(cur): raise HTTPException(503,"financial_operations_frozen")
+            cur.execute("SELECT id,state FROM withdrawal_requests WHERE idempotency_key=%s",(body.idempotency_key,))
+            existing=cur.fetchone()
+            if existing: return {"id":str(existing[0]),"state":existing[1],"idempotent":True}
+            balance=customer_liability(cur,account.id,asset)
+            if balance<body.amount_atomic: raise HTTPException(409,"insufficient_balance")
+            customer=ensure_ledger_account(cur,code=f"customer:{account.id}",asset_code=asset,account_type="customer_liability",owner_account_id=account.id)
+            hold=ensure_ledger_account(cur,code=f"withdrawal-hold:{account.id}",asset_code=asset,account_type="withdrawal_hold",owner_account_id=account.id)
+            create_balanced_transaction(cur,asset_code=asset,transaction_type="withdrawal_reserve",reference_type="withdrawal",reference_id=None,idempotency_key=body.idempotency_key,lines=[(customer,"debit",body.amount_atomic),(hold,"credit",body.amount_atomic)])
+            cur.execute("INSERT INTO withdrawal_requests(account_id,asset_code,amount_atomic,destination_ref,idempotency_key,state) VALUES(%s,%s,%s,%s,%s,'risk_review') RETURNING id",(account.id,asset,body.amount_atomic,body.destination_ref,body.idempotency_key))
+            wid=cur.fetchone()[0]
+            conn.commit()
+    return {"id":str(wid),"state":"risk_review"}
+
+@app.post("/payouts",status_code=201)
+async def request_payout(body:PayoutIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    asset=body.asset_code.upper()
+    if asset not in {"BTC","LTC","XMR"}: raise HTTPException(400,"unsupported_asset")
+    with connection() as conn:
+        with conn.cursor() as cur:
+            if not financial_open(cur): raise HTTPException(503,"financial_operations_frozen")
+            cur.execute("SELECT status FROM sellers WHERE account_id=%s",(account.id,))
+            seller=cur.fetchone()
+            if not seller or seller[0]!="active": raise HTTPException(403,"seller_not_active")
+            level=current_level(cur,account.id)
+            cur.execute("SELECT requires_level,active FROM seller_payout_policies WHERE mode=%s",(body.mode,))
+            policy=cur.fetchone()
+            if not policy or not policy[1] or level["level"]<int(policy[0]): raise HTTPException(403,"payout_mode_not_eligible")
+            if body.mode=="advance_payout" and not level["advance_payout_allowed"]: raise HTTPException(403,"advance_payout_not_allowed")
+            balance=customer_liability(cur,account.id,asset)
+            if balance<body.amount_atomic: raise HTTPException(409,"insufficient_balance")
+            cur.execute("INSERT INTO seller_payout_requests(seller_account_id,asset_code,amount_atomic,mode,idempotency_key,status) VALUES(%s,%s,%s,%s,%s,'risk_review') RETURNING id",(account.id,asset,body.amount_atomic,body.mode,body.idempotency_key))
+            pid=cur.fetchone()[0]
+            conn.commit()
+    return {"id":str(pid),"status":"risk_review","level":level}
+
+@app.post("/admin/promos",status_code=201)
+async def create_promo(body:PromoIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    if body.benefit_type not in {"free_store","fee_discount_fixed","fee_discount_percent"}: raise HTTPException(400,"invalid_benefit")
+    code=__import__("seller_store").generate_promo()
+    asset=(body.benefit_asset_code or "").upper() or None
+    if body.benefit_type=="free_store" and (asset or body.benefit_atomic or body.benefit_percent): raise HTTPException(400,"invalid_benefit")
+    if body.benefit_type=="fee_discount_fixed" and (not asset or body.benefit_atomic is None or body.benefit_percent): raise HTTPException(400,"invalid_benefit")
+    if body.benefit_type=="fee_discount_percent" and (asset or body.benefit_atomic or body.benefit_percent is None): raise HTTPException(400,"invalid_benefit")
+    with connection() as conn:
+        with conn.cursor() as cur:
+            rid=request_id(request)
+            require_permission(cur,account,"promos.manage",rid,"promo")
+            cur.execute("INSERT INTO promo_codes(code_hash,benefit_type,benefit_asset_code,benefit_atomic,benefit_percent,max_uses,expires_at,created_by) VALUES(%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                        (promo_hash(code),body.benefit_type,asset,body.benefit_atomic,body.benefit_percent,body.max_uses,body.expires_at,account.id))
+            pid=cur.fetchone()[0]; audit(cur,account.id,"promo.create","promo",pid,"allowed","plaintext_returned_once",rid); conn.commit()
+    return {"id":str(pid),"code":code}
+
+@app.post("/admin/reconciliation",status_code=201)
+async def reconcile(body:ReconcileIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    rid=request_id(request)
+    with connection() as conn:
+        with conn.cursor() as cur:
+            require_permission(cur,account,"settings.manage",rid,"reconciliation")
+            run_id=record_asset_reconciliation(cur,body.asset_code,body.network,body.onchain_atomic,body.internal_liability_atomic)
+            conn.commit()
+    return {"run_id":str(run_id)}
+
+@app.post("/admin/emergency/clear")
+async def clear_emergency(request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    rid=request_id(request)
+    with connection() as conn:
+        with conn.cursor() as cur:
+            require_permission(cur,account,"emergency.manage",rid,"system")
+            if not all_assets_reconciled(cur): raise HTTPException(409,"reconciliation_required")
+            cur.execute("UPDATE system_state SET value='normal',updated_at=now() WHERE key IN('custody_mode','marketplace_mode')")
+            cur.execute("INSERT INTO emergency_events(action,actor_account_id,reason,state_before,state_after,authorization_ref) VALUES('clear',%s,'reconciliation_passed','emergency','normal',%s)",(account.id,rid))
+            audit(cur,account.id,"emergency.clear","system",None,"allowed","reconciliation_passed",rid)
+            conn.commit()
+    return {"status":"normal"}
+
+@app.get("/categories")
+def get_categories():
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id,name,slug FROM categories WHERE active=true ORDER BY name")
+            return {"items":[{"id":str(r[0]),"name":r[1],"slug":r[2]} for r in cur.fetchall()]}
+
+@app.get("/seller/listings")
+async def seller_listings(account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id,title,description,price_minor,currency,quantity,status,shipping_required,created_at,updated_at FROM listings WHERE seller_id=%s ORDER BY created_at DESC LIMIT 200",(account.id,))
+            return {"items":[{"id":str(r[0]),"title":r[1],"description":r[2],"price_minor":r[3],"currency":r[4],"quantity":r[5],"status":r[6],"shipping_required":r[7],"created_at":r[8],"updated_at":r[9]} for r in cur.fetchall()]}
+
+@app.get("/favorites")
+async def favorites(account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT l.id,l.title,l.price_minor,l.currency FROM favorites f JOIN listings l ON l.id=f.listing_id WHERE f.account_id=%s ORDER BY f.created_at DESC LIMIT 200",(account.id,))
+            return {"items":[{"id":str(r[0]),"title":r[1],"price_minor":r[2],"currency":r[3]} for r in cur.fetchall()]}
+
+@app.post("/favorites/{listing_id}",status_code=201)
+async def favorite(listing_id:UUID,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM listings WHERE id=%s AND status='active'",(listing_id,))
+            if not cur.fetchone(): raise HTTPException(404,"not_found")
+            cur.execute("INSERT INTO favorites(account_id,listing_id) VALUES(%s,%s) ON CONFLICT DO NOTHING",(account.id,listing_id)); conn.commit()
+    return {"status":"saved"}
+
+@app.delete("/favorites/{listing_id}")
+async def unfavorite(listing_id:UUID,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM favorites WHERE account_id=%s AND listing_id=%s",(account.id,listing_id)); conn.commit()
+    return {"status":"removed"}
+
+@app.post("/orders/{order_id}/shipping")
+async def set_shipping(order_id:UUID,body:ShippingIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    if body.country.upper()!=body.country or len(body.country)!=2: raise HTTPException(400,"country_must_be_iso2_upper")
+    encrypted=encrypt_text(json.dumps(body.model_dump(),sort_keys=True,separators=(",",":")))
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT buyer_id FROM orders WHERE id=%s FOR UPDATE",(order_id,)); row=cur.fetchone()
+            if not row or row[0]!=account.id: raise HTTPException(403,"shipping_not_allowed")
+            cur.execute("""INSERT INTO shipping_records(order_id,actor_account_id,purpose,encrypted_payload,encryption_version)
+                           VALUES(%s,%s,'order_delivery',%s,'v1')
+                           ON CONFLICT(order_id) DO UPDATE SET actor_account_id=EXCLUDED.actor_account_id,encrypted_payload=EXCLUDED.encrypted_payload,updated_at=now()""",(order_id,account.id,encrypted)); conn.commit()
+    return {"status":"saved"}
+
+@app.get("/orders/{order_id}/shipping")
+async def get_shipping(order_id:UUID,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT o.buyer_id,EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=o.id AND oi.seller_id=%s),sr.encrypted_payload
+                           FROM orders o LEFT JOIN shipping_records sr ON sr.order_id=o.id WHERE o.id=%s""",(account.id,order_id))
+            row=cur.fetchone()
+            if not row or (row[0]!=account.id and not row[1]): raise HTTPException(403,"forbidden")
+            return {"shipping":None if not row[2] else json.loads(decrypt_text(bytes(row[2])))}
+
+@app.post("/disputes/{dispute_id}/evidence",status_code=201)
+async def upload_evidence(dispute_id:UUID,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    media=request.headers.get("content-type","").split(";")[0].lower(); data=await request.body()
+    try:key,size,digest,scan=store_upload(data,media,"dispute_evidence",STORAGE_ROOT)
+    except Exception as exc: raise HTTPException(400,"upload_rejected") from exc
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT buyer_account_id,seller_account_id FROM disputes WHERE id=%s FOR UPDATE",(dispute_id,)); row=cur.fetchone()
+            if not row or account.id not in {row[0],row[1]}: raise HTTPException(403,"forbidden")
+            cur.execute("INSERT INTO uploads(owner_account_id,object_key,media_type,byte_size,sha256,purpose,scan_status) VALUES(%s,%s,%s,%s,%s,'dispute_evidence',%s) RETURNING id",(account.id,key,media,size,digest,scan))
+            uid=cur.fetchone()[0]
+            cur.execute("INSERT INTO dispute_evidence(dispute_id,submitted_by,object_key,media_type,byte_size,sha256,scan_status) VALUES(%s,%s,%s,%s,%s,%s,%s) RETURNING id",(dispute_id,account.id,key,media,size,digest,scan))
+            eid=cur.fetchone()[0]; conn.commit()
+    return {"id":str(eid),"upload_id":str(uid),"scan_status":scan}
+
+@app.post("/admin/listings/{listing_id}/status")
+async def moderate_listing(listing_id:UUID,body:ModerationStatusIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account); rid=request_id(request)
+    if body.status not in {"active","paused","removed","blocked"}: raise HTTPException(400,"invalid_listing_status")
+    with connection() as conn:
+        with conn.cursor() as cur:
+            require_permission(cur,account,"listings.manage",rid,"listing",listing_id)
+            cur.execute("SELECT status FROM listings WHERE id=%s FOR UPDATE",(listing_id,)); row=cur.fetchone()
+            if not row: raise HTTPException(404,"not_found")
+            cur.execute("UPDATE listings SET status=%s,updated_at=now() WHERE id=%s",(body.status,listing_id))
+            audit(cur,account.id,"listing.moderate","listing",listing_id,"allowed",body.reason,rid); conn.commit()
+    return {"status":body.status}
+
+@app.post("/admin/users/{account_id}/status")
+async def moderate_account(account_id:UUID,body:ModerationStatusIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account); rid=request_id(request)
+    if body.status not in {"active","suspended","closed"}: raise HTTPException(400,"invalid_account_status")
+    if account_id==account.id: raise HTTPException(403,"self_action_forbidden")
+    with connection() as conn:
+        with conn.cursor() as cur:
+            require_permission(cur,account,"users.manage",rid,"account",account_id)
+            cur.execute("SELECT status FROM accounts WHERE id=%s FOR UPDATE",(account_id,)); row=cur.fetchone()
+            if not row: raise HTTPException(404,"not_found")
+            cur.execute("UPDATE accounts SET status=%s,updated_at=now() WHERE id=%s",(body.status,account_id))
+            if body.status!="active": cur.execute("UPDATE sessions SET revoked_at=now() WHERE account_id=%s AND revoked_at IS NULL",(account_id,))
+            audit(cur,account.id,"account.moderate","account",account_id,"allowed",body.reason,rid); conn.commit()
+    return {"status":body.status}
+
+@app.post("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id:UUID,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE notifications SET read_at=now() WHERE id=%s AND account_id=%s",(notification_id,account.id)); conn.commit()
+    return {"status":"read"}
+
+def _verify_admin_mfa(cur,account_id:UUID,code:str)->bool:
+    cur.execute("SELECT encrypted_secret FROM admin_mfa_credentials WHERE account_id=%s",(account_id,))
+    row=cur.fetchone()
+    return bool(row and verify_code(decrypt_secret(bytes(row[0])),code))
 
 def _admin_password_hash(account_id:UUID)->str:
     with connection() as conn:

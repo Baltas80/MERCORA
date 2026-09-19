@@ -1,65 +1,71 @@
 # MERCORA roadmap
 
-## Phase 0 — Foundation
-- [x] Secure repository baseline
-- [x] Security-first architecture
-- [x] Initial threat model
-- [x] Initial CI security gates
-- [x] Initial dependency policy/documentation
+## Canonical implementation status
 
-## Phase 1 — Application core
-- [x] Frontend shell and dark marketplace UI
-- [x] Backend API skeleton
-- [x] PostgreSQL schema and migrations foundation
-- [x] Password hashing utility
-- [ ] Authentication and sessions
-- [ ] Authorization model
+### Application core
+- [x] FastAPI/Python canonical backend
+- [x] PostgreSQL versioned migration runner
+- [x] Password hashing and opaque sessions
+- [x] Recovery codes
+- [x] CSRF protection
+- [x] RBAC foundation and high-risk approval model
+- [x] Pseudonymous accounts
+- [x] Listings, categories, search, cart and checkout
+- [x] Inventory row-lock reservation
+- [x] Buyer/seller fees with immutable order snapshots
+- [x] Seller stores and promotion codes
+- [x] Favorites
+- [x] Reviews and reports
+- [x] Encrypted shipping records
+- [x] Encrypted messaging and notifications
 
-## Phase 2 — Marketplace
-- [x] Initial marketplace domain schema
-- [ ] Seller profiles
-- [ ] Listings and categories API
-- [ ] Search and filtering API
-- [ ] Cart and checkout backend
-- [ ] Orders and inventory state machine
-- [ ] Ratings/reputation
-- [ ] Moderation and reporting
-- [ ] Messaging
+### Payments / financial controls
+- [x] Payment-intent state machine
+- [x] Server-authenticated payment event ingress
+- [x] Escrow state foundation
+- [x] Append-only double-entry ledger
+- [x] Withdrawal request + ledger reservation
+- [x] Seller payout request and risk gate
+- [x] Reconciliation records and fail-closed emergency mode
+- [x] Emergency freeze / guarded clear
+- [ ] Real BTC/LTC/XMR blockchain adapters
+- [ ] Isolated signing service / HSM or KMS
+- [ ] Automated on-chain observer reconciliation
+- [ ] Production custody authorization
 
-## Phase 3 — Payments
-- [x] Custody architecture and ledger design
-- [x] Emergency custody model
-- [ ] Payment adapter interface
-- [ ] Bitcoin integration
-- [ ] Litecoin integration
-- [ ] Monero integration
-- [ ] Confirmation/state machine
-- [ ] Reconciliation and audit automation
+### Disputes / moderation
+- [x] Dispute state machine
+- [x] Evidence storage quarantine
+- [x] Encrypted dispute messages
+- [x] Decisions and appeals
+- [x] Moderation actions and reporting
+- [ ] Production malware scanning service
+- [ ] Full moderation queue UI
+- [ ] Automated abuse scoring and anti-collusion
 
-## Phase 4 — Tor and infrastructure
-- [x] Initial Onion Service configuration template
-- [x] Application loopback binding
-- [x] Initial non-root container image
-- [ ] Hardened Onion Service deployment
-- [ ] Reverse proxy isolation
-- [ ] Resource limits
-- [ ] Backup/restore procedure
-- [ ] Monitoring and health checks
+### Infrastructure
+- [x] Nginx reverse proxy
+- [x] Docker non-root application
+- [x] Container hardening baseline
+- [x] Tor v3 configuration template
+- [x] Background worker
+- [x] Outbox/job foundation
+- [ ] Production Tor deployment + origin-leak test
+- [ ] Centralized monitoring/alerting
+- [ ] Tested encrypted backups and restore
+- [ ] Resource/load limits validated under load
 
-## Phase 5 — Security validation
-- [x] Basic secret-material CI gate
-- [x] Basic syntax CI gate
-- [x] Unit-test CI hook
-- [ ] SAST expansion
-- [ ] Dependency scanning
-- [ ] Secret scanning expansion
+### Security validation
+- [x] Secret scan baseline
+- [x] CodeQL baseline
+- [x] Dependency audit
+- [x] Migration smoke tests
+- [x] HTTP security smoke test
+- [x] Inventory concurrency test
 - [ ] DAST
-- [ ] Authentication/authorization abuse tests
-- [ ] Resource exhaustion tests
-- [ ] Tor-specific privacy review
-- [ ] Custody security review
-- [ ] Production readiness review
+- [ ] Container vulnerability scan
+- [ ] Full ASVS verification
+- [ ] Independent custody/security review
+- [ ] Independent legal review
 
-## Current priority
-
-Build the authenticated application core and authorization boundary before connecting any real blockchain wallets or production funds.
+Real funds remain disabled until every financial production gate is satisfied.
