@@ -1,13 +1,14 @@
 import { readFile } from "node:fs/promises";
 
 const compose = await readFile(new URL("../docker-compose.yml", import.meta.url), "utf8");
+const normalized = "\n" + compose;
 function serviceBlock(name) {
   const marker = "\n  " + name + ":\n";
-  const start = compose.indexOf(marker);
+  const start = normalized.indexOf(marker);
   if (start < 0) return "";
   const after = start + marker.length;
-  const next = compose.slice(after).search(/\n  [A-Za-z0-9_-]+:\n|\nnetworks:\n/);
-  return next < 0 ? compose.slice(after) : compose.slice(after, after + next);
+  const next = normalized.slice(after).search(/\n  [A-Za-z0-9_-]+:\n|\nnetworks:\n/);
+  return next < 0 ? normalized.slice(after) : normalized.slice(after, after + next);
 }
 const postgres = serviceBlock("postgres");
 const migrate = serviceBlock("migrate");
