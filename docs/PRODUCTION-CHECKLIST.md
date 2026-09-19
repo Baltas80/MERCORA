@@ -3,15 +3,19 @@
 - [ ] Canonical FastAPI stack is the only application backend.
 - [ ] Database migrations run from versioned files and are backed up.
 - [ ] Application, worker, proxy, Tor, storage and custody trust boundaries are isolated.
+- [ ] Edge boundary gates pass in CI and against the deployed topology; direct-origin access is negative-tested.
 - [ ] Production secrets come from a secret manager, never Git.
 - [ ] Admin bootstrap is performed once and recorded.
 - [ ] Admin high-risk actions use step-up and an independent approver.
 - [ ] MFA/passkeys are enabled for administrators before financial activation.
 - [ ] BTC/LTC/XMR adapters are independently verified and reconciliation is green.
+- [ ] Real-funds kill switch is false until the independent custody review is complete.
+- [ ] All financial callbacks require authenticated signatures and replay/idempotency keys.
 - [ ] Payment observers cannot directly sign transactions.
 - [ ] Escrow decisions cannot directly mutate balances.
 - [ ] DAST, concurrency and abuse tests pass.
 - [ ] Backups have been restored successfully in a clean environment.
 - [ ] Tor origin leakage and application fingerprinting review passes.
+- [ ] Production Tor is on a supported 0.4.9.x release and introduction-point DoS limits are verified.
 - [ ] Privacy retention matrix and legal documentation are approved.
 - [ ] Real funds remain disabled until the custody/security review is signed off.
