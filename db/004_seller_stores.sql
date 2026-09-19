@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS promo_codes (
   )
 );
 
-DO $
+DO $mercora$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_seller_store_activation_code') THEN
     ALTER TABLE seller_stores
@@ -91,7 +91,7 @@ BEGIN
       FOREIGN KEY (promo_code_id) REFERENCES promo_codes(id);
   END IF;
 END;
-$;
+$mercora$;
 
 CREATE TABLE IF NOT EXISTS promo_code_redemptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -112,7 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_seller_stores_status
 CREATE INDEX IF NOT EXISTS idx_seller_store_activations_account
   ON seller_store_activations(account_id, status);
 
-DO $
+DO $mercora$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_activation_promo_source') THEN
     ALTER TABLE seller_store_activations
@@ -126,7 +126,7 @@ BEGIN
       CHECK ((activation_source = 'promo' AND activation_code_id IS NOT NULL) OR activation_source = 'paid');
   END IF;
 END;
-$;
+$mercora$;
 
 CREATE OR REPLACE FUNCTION redeem_promo_code(
   p_promo_code_id UUID,
@@ -188,7 +188,7 @@ EXCEPTION
   WHEN unique_violation THEN
     RETURN FALSE;
 END;
-$$;
+$mercora$;
 
 CREATE OR REPLACE FUNCTION activate_seller_store(p_activation_id UUID)
 RETURNS UUID
@@ -263,7 +263,7 @@ BEGIN
 
   RETURN store_id;
 END;
-$$;
+$mercora$;
 
 -- Application code must hash plaintext promotion codes before lookup.
 -- Paid activation may only set payment_status='verified' from the authoritative
