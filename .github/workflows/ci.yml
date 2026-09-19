@@ -41,6 +41,18 @@ jobs:
           PY
       - name: Install
         run: pip install -r app/requirements.txt
+      - name: Verify compose boundary
+        run: node scripts/verify-compose-security.mjs
+      - name: Verify edge boundary
+        run: node scripts/verify-edge-security.mjs
+      - name: Verify Tor template
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -qx 'HiddenServiceVersion 3' tor/torrc.example
+          grep -qx 'SocksPort 0' tor/torrc.example
+          grep -qx 'ControlPort 0' tor/torrc.example
+          ! grep -Eiq '(PRIVATE KEY|private_key|mnemonic|seed phrase|x25519 private)' tor/torrc.example
       - name: Migration smoke test
         run: PYTHONPATH=app python app/migrate.py
       - name: Python syntax
@@ -55,9 +67,10 @@ jobs:
           PYTHONPATH=app uvicorn app.server:app --host 127.0.0.1 --port 8090 >/tmp/mercora-api.log 2>&1 &
           PID=$!
           trap 'kill $PID 2>/dev/null || true' EXIT
-          for i in $(seq 1 10); do curl -fsS http://127.0.0.1:8090/healthz >/dev/null && break; sleep 1; done
+          for i in $(seq 1 15); do curl -fsS http://127.0.0.1:8090/healthz >/dev/null && break; sleep 1; done
           curl -fsSI http://127.0.0.1:8090/healthz | grep -qi 'x-content-type-options: nosniff'
           curl -fsSI http://127.0.0.1:8090/healthz | grep -qi 'referrer-policy: no-referrer'
+          curl -fsSI http://127.0.0.1:8090/healthz | grep -qi 'cache-control: no-store'
       - name: Secret pattern scan
         shell: bash
         run: |
