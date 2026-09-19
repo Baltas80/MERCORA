@@ -102,6 +102,7 @@ class DecisionIn(BaseModel):
     seller_release_atomic: int | None = Field(default=None, ge=0)
     asset_code: str | None = None
 
+
 class AppealIn(BaseModel):
     reason: str = Field(min_length=10, max_length=5000)
 
@@ -438,20 +439,13 @@ async def orders(account: Annotated[AuthenticatedAccount, Depends(current_accoun
 @app.post("/orders/{order_id}/status")
 async def change_order_status(order_id: UUID, body: OrderStatusIn, request: Request, account: Annotated[AuthenticatedAccount, Depends(current_account)]):
     await csrf_account(request, account)
-    allowed = {
-        "pending_payment": {"cancelled"},
-        "payment_confirmed": {"processing"},
-        "processing": {"shipped"},
-        "shipped": {"delivered"},
-        "delivered": {"completed"},
-    }
     with connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT status,buyer_id FROM orders WHERE id=%s FOR UPDATE", (order_id,))
             row = cur.fetchone()
             if not row: raise HTTPException(404, "not_found")
             current = row[0]
-            if body.status not in allowed.get(current, set()): raise HTTPException(409, "invalid_order_transition")
+            if not order_can_transition(current, body.status): raise HTTPException(409, "invalid_order_transition")
             cur.execute("SELECT 1 FROM order_items WHERE order_id=%s AND seller_id=%s LIMIT 1", (order_id, account.id))
             seller_participant = cur.fetchone() is not None
             if body.status == "completed" and account.id != row[1]: raise HTTPException(403, "buyer_required")
