@@ -33,12 +33,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY' >> "$GITHUB_ENV"
-          import base64, secrets
-          print("MERCORA_ENCRYPTION_KEY_B64=" + base64.b64encode(secrets.token_bytes(32)).decode())
-          print("MERCORA_PAYMENT_INGEST_SECRET=" + secrets.token_hex(32))
-          print("MERCORA_FINANCE_CALLBACK_SECRET=" + secrets.token_hex(32))
-          PY
+          values="$(python - <<'PY'
+import base64, secrets
+print(base64.b64encode(secrets.token_bytes(32)).decode())
+print(secrets.token_hex(32))
+print(secrets.token_hex(32))
+PY
+)"
+          mapfile -t secret_values <<< "$values"
+          encryption_key="${secret_values[0]}"
+          ingest_secret="${secret_values[1]}"
+          callback_secret="${secret_values[2]}"
+          printf '::add-mask::%s\n' "$encryption_key" "$ingest_secret" "$callback_secret"
+          {
+            printf 'MERCORA_ENCRYPTION_KEY_B64=%s\n' "$encryption_key"
+            printf 'MERCORA_PAYMENT_INGEST_SECRET=%s\n' "$ingest_secret"
+            printf 'MERCORA_FINANCE_CALLBACK_SECRET=%s\n' "$callback_secret"
+          } >> "$GITHUB_ENV"
       - name: Install
         run: pip install -r app/requirements.txt
       - name: Verify compose boundary
