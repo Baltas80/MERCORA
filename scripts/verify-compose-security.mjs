@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 const compose = await readFile(new URL('../docker-compose.yml', import.meta.url), 'utf8');
-const postgres = compose.match(/^  postgres:\n([\s\S]*?)(?=^  app:\n|^networks:\n|^volumes:\n|\z)/m)?.[1] ?? '';
+const postgres = compose.match(/^  postgres:\n([\s\S]*?)(?=^  app:\n|^networks:\n|^volumes:\n)/m)?.[1] ?? '';
 
 const required = [
   ['PostgreSQL service must exist', postgres.length > 0],
