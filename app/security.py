@@ -15,6 +15,7 @@ from auth import AuthenticatedAccount, resolve_session
 from db import connection
 
 MAX_BODY = int(os.environ.get("MERCORA_MAX_BODY_BYTES", "1048576"))
+REAL_FUNDS_ENABLED = os.environ.get("MERCORA_REAL_FUNDS_ENABLED", "false").lower() == "true"
 
 
 def headers(response: Response) -> None:
@@ -135,6 +136,8 @@ def require_permission(
 
 
 def financial_open(cur) -> bool:
+    if not REAL_FUNDS_ENABLED:
+        return False
     cur.execute("SELECT value FROM system_state WHERE key='custody_mode'")
     custody = cur.fetchone()
     cur.execute("SELECT value FROM system_state WHERE key='marketplace_mode'")
