@@ -60,8 +60,16 @@ jobs:
           test ! -d tor/keys
       - name: Dependency audit
         run: pip install pip-audit && pip-audit -r app/requirements.txt
+      - name: Backup and restore smoke test
+        run: |
+          pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > /tmp/mercora.dump
+          psql "$DATABASE_URL" -c "CREATE DATABASE mercora_restore"
+          pg_restore --no-owner --no-privileges --dbname=postgresql://mercora:postgres@127.0.0.1:5432/mercora_restore /tmp/mercora.dump
+          psql postgresql://mercora:postgres@127.0.0.1:5432/mercora_restore -c "SELECT count(*) FROM schema_migrations" >/dev/null
       - name: Container build
         run: docker build -f app/Dockerfile .
+      - name: DAST smoke
+        run: python app/dast_smoke.py http://127.0.0.1:8090
   codeql:
     runs-on: ubuntu-latest
     steps:
