@@ -912,7 +912,7 @@ async def wallet_balances(account:Annotated[AuthenticatedAccount,Depends(current
                                   - COALESCE(SUM(e.amount_atomic) FILTER(WHERE e.direction='debit'),0)
                            FROM assets a
                            LEFT JOIN ledger_accounts la ON la.asset_code=a.code AND la.owner_account_id=%s AND la.account_type='customer_liability'
-                           LEFT JOIN ledger_entries e ON e.account_id=la.id
+                           LEFT JOIN ledger_entries e ON e.ledger_account_id=la.id
                            GROUP BY a.code ORDER BY a.code""",(account.id,))
             return {"items":[{"asset_code":r[0],"available_atomic":str(r[1] or 0)} for r in cur.fetchall()]}
 
