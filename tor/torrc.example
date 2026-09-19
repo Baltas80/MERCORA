@@ -1,7 +1,14 @@
-# Example Tor v3 Onion Service configuration for MERCORA.
-# NEVER commit generated keys or private service data.
-#
-# Keep the application bound to loopback only.
+# MERCORA Onion Service v3 template.
 SocksPort 0
+ControlPort 0
+ClientUseIPv4 1
+ClientUseIPv6 0
+AvoidDiskWrites 1
 HiddenServiceDir /var/lib/tor/mercora
 HiddenServicePort 80 127.0.0.1:8080
+
+# Production:
+# - protect HiddenServiceDir with 0700 permissions
+# - keep origin listener loopback/private
+# - isolate Tor from database, storage, worker and custody networks
+# - do not expose private service keys to the app container
