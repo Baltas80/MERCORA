@@ -461,6 +461,15 @@ async def change_order_status(order_id: UUID, body: OrderStatusIn, request: Requ
             if body.status in {"shipped","delivered"} and not seller_participant: raise HTTPException(403, "seller_required")
             if body.status == "processing" and not seller_participant: raise HTTPException(403, "seller_required")
             cur.execute("UPDATE orders SET status=%s,updated_at=now() WHERE id=%s", (body.status, order_id))
+            if body.status == "completed":
+                cur.execute("SELECT DISTINCT seller_id FROM order_items WHERE order_id=%s",(order_id,))
+                cur.execute("SELECT delta_points FROM seller_point_rules WHERE reason_code='sale_completed' AND active=true")
+                point_rule=cur.fetchone()
+                if point_rule:
+                    for (seller_id,) in cur.fetchall():
+                        cur.execute("""INSERT INTO seller_points_ledger(seller_account_id,delta_points,reason_code,reference_id,idempotency_key,actor)
+                                       VALUES(%s,%s,'sale_completed',%s,%s,%s) ON CONFLICT(idempotency_key) DO NOTHING""",
+                                    (seller_id,int(point_rule[0]),order_id,f"sale-completed:{order_id}:{seller_id}",account.id))
             if body.status == "delivered":
                 cur.execute("""UPDATE seller_escrows se SET release_eligible_at=now()+make_interval(secs=>ep.hold_after_delivery_seconds),updated_at=now()
                                FROM escrow_policies ep WHERE ep.version=se.policy_version AND se.order_id=%s AND se.status='held'""", (order_id,))
