@@ -31,7 +31,10 @@ services:
   api:
     build: {context: ., dockerfile: app/Dockerfile}
     environment:
-      DATABASE_URL: postgresql://mercora:${POSTGRES_PASSWORD}@postgres:5432/mercora
+      MERCORA_DB_HOST: postgres
+      MERCORA_DB_NAME: mercora
+      MERCORA_DB_USER: mercora
+      MERCORA_DB_PASSWORD: ${POSTGRES_PASSWORD}
       MERCORA_ENV: production
       MERCORA_ENCRYPTION_KEY_B64: ${MERCORA_ENCRYPTION_KEY_B64:?set MERCORA_ENCRYPTION_KEY_B64}
       MERCORA_PAYMENT_INGEST_SECRET: ${MERCORA_PAYMENT_INGEST_SECRET:?set MERCORA_PAYMENT_INGEST_SECRET}
