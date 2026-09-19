@@ -44,6 +44,9 @@ jobs:
       - name: Check frontend syntax
         run: node --check web/app.js
 
+      - name: Verify container network isolation
+        run: node scripts/verify-compose-security.mjs
+
       - name: Dependency audit
         run: npm audit --audit-level=high
 
