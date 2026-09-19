@@ -135,7 +135,7 @@ CREATE OR REPLACE FUNCTION redeem_promo_code(
 )
 RETURNS BOOLEAN
 LANGUAGE plpgsql
-AS $$
+AS $func$
 DECLARE
   code_row promo_codes%ROWTYPE;
 BEGIN
@@ -188,12 +188,12 @@ EXCEPTION
   WHEN unique_violation THEN
     RETURN FALSE;
 END;
-$mercora$;
+$func$;
 
 CREATE OR REPLACE FUNCTION activate_seller_store(p_activation_id UUID)
 RETURNS UUID
 LANGUAGE plpgsql
-AS $$
+AS $func$
 DECLARE
   activation seller_store_activations%ROWTYPE;
   store_id UUID;
@@ -263,7 +263,7 @@ BEGIN
 
   RETURN store_id;
 END;
-$mercora$;
+$func$;
 
 -- Application code must hash plaintext promotion codes before lookup.
 -- Paid activation may only set payment_status='verified' from the authoritative
