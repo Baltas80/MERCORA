@@ -24,7 +24,6 @@ from recovery import use_recovery_code
 from security import audit, csrf_account, current_account, financial_open, guard_size, headers, permission_set, request_id, require_permission
 from seller_store import normalize_name, normalize_slug, promo_hash
 from settlement_service import confirm_payment_and_create_escrow
-from storage import MAX_BYTES, store_upload
 from rate_limit import FixedWindowRateLimiter
 from mfa import generate_secret, provisioning_uri, verify_code, encrypt_secret, decrypt_secret
 from reconciliation import record_asset_reconciliation, all_assets_reconciled
@@ -286,13 +285,35 @@ async def create_listing(body: ListingIn, request: Request, account: Annotated[A
             seller = cur.fetchone()
             if not seller or seller[0] != "active":
                 raise HTTPException(403, "seller_not_active")
+
+            classification = "restricted"
+            if body.category_id is not None:
+                cur.execute("""SELECT c.active,COALESCE(r.classification,'restricted')
+                               FROM categories c
+                               LEFT JOIN marketplace_category_rules r
+                                 ON r.category_slug=c.slug AND r.active=true
+                               WHERE c.id=%s""", (body.category_id,))
+                category = cur.fetchone()
+                if not category or not category[0]:
+                    raise HTTPException(400, "invalid_category")
+                classification = category[1]
+
+            if classification == "prohibited":
+                raise HTTPException(403, "category_prohibited")
+
+            listing_status = "active" if classification == "allowed" else "draft"
             cur.execute("""INSERT INTO listings(seller_id,category_id,title,description,price_minor,currency,quantity,status)
-                           VALUES(%s,%s,%s,%s,%s,%s,%s,'active') RETURNING id""",
-                        (account.id, body.category_id, body.title.strip(), body.description.strip(), body.price_minor, body.currency, body.quantity))
+                           VALUES(%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                        (account.id, body.category_id, body.title.strip(), body.description.strip(), body.price_minor, body.currency, body.quantity, listing_status))
             listing_id = cur.fetchone()[0]
             cur.execute("INSERT INTO listing_inventory(listing_id,available_quantity) VALUES(%s,%s)", (listing_id, body.quantity))
+
+            if listing_status == "draft":
+                cur.execute("""INSERT INTO moderation_cases(resource_type,resource_id,reported_by,reason_code,details)
+                               VALUES('listing',%s,%s,'restricted_category','Listing requires manual policy review before publication.')""",
+                            (listing_id, account.id))
             conn.commit()
-    return {"id": str(listing_id)}
+    return {"id": str(listing_id), "status": listing_status}
 
 @app.post("/listings/{listing_id}/report", status_code=201)
 async def report_listing(listing_id: UUID, reason: str, request: Request, account: Annotated[AuthenticatedAccount, Depends(current_account)]):
@@ -1156,9 +1177,6 @@ def _verify_admin_mfa(cur,account_id:UUID,code:str)->bool:
     if not totp.verify(code,valid_window=0): return False
     cur.execute("UPDATE admin_mfa_credentials SET last_timestep=%s,updated_at=now() WHERE account_id=%s",(timestep,account_id))
     return True
-    cur.execute("SELECT encrypted_secret FROM admin_mfa_credentials WHERE account_id=%s",(account_id,))
-    row=cur.fetchone()
-    return bool(row and verify_code(decrypt_secret(bytes(row[0])),code))
 
 def _admin_password_hash(account_id:UUID)->str:
     with connection() as conn:
