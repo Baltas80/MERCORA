@@ -18,7 +18,10 @@ services:
     build: {context: ., dockerfile: app/Dockerfile}
     command: ["python","migrate.py"]
     environment:
-      DATABASE_URL: postgresql://mercora:${POSTGRES_PASSWORD}@postgres:5432/mercora
+      MERCORA_DB_HOST: postgres
+      MERCORA_DB_NAME: mercora
+      MERCORA_DB_USER: mercora
+      MERCORA_DB_PASSWORD: ${POSTGRES_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
