@@ -1,11 +1,11 @@
 server {
-  listen 80 default_server;
+  listen 8080 default_server;
   server_name "";
   return 421;
 }
 
 server {
-  listen 80;
+  listen 8080;
   server_name ${MERCORA_PUBLIC_HOST};
   server_tokens off;
   client_max_body_size 12m;
