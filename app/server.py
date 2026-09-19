@@ -21,7 +21,7 @@ from inventory import commit_inventory_sale, reserve_inventory, release_inventor
 from ledger import customer_liability, create_balanced_transaction, ensure_ledger_account
 from payments import PaymentMethod, PaymentStatus, can_transition as payment_can_transition
 from recovery import use_recovery_code
-from security import audit, csrf_account, current_account, financial_open, guard_size, headers, permission_set, request_id, require_permission
+from security import audit, csrf_account, current_account, financial_open, guard_size, headers, permission_set, read_limited_body, request_id, require_permission
 from seller_store import normalize_name, normalize_slug, promo_hash
 from settlement_service import confirm_payment_and_create_escrow
 from rate_limit import FixedWindowRateLimiter
@@ -1102,7 +1102,7 @@ async def upload_evidence(dispute_id:UUID,request:Request,account:Annotated[Auth
             cur.execute("SELECT buyer_account_id,seller_account_id,status FROM disputes WHERE id=%s FOR UPDATE",(dispute_id,)); row=cur.fetchone()
             if not row or account.id not in {row[0],row[1]}: raise HTTPException(403,"forbidden")
             if row[2] in {"closed","rejected"}: raise HTTPException(409,"dispute_closed")
-    data=await request.body()
+    data=await read_limited_body(request, 10 * 1024 * 1024)
     try:key,size,digest,scan=store_upload(data,media,"dispute_evidence",STORAGE_ROOT)
     except Exception as exc: raise HTTPException(400,"upload_rejected") from exc
     with connection() as conn:
