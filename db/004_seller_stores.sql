@@ -77,13 +77,21 @@ CREATE TABLE IF NOT EXISTS promo_codes (
   )
 );
 
-ALTER TABLE seller_stores
-  ADD CONSTRAINT fk_seller_store_activation_code
-  FOREIGN KEY (activation_code_id) REFERENCES promo_codes(id);
+DO $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_seller_store_activation_code') THEN
+    ALTER TABLE seller_stores
+      ADD CONSTRAINT fk_seller_store_activation_code
+      FOREIGN KEY (activation_code_id) REFERENCES promo_codes(id);
+  END IF;
 
-ALTER TABLE seller_store_activations
-  ADD CONSTRAINT fk_activation_promo_code
-  FOREIGN KEY (promo_code_id) REFERENCES promo_codes(id);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_activation_promo_code') THEN
+    ALTER TABLE seller_store_activations
+      ADD CONSTRAINT fk_activation_promo_code
+      FOREIGN KEY (promo_code_id) REFERENCES promo_codes(id);
+  END IF;
+END;
+$;
 
 CREATE TABLE IF NOT EXISTS promo_code_redemptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -103,6 +111,22 @@ CREATE INDEX IF NOT EXISTS idx_seller_stores_status
 
 CREATE INDEX IF NOT EXISTS idx_seller_store_activations_account
   ON seller_store_activations(account_id, status);
+
+DO $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_activation_promo_source') THEN
+    ALTER TABLE seller_store_activations
+      ADD CONSTRAINT ck_activation_promo_source
+      CHECK ((source = 'promo' AND promo_code_id IS NOT NULL) OR source = 'paid');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_store_promo_source') THEN
+    ALTER TABLE seller_stores
+      ADD CONSTRAINT ck_store_promo_source
+      CHECK ((activation_source = 'promo' AND activation_code_id IS NOT NULL) OR activation_source = 'paid');
+  END IF;
+END;
+$;
 
 CREATE OR REPLACE FUNCTION redeem_promo_code(
   p_promo_code_id UUID,
@@ -132,6 +156,22 @@ BEGIN
     RETURN FALSE;
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1
+      FROM seller_store_activations
+     WHERE id = p_activation_id
+       AND account_id = p_account_id
+       AND source = 'promo'
+       AND promo_code_id = p_promo_code_id
+       AND status = 'pending'
+  ) THEN
+    RETURN FALSE;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM seller_stores WHERE account_id = p_account_id) THEN
+    RETURN FALSE;
+  END IF;
+
   INSERT INTO promo_code_redemptions(promo_code_id, account_id, activation_id)
   VALUES (p_promo_code_id, p_account_id, p_activation_id);
 
@@ -157,6 +197,7 @@ AS $$
 DECLARE
   activation seller_store_activations%ROWTYPE;
   store_id UUID;
+  existing_store_status TEXT;
 BEGIN
   SELECT *
     INTO activation
@@ -168,14 +209,17 @@ BEGIN
     RAISE EXCEPTION 'activation_not_found';
   END IF;
 
-  SELECT id
-    INTO store_id
+  SELECT id, status
+    INTO store_id, existing_store_status
     FROM seller_stores
    WHERE account_id = activation.account_id
    FOR UPDATE;
 
   IF store_id IS NOT NULL THEN
-    RETURN store_id;
+    IF existing_store_status = 'active' THEN
+      RETURN store_id;
+    END IF;
+    RAISE EXCEPTION 'seller_store_not_active';
   END IF;
 
   IF activation.source = 'paid' AND activation.payment_status <> 'verified' THEN
