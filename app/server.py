@@ -39,6 +39,7 @@ PAYMENT_INGEST_SECRET = os.environ.get("MERCORA_PAYMENT_INGEST_SECRET", "")
 CONFIRMATIONS = {"BTC": int(os.environ.get("MERCORA_CONFIRMATIONS_BTC", "3")), "LTC": int(os.environ.get("MERCORA_CONFIRMATIONS_LTC", "6")), "XMR": int(os.environ.get("MERCORA_CONFIRMATIONS_XMR", "10"))}
 login_limiter = FixedWindowRateLimiter(8, 60)
 register_limiter = FixedWindowRateLimiter(5, 60)
+recovery_limiter = FixedWindowRateLimiter(5, 900)
 dispute_limiter = FixedWindowRateLimiter(5, 600)
 message_limiter = FixedWindowRateLimiter(40, 60)
 report_limiter = FixedWindowRateLimiter(20, 3600)
@@ -244,6 +245,9 @@ async def logout(request: Request, response: Response, account: Annotated[Authen
 
 @app.post("/auth/recovery/reset")
 def recovery_reset(body: RecoveryReset):
+    key = body.pseudonym.lower()
+    if not recovery_limiter.allow(key):
+        raise HTTPException(429, "rate_limited")
     with connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id FROM accounts WHERE lower(pseudonym)=lower(%s) AND status<>'closed' LIMIT 1", (body.pseudonym,))
@@ -587,6 +591,8 @@ async def ingest_payment_event(request: Request):
     except json.JSONDecodeError as exc: raise HTTPException(400, "invalid_json") from exc
     required = {"payment_intent_id","event_key","asset_code","confirmations","verified"}
     if not required <= data.keys(): raise HTTPException(400, "invalid_event")
+    if not isinstance(data["event_key"], str) or not (16 <= len(data["event_key"]) <= 200):
+        raise HTTPException(400, "invalid_event_key")
     with connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id,order_id,account_id,asset_code,amount_atomic,status,external_reference FROM payment_intents WHERE id=%s FOR UPDATE", (data["payment_intent_id"],))
@@ -1150,12 +1156,14 @@ async def finance_operation_result(request:Request):
     operation_type=data.get("operation_type")
     operation_id=data.get("operation_id")
     state=data.get("state")
+    event_key=data.get("event_key")
     if operation_type not in {"withdrawal","payout"} or state not in {"confirmed","paid","rejected","failed","broadcast"}: raise HTTPException(400,"invalid_financial_event")
+    if not isinstance(event_key, str) or not (16 <= len(event_key) <= 200): raise HTTPException(400,"invalid_event_key")
     with connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""INSERT INTO financial_operation_events(operation_type,operation_id,event_key,state,external_reference)
                            VALUES(%s,%s,%s,%s,%s) ON CONFLICT(event_key) DO NOTHING""",
-                        (operation_type,operation_id,data.get("event_key") or str(uuid4()),state,data.get("reference")))
+                        (operation_type,operation_id,event_key,state,data.get("reference")))
             if cur.rowcount==0:
                 conn.commit(); return {"status":"duplicate"}
             if operation_type=="withdrawal":
