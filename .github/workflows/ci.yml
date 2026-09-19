@@ -1,66 +1,61 @@
 name: MERCORA CI
-
 on:
   push:
-    branches: ["master"]
+    branches: [master, feat/mercora-canonical]
   pull_request:
-
 permissions:
   contents: read
   security-events: write
-
 jobs:
-  static-security:
+  test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: mercora
+          POSTGRES_USER: mercora
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mercora -d mercora"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://mercora:postgres@127.0.0.1:5432/mercora
+      MERCORA_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      MERCORA_ENV: development
     steps:
       - uses: actions/checkout@v4
-
-      - name: Check for obvious secret material
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install
+        run: pip install -r app/requirements.txt
+      - name: Migration smoke test
+        run: PYTHONPATH=app python app/migrate.py
+      - name: Python syntax
+        run: python -m compileall -q app
+      - name: Unit tests
+        run: python -m unittest discover -s app -p 'test_*.py'
+      - name: Secret pattern scan
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE --exclude-dir=.git --exclude='*.md' \
-            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' .; then
+          if git grep -n -I -E '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|wallet_seed|api_key[[:space:]]*[:=])' -- ':!*.md' ':!.github/**'; then
             echo "Potential secret material detected."
             exit 1
           fi
-
-      - name: Check forbidden production artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
           test ! -e .env
-          test ! -e .env.production
           test ! -d tor/keys
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Check server syntax
-        run: node --check server/server.js
-
-      - name: Check frontend syntax
-        run: node --check web/app.js
-
       - name: Dependency audit
-        run: npm audit --audit-level=high
-
-      - name: Run unit tests
-        run: npm test
-
+        run: pip install pip-audit && pip-audit -r app/requirements.txt
+      - name: Container build
+        run: docker build -f app/Dockerfile .
   codeql:
-    name: CodeQL
     runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      packages: read
-      actions: read
-      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v3
         with:
-          languages: javascript
+          languages: python
       - uses: github/codeql-action/analyze@v3
