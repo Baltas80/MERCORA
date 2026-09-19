@@ -9,6 +9,13 @@ def run_once()->int:
     claimed=0
     with connection() as conn:
         with conn.cursor() as cur:
+            # Recover jobs whose worker lease expired before the process could finish.
+            cur.execute("""UPDATE jobs
+                           SET status='queued',locked_at=NULL,locked_by=NULL,
+                               last_error='worker_lease_expired',run_at=now(),updated_at=now()
+                           WHERE status='running'
+                             AND locked_at IS NOT NULL
+                             AND locked_at < now()-interval '10 minutes'""")
             cur.execute("""SELECT id,job_type,payload FROM jobs
                            WHERE status='queued' AND run_at<=now()
                            ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 20""")
