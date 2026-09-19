@@ -256,3 +256,40 @@ $points$;
 
 -- Points must be awarded/deducted from authoritative server events only.
 -- The client must never submit an arbitrary point balance or level.
+CREATE TABLE IF NOT EXISTS seller_point_rules (
+  reason_code TEXT PRIMARY KEY,
+  delta_points INTEGER NOT NULL CHECK (delta_points <> 0),
+  description TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT true,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO seller_point_rules(reason_code, delta_points, description) VALUES
+  ('sale_completed', 10, 'Completed seller order'),
+  ('verified_positive_review', 2, 'Verified positive buyer review'),
+  ('refund_after_resolution', -20, 'Refund after dispute resolution'),
+  ('policy_violation', -100, 'Confirmed marketplace policy violation'),
+  ('fraud_confirmed', -500, 'Confirmed seller fraud')
+ON CONFLICT (reason_code) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION award_seller_points_from_rule(
+  p_seller_account_id UUID,
+  p_reason_code TEXT,
+  p_reference_id UUID,
+  p_idempotency_key TEXT,
+  p_actor TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $rule$
+DECLARE
+  rule_row seller_point_rules%ROWTYPE;
+BEGIN
+  SELECT * INTO rule_row FROM seller_point_rules WHERE reason_code = p_reason_code AND active = true FOR SHARE;
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+  RETURN record_seller_points(
+    p_seller_account_id, rule_row.delta_points, rule_row.reason_code,
+    p_reference_id, p_idempotency_key, p_actor
+  );
+END;
+$rule$;
