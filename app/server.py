@@ -463,10 +463,11 @@ async def change_order_status(order_id: UUID, body: OrderStatusIn, request: Requ
             cur.execute("UPDATE orders SET status=%s,updated_at=now() WHERE id=%s", (body.status, order_id))
             if body.status == "completed":
                 cur.execute("SELECT DISTINCT seller_id FROM order_items WHERE order_id=%s",(order_id,))
+                sellers_completed=cur.fetchall()
                 cur.execute("SELECT delta_points FROM seller_point_rules WHERE reason_code='sale_completed' AND active=true")
                 point_rule=cur.fetchone()
                 if point_rule:
-                    for (seller_id,) in cur.fetchall():
+                    for (seller_id,) in sellers_completed:
                         cur.execute("""INSERT INTO seller_points_ledger(seller_account_id,delta_points,reason_code,reference_id,idempotency_key,actor)
                                        VALUES(%s,%s,'sale_completed',%s,%s,%s) ON CONFLICT(idempotency_key) DO NOTHING""",
                                     (seller_id,int(point_rule[0]),order_id,f"sale-completed:{order_id}:{seller_id}",account.id))
