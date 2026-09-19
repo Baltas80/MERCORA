@@ -1,0 +1,36 @@
+from __future__ import annotations
+import hashlib,uuid
+from io import BytesIO
+from pathlib import Path
+from PIL import Image
+
+IMAGE_TYPES={"image/jpeg":"jpg","image/png":"png","image/webp":"webp"}
+PDF="application/pdf"
+MAX_BYTES=10*1024*1024
+
+def sanitize_image(data:bytes,media_type:str)->bytes:
+    if media_type not in IMAGE_TYPES or not data or len(data)>MAX_BYTES: raise ValueError("upload_rejected")
+    with Image.open(BytesIO(data)) as img: img.verify()
+    with Image.open(BytesIO(data)) as img:
+        if img.width>8000 or img.height>8000: raise ValueError("image_dimensions_rejected")
+        out=BytesIO()
+        img.convert("RGB").save(out,format={"image/jpeg":"JPEG","image/png":"PNG","image/webp":"WEBP"}[media_type],quality=90)
+        return out.getvalue()
+
+def validate_pdf(data:bytes)->bytes:
+    if not data or len(data)>MAX_BYTES or not data.startswith(b"%PDF-"): raise ValueError("upload_rejected")
+    return bytes(data)
+
+def store_upload(data:bytes,media_type:str,purpose:str,root:str)->tuple[str,int,str,str]:
+    if media_type in IMAGE_TYPES: clean=sanitize_image(data,media_type);ext=IMAGE_TYPES[media_type];scan="pending"
+    elif media_type==PDF: clean=validate_pdf(data);ext="pdf";scan="pending"
+    else: raise ValueError("upload_type_invalid")
+    key=f"{purpose}/{uuid.uuid4().hex}.{ext}"
+    path=Path(root).resolve()/key
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_bytes(clean)
+    return key,len(clean),hashlib.sha256(clean).hexdigest(),scan
+
+def store_clean_image(data:bytes,media_type:str,purpose:str,root:str):
+    key,size,digest,_=store_upload(data,media_type,purpose,root)
+    return key,size,digest

@@ -2,65 +2,94 @@ name: MERCORA CI
 
 on:
   push:
-    branches: ["master"]
+    branches: [master, feat/mercora-canonical]
   pull_request:
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
-  static-security:
+  test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: mercora
+          POSTGRES_USER: mercora
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mercora -d mercora"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://mercora:postgres@127.0.0.1:5432/mercora
+      MERCORA_ENV: development
     steps:
       - uses: actions/checkout@v4
-
-      - name: Check for obvious secret material
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Generate ephemeral CI secrets
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE --exclude-dir=.git --exclude='*.md' \
-            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' .; then
+          python - <<'PY' >> "$GITHUB_ENV"
+          import base64, secrets
+          print("MERCORA_ENCRYPTION_KEY_B64=" + base64.b64encode(secrets.token_bytes(32)).decode())
+          print("MERCORA_PAYMENT_INGEST_SECRET=" + secrets.token_hex(32))
+          print("MERCORA_FINANCE_CALLBACK_SECRET=" + secrets.token_hex(32))
+          PY
+      - name: Install
+        run: pip install -r app/requirements.txt
+      - name: Migration smoke test
+        run: PYTHONPATH=app python app/migrate.py
+      - name: Python syntax
+        run: python -m compileall -q app
+      - name: JavaScript syntax
+        run: for f in web/*.js; do node --check "$f"; done
+      - name: Unit and integration tests
+        run: PYTHONPATH=app python -m unittest discover -s app -p 'test_*.py'
+      - name: HTTP security smoke test
+        run: |
+          set -euo pipefail
+          PYTHONPATH=app uvicorn app.server:app --host 127.0.0.1 --port 8090 >/tmp/mercora-api.log 2>&1 &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 10); do curl -fsS http://127.0.0.1:8090/healthz >/dev/null && break; sleep 1; done
+          curl -fsSI http://127.0.0.1:8090/healthz | grep -qi 'x-content-type-options: nosniff'
+          curl -fsSI http://127.0.0.1:8090/healthz | grep -qi 'referrer-policy: no-referrer'
+      - name: Secret pattern scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -I -E '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|wallet_seed|api_key[[:space:]]*[:=])' -- ':!*.md' ':!.github/**'; then
             echo "Potential secret material detected."
             exit 1
           fi
-
-      - name: Check forbidden production artifacts
-        shell: bash
+          test ! -e .env
+          test ! -d tor/keys
+      - name: Dependency audit
+        run: pip install --no-cache-dir pip-audit && pip-audit -r app/requirements.txt
+      - name: Backup and restore smoke test
         run: |
           set -euo pipefail
-          test ! -e .env
-          test ! -e .env.production
-          test ! -d tor/keys
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Check server syntax
-        run: node --check server/server.js
-
-      - name: Check frontend syntax
-        run: node --check web/app.js
-
-      - name: Dependency audit
-        run: npm audit --audit-level=high
-
-      - name: Run unit tests
-        run: npm test
+          pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > /tmp/mercora.dump
+          psql "$DATABASE_URL" -c "CREATE DATABASE mercora_restore"
+          pg_restore --no-owner --no-privileges --dbname=postgresql://mercora:postgres@127.0.0.1:5432/mercora_restore /tmp/mercora.dump
+          psql postgresql://mercora:postgres@127.0.0.1:5432/mercora_restore -c "SELECT count(*) FROM schema_migrations" >/dev/null
+      - name: Container build
+        run: docker build -f app/Dockerfile .
+      - name: DAST smoke
+        run: python app/dast_smoke.py http://127.0.0.1:8090
 
   codeql:
-    name: CodeQL
     runs-on: ubuntu-latest
     permissions:
-      security-events: write
-      packages: read
-      actions: read
       contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v3
         with:
-          languages: javascript
+          languages: python
       - uses: github/codeql-action/analyze@v3

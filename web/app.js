@@ -1,95 +1,14 @@
-const products = [
-  { id: "p1", title: "ThinkPad X1 Carbon", category: "Computing", condition: "Very good", seller: "northstar", price: 320 },
-  { id: "p2", title: "Mirrorless Camera Body", category: "Cameras", condition: "Good", seller: "silverframe", price: 410 },
-  { id: "p3", title: "Vintage Hi-Fi Receiver", category: "Electronics", condition: "Good", seller: "analog-works", price: 185 },
-  { id: "p4", title: "Mechanical Workshop Set", category: "Tools", condition: "Like new", seller: "forge_12", price: 95 },
-  { id: "p5", title: "Compact Coffee Grinder", category: "Home", condition: "Very good", seller: "copperline", price: 70 },
-  { id: "p6", title: "Film Camera Kit", category: "Cameras", condition: "Excellent", seller: "grainlab", price: 260 },
-  { id: "p7", title: "Retro Console Bundle", category: "Collectibles", condition: "Good", seller: "pixelvault", price: 145 },
-  { id: "p8", title: "Heavy Cotton Jacket", category: "Clothing", condition: "Very good", seller: "morrow", price: 80 }
-];
-
-const state = { cart: [] };
-const productGrid = document.querySelector("#productGrid");
-const resultCount = document.querySelector("#resultCount");
-const cartCount = document.querySelector("#cartCount");
-const cartDialog = document.querySelector("#cartDialog");
-const cartItems = document.querySelector("#cartItems");
-const cartTotal = document.querySelector("#cartTotal");
-
-function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[ch]));
-}
-
-function renderProducts(list) {
-  resultCount.textContent = `${list.length} listings`;
-  productGrid.replaceChildren();
-  for (const product of list) {
-    const card = document.createElement("article");
-    card.className = "product";
-    card.innerHTML = `
-      <div class="product-art" aria-hidden="true">MERCORA</div>
-      <div class="product-body">
-        <h3 class="product-title">${escapeHtml(product.title)}</h3>
-        <div class="product-meta">${escapeHtml(product.category)} · ${escapeHtml(product.condition)}<br>Seller: ${escapeHtml(product.seller)}</div>
-        <div class="product-footer">
-          <span class="price">€${product.price.toLocaleString("en-IE")}</span>
-          <button class="add" data-id="${product.id}" type="button">ADD</button>
-        </div>
-      </div>`;
-    productGrid.appendChild(card);
-  }
-}
-
-function renderCart() {
-  cartCount.textContent = String(state.cart.length);
-  cartItems.replaceChildren();
-  let total = 0;
-  for (const item of state.cart) {
-    total += item.price;
-    const line = document.createElement("div");
-    line.className = "cart-line";
-    line.innerHTML = `<span>${escapeHtml(item.title)}</span><strong>€${item.price}</strong>`;
-    cartItems.appendChild(line);
-  }
-  cartTotal.textContent = `€${total.toLocaleString("en-IE")}`;
-  if (!state.cart.length) {
-    const empty = document.createElement("p");
-    empty.className = "muted";
-    empty.textContent = "Your cart is empty.";
-    cartItems.appendChild(empty);
-  }
-}
-
-productGrid.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-id]");
-  if (!button) return;
-  const product = products.find((item) => item.id === button.dataset.id);
-  if (product) state.cart.push(product);
-  renderCart();
-});
-
-document.querySelector("#cartButton").addEventListener("click", () => {
-  renderCart();
-  cartDialog.showModal();
-});
-document.querySelector("#closeCart").addEventListener("click", () => cartDialog.close());
-document.querySelector("#checkoutButton").addEventListener("click", () => {
-  window.location.hash = "checkout";
-  cartDialog.close();
-  window.alert("Checkout UI will be connected to the audited payment service in a later phase.");
-});
-
-document.querySelector("#searchForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  const q = document.querySelector("#searchInput").value.trim().toLowerCase();
-  const filtered = q ? products.filter((item) => [item.title, item.category, item.condition, item.seller].some((value) => value.toLowerCase().includes(q))) : products;
-  renderProducts(filtered);
-});
-
-document.querySelectorAll(".category").forEach((button) => {
-  button.addEventListener("click", () => renderProducts(products.filter((item) => item.category === button.dataset.category)));
-});
-
-renderProducts(products);
-renderCart();
+import {applyTranslations,getLocale,setLocale,t} from "./i18n.js";
+const state={items:[],cart:[],locale:getLocale(),authenticated:false};
+const grid=document.querySelector("#productGrid"),count=document.querySelector("#resultCount"),cartCount=document.querySelector("#cartCount"),dialog=document.querySelector("#cartDialog"),cartItems=document.querySelector("#cartItems"),cartTotal=document.querySelector("#cartTotal"),language=document.querySelector("#languageSelect");
+function money(minor,currency,locale=state.locale){return new Intl.NumberFormat(locale,{style:"currency",currency}).format(Number(minor)/100)}
+async function api(path,options={}){const r=await fetch("/api"+path,{credentials:"same-origin",...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||d.detail||"request_failed");return d}
+function csrf(){const m=document.cookie.match(/(?:^|; )mercora_csrf=([^;]+)/);return m?decodeURIComponent(m[1]):""}
+function writeText(node,textValue){node.textContent=textValue}
+function render(){applyTranslations(state.locale);language.value=state.locale;count.textContent=state.items.length+" "+t("listings",state.locale);grid.replaceChildren();for(const p of state.items){const card=document.createElement("article");card.className="product";const art=document.createElement("div");art.className="product-art";art.textContent="MERCORA";const body=document.createElement("div");body.className="product-body";const title=document.createElement("h3");title.className="product-title";title.textContent=p.title;const meta=document.createElement("div");meta.className="product-meta";meta.textContent=p.seller_id+" · "+p.currency;const foot=document.createElement("div");foot.className="product-footer";const price=document.createElement("span");price.className="price";price.textContent=money(p.price_minor,p.currency);const add=document.createElement("button");add.className="add";add.type="button";add.dataset.id=p.id;add.textContent=t("product.add",state.locale);foot.append(price,add);body.append(title,meta,foot);card.append(art,body);grid.append(card)}cartItems.replaceChildren();let total=0;for(const item of state.cart){total+=Number(item.price_minor)*Number(item.quantity);const row=document.createElement("div");row.className="cart-line";row.textContent=item.title+" × "+item.quantity+" — "+money(item.price_minor*item.quantity,item.currency);cartItems.append(row)}if(!state.cart.length){const e=document.createElement("p");e.className="muted";e.textContent=t("cart.empty",state.locale);cartItems.append(e)}cartTotal.textContent=state.cart[0]?money(total,state.cart[0].currency):"€0";cartCount.textContent=String(state.cart.reduce((n,x)=>n+x.quantity,0))}
+async function load(){try{await api("/auth/me");state.authenticated=true}catch{state.authenticated=false}try{state.items=(await api("/listings")).items}catch{state.items=[]}if(state.authenticated){try{state.cart=(await api("/cart")).items}catch{state.cart=[]}}render()}
+grid.addEventListener("click",async e=>{const b=e.target.closest("[data-id]");if(!b)return;if(!state.authenticated){location.href="/account.html?next=/";return}try{await api("/cart",{method:"POST",headers:{"X-CSRF-Token":csrf()},body:JSON.stringify({listing_id:b.dataset.id,quantity:1})});state.cart=(await api("/cart")).items;render()}catch(err){alert(err.message)}});
+document.querySelector("#searchForm").addEventListener("submit",async e=>{e.preventDefault();const q=document.querySelector("#searchInput").value.trim();try{state.items=(await api("/listings"+(q?"?q="+encodeURIComponent(q):""))).items;render()}catch(err){alert(err.message)}});
+document.querySelector("#cartButton").addEventListener("click",()=>{render();dialog.showModal()});document.querySelector("#closeCart").addEventListener("click",()=>dialog.close());
+document.querySelector("#checkoutButton").addEventListener("click",async()=>{if(!state.authenticated){location.href="/account.html?next=/";return}if(!state.cart.length)return;const key=crypto.randomUUID()+crypto.randomUUID();try{const order=await api("/checkout",{method:"POST",headers:{"X-CSRF-Token":csrf()},body:JSON.stringify({idempotency_key:key})});const asset=(prompt("Activo de pago: BTC, LTC o XMR","BTC")||"BTC").toUpperCase();if(!["BTC","LTC","XMR"].includes(asset))return;const quote=await api("/payments/quote",{method:"POST",headers:{"X-CSRF-Token":csrf()},body:JSON.stringify({order_id:order.order_id,asset_code:asset})});const intent=await api("/payments/intent",{method:"POST",headers:{"X-CSRF-Token":csrf()},body:JSON.stringify({quote_id:quote.quote_id,idempotency_key:key+"-payment"})});alert("Payment intent creado: "+intent.asset_code+" "+intent.amount_atomic);dialog.close();state.cart=[]}catch(err){alert(err.message)}});
+language.addEventListener("change",()=>{state.locale=setLocale(language.value);render()});load();
