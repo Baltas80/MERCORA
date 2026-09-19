@@ -71,14 +71,14 @@ services:
     depends_on: [api]
     environment:
       MERCORA_PUBLIC_HOST: ${MERCORA_PUBLIC_HOST:?set MERCORA_PUBLIC_HOST}
-    ports: ["127.0.0.1:8080:80"]
+      NGINX_ENVSUBST_FILTER: ^MERCORA_PUBLIC_HOST$
+    ports: ["127.0.0.1:8080:8080"]
     volumes:
       - ./web:/usr/share/nginx/html:ro
       - ./infra/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
     networks: [frontend]
     restart: unless-stopped
     security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
     tmpfs:
       - /var/cache/nginx
       - /var/run
