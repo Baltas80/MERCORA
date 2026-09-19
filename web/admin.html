@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="MERCORA administration">
+  <title>MERCORA — Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="site-shell admin-shell">
+    <header class="topbar">
+      <a class="brand" href="/">MERCORA</a>
+      <div class="admin-title">ADMIN CONSOLE</div>
+      <label class="language-select"><span class="sr-only">Language</span><select id="languageSelect" aria-label="Language"><option value="es">ES</option><option value="en">EN</option><option value="fr">FR</option><option value="de">DE</option><option value="it">IT</option><option value="pt">PT</option></select></label>
+    </header>
+    <main class="admin-layout">
+      <aside class="admin-sidebar">
+        <div class="panel-title">CONTROL CENTER</div>
+        <button data-section="overview" class="admin-nav active">Overview</button>
+        <button data-section="users" class="admin-nav">Users</button>
+        <button data-section="sellers" class="admin-nav">Sellers & stores</button>
+        <button data-section="sales" class="admin-nav">Sales & orders</button>
+        <button data-section="payments" class="admin-nav">Payments</button>
+        <button data-section="wallets" class="admin-nav">Wallets</button>
+        <button data-section="escrow" class="admin-nav">Escrow</button>
+        <button data-section="points" class="admin-nav">Points & levels</button>
+        <button data-section="payouts" class="admin-nav">Payout modes</button>
+        <button data-section="moderation" class="admin-nav">Moderation</button>
+        <button data-section="promos" class="admin-nav">Promotion codes</button>
+        <button data-section="audit" class="admin-nav">Audit log</button>
+        <button data-section="emergency" class="admin-nav">Emergency controls</button>
+      </aside>
+      <section class="admin-main">
+        <div class="admin-header">
+          <div><p class="eyebrow">MERCORA ADMIN</p><h1>Operations dashboard</h1></div>
+          <div class="admin-security">HIGH-RISK ACTIONS REQUIRE STEP-UP + SECOND APPROVER</div>
+        </div>
+        <div class="admin-grid">
+          <article class="admin-card"><span>Users</span><strong>—</strong><small>Live API required</small></article>
+          <article class="admin-card"><span>Active stores</span><strong>—</strong><small>Live API required</small></article>
+          <article class="admin-card"><span>Orders</span><strong>—</strong><small>Live API required</small></article>
+          <article class="admin-card"><span>Escrow held</span><strong>—</strong><small>Financial service required</small></article>
+        </div>
+        <div id="adminContent" class="admin-panel">
+          <h2>Centralized control</h2>
+          <p class="muted">The production console will expose account, seller, marketplace, payments, wallet metadata, escrow, points, payouts, moderation, promotions, audit and emergency operations through authenticated APIs.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/admin.js"></script>
+</body>
+</html>
