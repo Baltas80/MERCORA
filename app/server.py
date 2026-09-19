@@ -869,6 +869,19 @@ async def admin_mfa_enroll(body:MFAEnrollIn,request:Request,account:Annotated[Au
             conn.commit()
     return {"secret":secret,"otpauth_uri":provisioning_uri(secret,account.pseudonym)}
 
+@app.get("/wallet/balances")
+async def wallet_balances(account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT a.code,
+                                  COALESCE(SUM(e.amount_atomic) FILTER(WHERE e.direction='credit'),0)
+                                  - COALESCE(SUM(e.amount_atomic) FILTER(WHERE e.direction='debit'),0)
+                           FROM assets a
+                           LEFT JOIN ledger_accounts la ON la.asset_code=a.code AND la.owner_account_id=%s AND la.account_type='customer_liability'
+                           LEFT JOIN ledger_entries e ON e.account_id=la.id
+                           GROUP BY a.code ORDER BY a.code""",(account.id,))
+            return {"items":[{"asset_code":r[0],"available_atomic":str(r[1] or 0)} for r in cur.fetchall()]}
+
 @app.post("/wallet/withdrawals",status_code=201)
 async def request_withdrawal(body:WithdrawalIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
     await csrf_account(request,account)
