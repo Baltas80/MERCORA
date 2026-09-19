@@ -1094,13 +1094,19 @@ async def upload_evidence(dispute_id:UUID,request:Request,account:Annotated[Auth
     await csrf_account(request,account)
     if not upload_limiter.allow(str(account.id)):
         raise HTTPException(429,"rate_limited")
-    media=request.headers.get("content-type","").split(";")[0].lower(); data=await request.body()
+    media=request.headers.get("content-type","").split(";")[0].lower()
+    if media not in {"image/jpeg","image/png","image/webp","application/pdf"}:
+        raise HTTPException(400,"upload_type_invalid")
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT buyer_account_id,seller_account_id,status FROM disputes WHERE id=%s FOR UPDATE",(dispute_id,)); row=cur.fetchone()
+            if not row or account.id not in {row[0],row[1]}: raise HTTPException(403,"forbidden")
+            if row[2] in {"closed","rejected"}: raise HTTPException(409,"dispute_closed")
+    data=await request.body()
     try:key,size,digest,scan=store_upload(data,media,"dispute_evidence",STORAGE_ROOT)
     except Exception as exc: raise HTTPException(400,"upload_rejected") from exc
     with connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT buyer_account_id,seller_account_id FROM disputes WHERE id=%s FOR UPDATE",(dispute_id,)); row=cur.fetchone()
-            if not row or account.id not in {row[0],row[1]}: raise HTTPException(403,"forbidden")
             cur.execute("INSERT INTO uploads(owner_account_id,object_key,media_type,byte_size,sha256,purpose,scan_status) VALUES(%s,%s,%s,%s,%s,'dispute_evidence',%s) RETURNING id",(account.id,key,media,size,digest,scan))
             uid=cur.fetchone()[0]
             cur.execute("INSERT INTO dispute_evidence(dispute_id,submitted_by,object_key,media_type,byte_size,sha256,scan_status) VALUES(%s,%s,%s,%s,%s,%s,%s) RETURNING id",(dispute_id,account.id,key,media,size,digest,scan))
