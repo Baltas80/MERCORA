@@ -5,8 +5,7 @@ services:
       POSTGRES_DB: mercora
       POSTGRES_USER: mercora
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    volumes: [postgres_data:/var/lib/postgresql/data]
     networks: [backend]
     restart: unless-stopped
     healthcheck:
@@ -14,18 +13,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
   migrate:
     build: {context: ., dockerfile: app/Dockerfile}
     command: ["python","migrate.py"]
-    environment:
-      DATABASE_URL: postgresql://mercora:${POSTGRES_PASSWORD}@postgres:5432/mercora
-    depends_on:
-      postgres:
-        condition: service_healthy
+    environment: {DATABASE_URL: postgresql://mercora:${POSTGRES_PASSWORD}@postgres:5432/mercora}
+    depends_on: {postgres: {condition: service_healthy}}
     networks: [backend]
     restart: "no"
-
   api:
     build: {context: ., dockerfile: app/Dockerfile}
     environment:
@@ -33,13 +27,13 @@ services:
       MERCORA_ENV: production
       MERCORA_ENCRYPTION_KEY_B64: ${MERCORA_ENCRYPTION_KEY_B64:?set MERCORA_ENCRYPTION_KEY_B64}
       MERCORA_PAYMENT_INGEST_SECRET: ${MERCORA_PAYMENT_INGEST_SECRET:?set MERCORA_PAYMENT_INGEST_SECRET}
+      MERCORA_FINANCE_CALLBACK_SECRET: ${MERCORA_FINANCE_CALLBACK_SECRET:?set MERCORA_FINANCE_CALLBACK_SECRET}
       MERCORA_STORAGE_ROOT: /data
     depends_on:
       migrate:
         condition: service_completed_successfully
     networks: [backend]
-    volumes:
-      - mercora_data:/data
+    volumes: [mercora_data:/data]
     restart: unless-stopped
     read_only: true
     tmpfs: [/tmp]
@@ -50,22 +44,22 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-
   worker:
     build: {context: ., dockerfile: app/Dockerfile}
     command: ["python","worker.py"]
     environment:
       DATABASE_URL: postgresql://mercora:${POSTGRES_PASSWORD}@postgres:5432/mercora
+      MERCORA_STORAGE_ROOT: /data
     depends_on:
       migrate:
         condition: service_completed_successfully
     networks: [backend]
+    volumes: [mercora_data:/data]
     restart: unless-stopped
-    read_only: true
+    read_only: false
     tmpfs: [/tmp]
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
-
   proxy:
     image: nginx:1.28-alpine
     depends_on: [api]
@@ -76,12 +70,9 @@ services:
     networks: [edge,backend]
     restart: unless-stopped
     security_opt: [no-new-privileges:true]
-
 networks:
   edge:
-  backend:
-    internal: true
-
+  backend: {internal: true}
 volumes:
   postgres_data:
   mercora_data:
