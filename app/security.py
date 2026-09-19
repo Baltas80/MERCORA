@@ -146,3 +146,16 @@ def financial_open(cur) -> bool:
         and custody[0] == "normal"
         and marketplace[0] == "normal"
     )
+
+
+async def read_limited_body(request: Request, limit: int) -> bytes:
+    if limit <= 0:
+        raise ValueError("invalid_body_limit")
+    total = 0
+    chunks: list[bytes] = []
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(413, "request_too_large")
+        chunks.append(chunk)
+    return b"".join(chunks)
