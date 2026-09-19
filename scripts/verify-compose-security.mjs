@@ -23,7 +23,7 @@ const must = [
   ["api publishes no host ports", !/^\\s+ports:/m.test(api)],
   ["worker publishes no host ports", !/^\\s+ports:/m.test(worker)],
   ["proxy is the only published service", /^\\s+ports:/m.test(proxy) && (compose.match(/(^|\\n)\\s+ports:/g) || []).length === 1],
-  ["proxy publishes only loopback 8080", /127\\.0\\.0\\.1:8080:8080/.test(proxy)],
+  ["proxy publishes only loopback 8080", /127[.]0[.]0[.]1:8080:8080/.test(proxy)],
   ["postgres uses data network only", /networks: \[data\]/.test(postgres)],
   ["migrate uses data network only", /networks: \[data\]/.test(migrate)],
   ["worker uses data network only", /networks: \[data\]/.test(worker)],
