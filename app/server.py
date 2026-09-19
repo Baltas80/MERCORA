@@ -504,6 +504,24 @@ async def create_payment_intent(body: PaymentIntentIn, request: Request, account
                            VALUES(%s,%s,%s,%s,%s,'mainnet',%s,'awaiting_payment',%s,now()+interval '30 minutes') RETURNING id""",
                         (q[1], account.id, body.quote_id, method, q[3], q[4], body.idempotency_key))
             pid = cur.fetchone()[0]
+            cur.execute("SELECT subtotal_minor,total_minor FROM orders WHERE id=%s AND buyer_id=%s FOR UPDATE",(q[1],account.id))
+            order_amounts=cur.fetchone()
+            if not order_amounts or int(order_amounts[0])<=0 or int(order_amounts[1])<=0: raise HTTPException(400,"order_amount_invalid")
+            cur.execute("""SELECT seller_id,SUM(quantity*unit_price_minor),SUM(seller_fee_minor)
+                           FROM order_items WHERE order_id=%s GROUP BY seller_id ORDER BY seller_id""",(q[1],))
+            seller_rows=cur.fetchall()
+            asset_subtotal=(int(q[4])*int(order_amounts[0]))//int(order_amounts[1])
+            if asset_subtotal<=0: raise HTTPException(400,"payment_allocation_too_small")
+            positive=[row for row in seller_rows if int(row[1])-int(row[2] or 0)>0]
+            remaining=asset_subtotal
+            for idx,(seller_id,gross,fee) in enumerate(positive):
+                net=int(gross)-int(fee or 0)
+                allocation=(asset_subtotal*net)//int(order_amounts[0]) if idx<len(positive)-1 else remaining
+                if allocation<=0: continue
+                if allocation>remaining: raise HTTPException(409,"payment_allocation_invalid")
+                cur.execute("INSERT INTO payment_allocations(payment_intent_id,seller_account_id,asset_code,amount_atomic) VALUES(%s,%s,%s,%s)",(pid,seller_id,q[3],allocation))
+                remaining-=allocation
+            if remaining!=0: raise HTTPException(409,"payment_allocation_remainder")
             cur.execute("UPDATE orders SET status='pending_payment',updated_at=now() WHERE id=%s AND buyer_id=%s", (q[1], account.id))
             conn.commit()
     return {"payment_intent_id": str(pid), "asset_code": q[3], "amount_atomic": str(q[4]), "status": "awaiting_payment"}
