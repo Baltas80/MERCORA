@@ -29,6 +29,7 @@ from rate_limit import FixedWindowRateLimiter
 from mfa import generate_secret, provisioning_uri, verify_code, encrypt_secret, decrypt_secret
 from reconciliation import record_asset_reconciliation, all_assets_reconciled
 from risk import current_level
+from storage import store_upload
 from order_policy import can_transition as order_can_transition
 
 app = FastAPI(title="MERCORA API", docs_url=None, redoc_url=None, openapi_url=None)
@@ -290,6 +291,8 @@ async def create_listing(body: ListingIn, request: Request, account: Annotated[A
 @app.post("/listings/{listing_id}/report", status_code=201)
 async def report_listing(listing_id: UUID, reason: str, request: Request, account: Annotated[AuthenticatedAccount, Depends(current_account)]):
     await csrf_account(request, account)
+    if not report_limiter.allow(str(account.id)):
+        raise HTTPException(429, "rate_limited")
     if len(reason.strip()) < 3:
         raise HTTPException(400, "invalid_reason")
     with connection() as conn:
@@ -584,6 +587,8 @@ async def ingest_payment_event(request: Request):
 @app.post("/disputes", status_code=201)
 async def open_dispute(body: DisputeIn, request: Request, account: Annotated[AuthenticatedAccount, Depends(current_account)]):
     await csrf_account(request, account)
+    if not dispute_limiter.allow(str(account.id)):
+        raise HTTPException(429, "rate_limited")
     if body.reason_code not in {"non_delivery","item_not_as_described","damaged_in_transit","suspected_counterfeit","other"}: raise HTTPException(400,"invalid_reason")
     with connection() as conn:
         with conn.cursor() as cur:
@@ -604,6 +609,8 @@ async def open_dispute(body: DisputeIn, request: Request, account: Annotated[Aut
 @app.post("/disputes/{dispute_id}/messages")
 async def dispute_message(dispute_id:UUID, body:DisputeMessageIn, request:Request, account:Annotated[AuthenticatedAccount,Depends(current_account)]):
     await csrf_account(request,account)
+    if not message_limiter.allow(str(account.id)):
+        raise HTTPException(429,"rate_limited")
     encrypted=encrypt_text(body.body)
     with connection() as conn:
         with conn.cursor() as cur:
@@ -692,6 +699,8 @@ async def appeal_dispute(dispute_id:UUID,body:AppealIn,request:Request,account:A
 @app.post("/messages")
 async def send_message(body:MessageIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
     await csrf_account(request,account)
+    if not message_limiter.allow(str(account.id)):
+        raise HTTPException(429,"rate_limited")
     if body.recipient_account_id==account.id: raise HTTPException(400,"invalid_recipient")
     encrypted=encrypt_text(body.body)
     with connection() as conn:
@@ -715,6 +724,8 @@ async def get_messages(account:Annotated[AuthenticatedAccount,Depends(current_ac
 @app.post("/uploads/images",status_code=201)
 async def upload_image(request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
     await csrf_account(request,account)
+    if not upload_limiter.allow(str(account.id)):
+        raise HTTPException(429,"rate_limited")
     media=request.headers.get("content-type","").split(";")[0].lower()
     data=await request.body()
     if len(data)>MAX_BYTES: raise HTTPException(413,"upload_too_large")
@@ -787,7 +798,6 @@ async def execute_emergency(body:EmergencyIn,request:Request,account:Annotated[A
             if not row or row[0]!=account.id or row[1]!="approved" or row[2]!="emergency.manage": raise HTTPException(403,"approved_action_required")
             cur.execute("UPDATE system_state SET value='emergency',updated_at=now() WHERE key IN('custody_mode','marketplace_mode')")
             cur.execute("INSERT INTO emergency_events(action,actor_account_id,reason,state_after,authorization_ref) VALUES('freeze',%s,%s,'emergency',%s)",(account.id,body.reason,str(body.action_request_id)))
-            cur.execute("UPDATE admin_action_requests SET status='executed',executed_at=now() WHERE id=%s",(body.action_request_id,))
             audit(cur,account.id,"emergency.freeze","system",None,"allowed",body.reason,rid)
             conn.commit()
     return {"status":"emergency"}
@@ -992,6 +1002,8 @@ async def get_shipping(order_id:UUID,account:Annotated[AuthenticatedAccount,Depe
 @app.post("/disputes/{dispute_id}/evidence",status_code=201)
 async def upload_evidence(dispute_id:UUID,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
     await csrf_account(request,account)
+    if not upload_limiter.allow(str(account.id)):
+        raise HTTPException(429,"rate_limited")
     media=request.headers.get("content-type","").split(";")[0].lower(); data=await request.body()
     try:key,size,digest,scan=store_upload(data,media,"dispute_evidence",STORAGE_ROOT)
     except Exception as exc: raise HTTPException(400,"upload_rejected") from exc
