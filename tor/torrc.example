@@ -4,11 +4,14 @@ ControlPort 0
 ClientUseIPv4 1
 ClientUseIPv6 0
 AvoidDiskWrites 1
+
 HiddenServiceDir /var/lib/tor/mercora
+HiddenServiceVersion 3
 HiddenServicePort 80 127.0.0.1:8080
 
 # Production:
 # - protect HiddenServiceDir with 0700 permissions
-# - keep origin listener loopback/private
+# - keep the public edge bound to loopback/private networking
 # - isolate Tor from database, storage, worker and custody networks
-# - do not expose private service keys to the app container
+# - do not expose private service keys to the application or proxy containers
+# - verify the deployed Tor version supports the intended Onion Service DoS defenses
