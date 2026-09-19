@@ -6,20 +6,25 @@ services:
       POSTGRES_USER: mercora
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     volumes: [postgres_data:/var/lib/postgresql/data]
-    networks: [backend]
+    networks: [data]
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL","pg_isready -U mercora -d mercora"]
       interval: 10s
       timeout: 5s
       retries: 5
+
   migrate:
     build: {context: ., dockerfile: app/Dockerfile}
     command: ["python","migrate.py"]
-    environment: {DATABASE_URL: postgresql://mercora:${POSTGRES_PASSWORD}@postgres:5432/mercora}
-    depends_on: {postgres: {condition: service_healthy}}
-    networks: [backend]
+    environment:
+      DATABASE_URL: postgresql://mercora:${POSTGRES_PASSWORD}@postgres:5432/mercora
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data]
     restart: "no"
+
   api:
     build: {context: ., dockerfile: app/Dockerfile}
     environment:
@@ -32,7 +37,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    networks: [backend]
+    networks: [frontend,data]
     volumes: [mercora_data:/data]
     restart: unless-stopped
     read_only: true
@@ -44,6 +49,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
   worker:
     build: {context: ., dockerfile: app/Dockerfile}
     command: ["python","worker.py"]
@@ -53,26 +59,36 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    networks: [backend]
+    networks: [data]
     volumes: [mercora_data:/data]
     restart: unless-stopped
-    read_only: false
     tmpfs: [/tmp]
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+
   proxy:
     image: nginx:1.28-alpine
     depends_on: [api]
+    environment:
+      MERCORA_PUBLIC_HOST: ${MERCORA_PUBLIC_HOST:?set MERCORA_PUBLIC_HOST}
     ports: ["127.0.0.1:8080:80"]
     volumes:
       - ./web:/usr/share/nginx/html:ro
-      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    networks: [edge,backend]
+      - ./infra/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    networks: [frontend]
     restart: unless-stopped
     security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+
 networks:
-  edge:
-  backend: {internal: true}
+  frontend:
+    internal: true
+  data:
+    internal: true
+
 volumes:
   postgres_data:
   mercora_data:
