@@ -1,4 +1,5 @@
 # MERCORA Onion Service v3 template.
+# Production baseline: Tor 0.4.9.12+; revalidate against current supported release before deployment.
 SocksPort 0
 ControlPort 0
 ClientUseIPv4 1
@@ -9,9 +10,22 @@ HiddenServiceDir /var/lib/tor/mercora
 HiddenServiceVersion 3
 HiddenServicePort 80 127.0.0.1:8080
 
+# Introduction-point DoS rate limiting.
+# Values should be load-tested before production; zero disables the effective limit.
+HiddenServiceEnableIntroDoSDefense 1
+HiddenServiceEnableIntroDoSRatePerSec 25
+HiddenServiceEnableIntroDoSBurstPerSec 200
+
+# Proof-of-work can add another layer of DoS resistance.
+# Enable only when the deployed Tor binary exposes/has the required PoW module
+# and the client UX has been tested for the expected workload.
+# HiddenServicePoWDefensesEnabled 1
+# HiddenServicePoWQueueRate 25
+# HiddenServicePoWQueueBurst 50
+
 # Production:
 # - protect HiddenServiceDir with 0700 permissions
 # - keep the public edge bound to loopback/private networking
 # - isolate Tor from database, storage, worker and custody networks
 # - do not expose private service keys to the application or proxy containers
-# - verify the deployed Tor version supports the intended Onion Service DoS defenses
+# - verify the deployed Tor version and supported DoS options before rollout
