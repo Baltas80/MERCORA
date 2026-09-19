@@ -34,7 +34,7 @@ const must = [
   ["proxy requires public host environment", /MERCORA_PUBLIC_HOST:\s*\$\{MERCORA_PUBLIC_HOST:\?set MERCORA_PUBLIC_HOST\}/.test(proxy)],
   ["api is read-only", /read_only: true/.test(api)],
   ["api drops all capabilities", /cap_drop: \[ALL\]/.test(api)],
-  ["no tor private material is mounted", !/(tor\\/keys|PRIVATE KEY|mnemonic|seed phrase)/i.test(compose)]
+  ["no tor private material is mounted", !/(tor[\\/ ]keys|PRIVATE KEY|mnemonic|seed phrase)/i.test(compose)]
 ];
 
 const failed = must.filter((entry) => !entry[1]).map((entry) => entry[0]);
