@@ -222,3 +222,37 @@ CREATE INDEX IF NOT EXISTS idx_seller_payout_requests_seller
 -- The application must verify the seller's current eligibility before changing
 -- seller_payout_mode_requests to approved or executing a payout.
 -- Points are evidence for eligibility, not a substitute for risk controls.
+
+
+CREATE OR REPLACE FUNCTION record_seller_points(
+  p_seller_account_id UUID,
+  p_delta_points INTEGER,
+  p_reason_code TEXT,
+  p_reference_id UUID,
+  p_idempotency_key TEXT,
+  p_actor TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $points$
+BEGIN
+  IF p_delta_points = 0 THEN
+    RAISE EXCEPTION 'invalid_points_delta';
+  END IF;
+
+  INSERT INTO seller_points_ledger(
+    seller_account_id, delta_points, reason_code,
+    reference_id, idempotency_key, actor
+  )
+  VALUES (
+    p_seller_account_id, p_delta_points, p_reason_code,
+    p_reference_id, p_idempotency_key, p_actor
+  )
+  ON CONFLICT (idempotency_key) DO NOTHING;
+
+  RETURN FOUND;
+END;
+$points$;
+
+-- Points must be awarded/deducted from authoritative server events only.
+-- The client must never submit an arbitrary point balance or level.
