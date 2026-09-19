@@ -534,9 +534,12 @@ async def create_payment_intent(body: PaymentIntentIn, request: Request, account
             q = cur.fetchone()
             if not q or q[5] <= datetime.now(timezone.utc):
                 raise HTTPException(400, "quote_expired")
-            cur.execute("SELECT id FROM payment_intents WHERE idempotency_key=%s", (body.idempotency_key,))
+            cur.execute("SELECT id,account_id FROM payment_intents WHERE idempotency_key=%s FOR UPDATE", (body.idempotency_key,))
             existing = cur.fetchone()
-            if existing: return {"payment_intent_id": str(existing[0]), "idempotent": True}
+            if existing:
+                if existing[1] != account.id:
+                    raise HTTPException(409, "idempotency_key_conflict")
+                return {"payment_intent_id": str(existing[0]), "idempotent": True}
             method = {"BTC": "bitcoin", "LTC": "litecoin", "XMR": "monero"}[q[3]]
             cur.execute("""INSERT INTO payment_intents(order_id,account_id,quote_id,method,asset_code,network,amount_atomic,status,idempotency_key,expires_at)
                            VALUES(%s,%s,%s,%s,%s,'mainnet',%s,'awaiting_payment',%s,now()+interval '30 minutes') RETURNING id""",
@@ -921,12 +924,17 @@ async def request_withdrawal(body:WithdrawalIn,request:Request,account:Annotated
     with connection() as conn:
         with conn.cursor() as cur:
             if not financial_open(cur): raise HTTPException(503,"financial_operations_frozen")
-            cur.execute("SELECT id,state FROM withdrawal_requests WHERE idempotency_key=%s",(body.idempotency_key,))
+            cur.execute("SELECT id,account_id,state FROM withdrawal_requests WHERE idempotency_key=%s FOR UPDATE",(body.idempotency_key,))
             existing=cur.fetchone()
-            if existing: return {"id":str(existing[0]),"state":existing[1],"idempotent":True}
+            if existing:
+                if existing[1] != account.id:
+                    raise HTTPException(409,"idempotency_key_conflict")
+                return {"id":str(existing[0]),"state":existing[2],"idempotent":True}
+            customer=ensure_ledger_account(cur,code=f"customer:{account.id}",asset_code=asset,account_type="customer_liability",owner_account_id=account.id)
+            cur.execute("SELECT id FROM ledger_accounts WHERE id=%s FOR UPDATE",(customer,))
+            cur.fetchone()
             balance=customer_liability(cur,account.id,asset)
             if balance<body.amount_atomic: raise HTTPException(409,"insufficient_balance")
-            customer=ensure_ledger_account(cur,code=f"customer:{account.id}",asset_code=asset,account_type="customer_liability",owner_account_id=account.id)
             hold=ensure_ledger_account(cur,code=f"withdrawal-hold:{account.id}",asset_code=asset,account_type="withdrawal_hold",owner_account_id=account.id)
             create_balanced_transaction(cur,asset_code=asset,transaction_type="withdrawal_reserve",reference_type="withdrawal",reference_id=None,idempotency_key=body.idempotency_key,lines=[(customer,"debit",body.amount_atomic),(hold,"credit",body.amount_atomic)])
             cur.execute("INSERT INTO withdrawal_requests(account_id,asset_code,amount_atomic,destination_ref,idempotency_key,state) VALUES(%s,%s,%s,%s,%s,'risk_review') RETURNING id",(account.id,asset,body.amount_atomic,body.destination_ref,body.idempotency_key))
@@ -950,10 +958,22 @@ async def request_payout(body:PayoutIn,request:Request,account:Annotated[Authent
             policy=cur.fetchone()
             if not policy or not policy[1] or level["level"]<int(policy[0]): raise HTTPException(403,"payout_mode_not_eligible")
             if body.mode=="advance_payout" and not level["advance_payout_allowed"]: raise HTTPException(403,"advance_payout_not_allowed")
+            cur.execute("SELECT id,seller_account_id,status FROM seller_payout_requests WHERE idempotency_key=%s FOR UPDATE",(body.idempotency_key,))
+            existing=cur.fetchone()
+            if existing:
+                if existing[1] != account.id:
+                    raise HTTPException(409,"idempotency_key_conflict")
+                return {"id":str(existing[0]),"status":existing[2],"idempotent":True}
+
+            customer=ensure_ledger_account(cur,code=f"customer:{account.id}",asset_code=asset,account_type="customer_liability",owner_account_id=account.id)
+            cur.execute("SELECT id FROM ledger_accounts WHERE id=%s FOR UPDATE",(customer,))
+            cur.fetchone()
             balance=customer_liability(cur,account.id,asset)
             if balance<body.amount_atomic: raise HTTPException(409,"insufficient_balance")
+            hold=ensure_ledger_account(cur,code=f"payout-hold:{account.id}",asset_code=asset,account_type="payout_hold",owner_account_id=account.id)
             cur.execute("INSERT INTO seller_payout_requests(seller_account_id,asset_code,amount_atomic,mode,idempotency_key,status) VALUES(%s,%s,%s,%s,%s,'risk_review') RETURNING id",(account.id,asset,body.amount_atomic,body.mode,body.idempotency_key))
             pid=cur.fetchone()[0]
+            create_balanced_transaction(cur,asset_code=asset,transaction_type="payout_reserve",reference_type="payout",reference_id=pid,idempotency_key=f"payout-reserve:{pid}",lines=[(customer,"debit",body.amount_atomic),(hold,"credit",body.amount_atomic)])
             conn.commit()
     return {"id":str(pid),"status":"risk_review","level":level}
 
