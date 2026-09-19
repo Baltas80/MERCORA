@@ -77,6 +77,14 @@ CREATE TABLE IF NOT EXISTS promo_codes (
   )
 );
 
+ALTER TABLE seller_stores
+  ADD CONSTRAINT fk_seller_store_activation_code
+  FOREIGN KEY (activation_code_id) REFERENCES promo_codes(id);
+
+ALTER TABLE seller_store_activations
+  ADD CONSTRAINT fk_activation_promo_code
+  FOREIGN KEY (promo_code_id) REFERENCES promo_codes(id);
+
 CREATE TABLE IF NOT EXISTS promo_code_redemptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   promo_code_id UUID NOT NULL REFERENCES promo_codes(id),
@@ -96,4 +104,123 @@ CREATE INDEX IF NOT EXISTS idx_seller_stores_status
 CREATE INDEX IF NOT EXISTS idx_seller_store_activations_account
   ON seller_store_activations(account_id, status);
 
--- Redemption must lock the promotion row and increment used_count atomically.
+CREATE OR REPLACE FUNCTION redeem_promo_code(
+  p_promo_code_id UUID,
+  p_account_id UUID,
+  p_activation_id UUID
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  code_row promo_codes%ROWTYPE;
+BEGIN
+  SELECT *
+    INTO code_row
+    FROM promo_codes
+   WHERE id = p_promo_code_id
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN FALSE;
+  END IF;
+
+  IF code_row.status <> 'active'
+     OR code_row.valid_from > now()
+     OR (code_row.expires_at IS NOT NULL AND code_row.expires_at <= now())
+     OR code_row.used_count >= code_row.max_uses THEN
+    RETURN FALSE;
+  END IF;
+
+  INSERT INTO promo_code_redemptions(promo_code_id, account_id, activation_id)
+  VALUES (p_promo_code_id, p_account_id, p_activation_id);
+
+  UPDATE promo_codes
+     SET used_count = used_count + 1,
+         status = CASE
+           WHEN used_count + 1 >= max_uses THEN 'exhausted'
+           ELSE 'active'
+         END
+   WHERE id = p_promo_code_id;
+
+  RETURN TRUE;
+EXCEPTION
+  WHEN unique_violation THEN
+    RETURN FALSE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION activate_seller_store(p_activation_id UUID)
+RETURNS UUID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  activation seller_store_activations%ROWTYPE;
+  store_id UUID;
+BEGIN
+  SELECT *
+    INTO activation
+    FROM seller_store_activations
+   WHERE id = p_activation_id
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'activation_not_found';
+  END IF;
+
+  SELECT id
+    INTO store_id
+    FROM seller_stores
+   WHERE account_id = activation.account_id
+   FOR UPDATE;
+
+  IF store_id IS NOT NULL THEN
+    RETURN store_id;
+  END IF;
+
+  IF activation.source = 'paid' AND activation.payment_status <> 'verified' THEN
+    RAISE EXCEPTION 'payment_not_verified';
+  END IF;
+
+  IF activation.source = 'promo' AND NOT EXISTS (
+    SELECT 1
+      FROM promo_code_redemptions
+     WHERE activation_id = activation.id
+  ) THEN
+    RAISE EXCEPTION 'promo_not_redeemed';
+  END IF;
+
+  INSERT INTO seller_stores (
+    account_id, store_name, store_slug, status,
+    activation_source, activation_code_id, activated_at, updated_at
+  )
+  VALUES (
+    activation.account_id,
+    activation.requested_store_name,
+    activation.requested_store_slug,
+    'active',
+    activation.source,
+    activation.promo_code_id,
+    now(),
+    now()
+  )
+  RETURNING id INTO store_id;
+
+  UPDATE seller_profiles
+     SET status = 'active',
+         activated_at = now(),
+         updated_at = now()
+   WHERE account_id = activation.account_id;
+
+  UPDATE seller_store_activations
+     SET status = 'activated',
+         updated_at = now()
+   WHERE id = activation.id;
+
+  RETURN store_id;
+END;
+$$;
+
+-- Application code must hash plaintext promotion codes before lookup.
+-- Paid activation may only set payment_status='verified' from the authoritative
+-- payment subsystem; clients must never be allowed to set it directly.
