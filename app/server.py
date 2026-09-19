@@ -18,7 +18,7 @@ from db import connection
 from dispute_policy import can_transition, valid_decision
 from fees import calculate_percentage_fee
 from inventory import commit_inventory_sale, reserve_inventory, release_inventory
-from ledger import customer_liability, create_balanced_transaction, ensure_ledger_account, create_balanced_transaction, ensure_ledger_account
+from ledger import customer_liability, create_balanced_transaction, ensure_ledger_account
 from payments import PaymentMethod, PaymentStatus, can_transition as payment_can_transition
 from recovery import use_recovery_code
 from security import audit, csrf_account, current_account, financial_open, guard_size, headers, permission_set, request_id, require_permission
@@ -29,6 +29,7 @@ from rate_limit import FixedWindowRateLimiter
 from mfa import generate_secret, provisioning_uri, verify_code, encrypt_secret, decrypt_secret
 from reconciliation import record_asset_reconciliation, all_assets_reconciled
 from risk import current_level
+from order_policy import can_transition as order_can_transition
 
 app = FastAPI(title="MERCORA API", docs_url=None, redoc_url=None, openapi_url=None)
 COOKIE_SECURE = os.environ.get("MERCORA_ENV", "production") != "development"
@@ -38,6 +39,10 @@ PAYMENT_INGEST_SECRET = os.environ.get("MERCORA_PAYMENT_INGEST_SECRET", "")
 CONFIRMATIONS = {"BTC": int(os.environ.get("MERCORA_CONFIRMATIONS_BTC", "3")), "LTC": int(os.environ.get("MERCORA_CONFIRMATIONS_LTC", "6")), "XMR": int(os.environ.get("MERCORA_CONFIRMATIONS_XMR", "10"))}
 login_limiter = FixedWindowRateLimiter(8, 60)
 register_limiter = FixedWindowRateLimiter(5, 60)
+dispute_limiter = FixedWindowRateLimiter(5, 600)
+message_limiter = FixedWindowRateLimiter(40, 60)
+report_limiter = FixedWindowRateLimiter(20, 3600)
+upload_limiter = FixedWindowRateLimiter(10, 600)
 
 class Credentials(BaseModel):
     pseudonym: str = Field(min_length=3, max_length=32)
@@ -96,7 +101,6 @@ class DecisionIn(BaseModel):
     refund_atomic: int | None = Field(default=None, ge=0)
     seller_release_atomic: int | None = Field(default=None, ge=0)
     asset_code: str | None = None
-    action_request_id: UUID
 
 class AppealIn(BaseModel):
     reason: str = Field(min_length=10, max_length=5000)
@@ -636,6 +640,27 @@ async def get_dispute(dispute_id:UUID, account:Annotated[AuthenticatedAccount,De
                     "events":[{"type":x[0],"from":x[1],"to":x[2],"reason":x[3],"created_at":x[4]} for x in events],
                     "messages":[{"author":str(x[0]),"role":x[1],"body":decrypt_text(bytes(x[2])),"created_at":x[3]} for x in msgs]}
 
+@app.post("/disputes/{dispute_id}/transition")
+async def transition_dispute(dispute_id:UUID,body:DisputeTransitionIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+    await csrf_account(request,account)
+    rid=request_id(request)
+    with connection() as conn:
+        with conn.cursor() as cur:
+            require_permission(cur,account,"disputes.manage",rid,"dispute",dispute_id)
+            cur.execute("SELECT status FROM disputes WHERE id=%s FOR UPDATE",(dispute_id,))
+            row=cur.fetchone()
+            if not row: raise HTTPException(404,"not_found")
+            current=row[0]
+            if not can_transition(current,body.target_status): raise HTTPException(409,"invalid_dispute_transition")
+            if body.target_status=="resolved":
+                cur.execute("SELECT financial_action_status FROM dispute_decisions WHERE dispute_id=%s",(dispute_id,))
+                d=cur.fetchone()
+                if not d or d[0] not in {"executed","not_required"}: raise HTTPException(409,"financial_action_pending")
+            cur.execute("UPDATE disputes SET status=%s,updated_at=now(),resolved_at=CASE WHEN %s IN('resolved','closed','rejected') THEN now() ELSE resolved_at END WHERE id=%s",(body.target_status,body.target_status,dispute_id))
+            cur.execute("INSERT INTO dispute_events(dispute_id,actor_account_id,event_type,from_status,to_status,reason_code,idempotency_key) VALUES(%s,%s,'manual_transition',%s,%s,%s,%s)",(dispute_id,account.id,current,body.target_status,body.reason,str(uuid4())))
+            conn.commit()
+    return {"status":body.target_status}
+
 @app.post("/disputes/{dispute_id}/decide")
 async def decide_dispute(dispute_id:UUID, body:DecisionIn, request:Request, account:Annotated[AuthenticatedAccount,Depends(current_account)]):
     await csrf_account(request,account)
@@ -643,10 +668,7 @@ async def decide_dispute(dispute_id:UUID, body:DecisionIn, request:Request, acco
     rid=request_id(request)
     with connection() as conn:
         with conn.cursor() as cur:
-            require_permission(cur,account,"escrow.manage",rid,"dispute",dispute_id)
-            cur.execute("SELECT requested_by,status,permission_code,expires_at FROM admin_action_requests WHERE id=%s FOR UPDATE",(body.action_request_id,))
-            ar=cur.fetchone()
-            if not ar or ar[0]!=account.id or ar[1]!="approved" or ar[2]!="escrow.manage": raise HTTPException(403,"approved_action_required")
+            require_permission(cur,account,"disputes.manage",rid,"dispute",dispute_id)
             cur.execute("SELECT status FROM disputes WHERE id=%s FOR UPDATE",(dispute_id,))
             state=cur.fetchone()
             if not state or state[0] not in {"under_review","mediation"}: raise HTTPException(409,"invalid_dispute_state")
@@ -655,7 +677,6 @@ async def decide_dispute(dispute_id:UUID, body:DecisionIn, request:Request, acco
                            VALUES(%s,%s,%s,%s,%s,%s,%s,%s)""",
                         (dispute_id,account.id,body.outcome,body.refund_atomic,body.seller_release_atomic,body.asset_code,body.rationale,"pending" if financial else "not_required"))
             cur.execute("UPDATE disputes SET status='decided',updated_at=now() WHERE id=%s",(dispute_id,))
-            cur.execute("UPDATE admin_action_requests SET status='executed',executed_at=now() WHERE id=%s",(body.action_request_id,))
             audit(cur,account.id,"dispute.decide","dispute",dispute_id,"allowed",body.outcome,rid)
             conn.commit()
     return {"status":"decided","financial_action":"pending" if financial else "not_required"}
@@ -743,7 +764,7 @@ async def create_admin_action(body:AdminActionIn,request:Request,account:Annotat
     return {"action_request_id":str(action_id),"status":"requested"}
 
 @app.post("/admin/actions/{action_id}/approve")
-async def approve_admin_action(action_id:UUID,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
+async def approve_admin_action(action_id:UUID,body:ApprovalIn,request:Request,account:Annotated[AuthenticatedAccount,Depends(current_account)]):
     await csrf_account(request,account)
     rid=request_id(request)
     with connection() as conn:
@@ -753,7 +774,9 @@ async def approve_admin_action(action_id:UUID,request:Request,account:Annotated[
             if not row or row[2]!="requested": raise HTTPException(404,"action_not_available")
             require_permission(cur,account,row[0],rid,"admin_action",action_id)
             if row[1]==account.id: raise HTTPException(403,"independent_approver_required")
+            if row[0] in {"withdrawals.approve","payouts.approve","escrow.manage","emergency.manage"} and not _verify_admin_mfa(cur,account.id,body.mfa_code): raise HTTPException(403,"mfa_required")
             if not approve_request(cur,action_id,account.id): raise HTTPException(409,"approval_failed")
+            cur.execute("UPDATE admin_approvals SET mfa_verified_at=now() WHERE action_request_id=%s AND approver_account_id=%s",(action_id,account.id))
             audit(cur,account.id,"admin.action.approve","admin_action",action_id,"allowed","second_approver",rid)
             conn.commit()
     return {"status":"approved"}
