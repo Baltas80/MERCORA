@@ -20,6 +20,8 @@ const must = [
   ["tor is explicitly v3", /HiddenServiceVersion 3/.test(torrc)],
   ["tor has no SOCKS or control listener", /SocksPort 0/.test(torrc) && /ControlPort 0/.test(torrc)],
   ["tor targets loopback edge", /HiddenServicePort 80 127\.0\.0\.1:8080/.test(torrc)],
+  ["tor enables introduction DoS defense", /HiddenServiceEnableIntroDoSDefense 1/.test(torrc)],
+  ["tor sets finite introduction rate", /HiddenServiceEnableIntroDoSRatePerSec 25/.test(torrc) && /HiddenServiceEnableIntroDoSBurstPerSec 200/.test(torrc)],
   ["tor template contains no private key material", !/(PRIVATE KEY|private_key|x25519 private|mnemonic|seed phrase)/i.test(torrc)]
 ];
 
