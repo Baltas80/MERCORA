@@ -12,6 +12,8 @@ const must = [
   ["nginx references configured public host", /server_name \$\{MERCORA_PUBLIC_HOST\};/.test(nginx)],
   ["nginx envsubst is restricted", /NGINX_ENVSUBST_FILTER: \^MERCORA_PUBLIC_HOST\$/.test(compose)],
   ["nginx routes dynamic requests to api", /try_files \$uri \$uri\/ @api;/.test(nginx) && /location @api/.test(nginx) && /proxy_pass http:\/\/api:8000;/.test(nginx)],
+  ["edge blocks readiness endpoint", /location = \/readyz/.test(nginx) && /return 404;/.test(nginx)],
+  ["edge blocks private internal endpoints", /location \^~ \/internal\//.test(nginx) && /return 404;/.test(nginx)],
   ["nginx does not forward client IP", /proxy_set_header X-Forwarded-For "";[\s\S]*?proxy_set_header X-Real-IP "";/.test(nginx)],
   ["nginx disables version disclosure", /server_tokens off;/.test(nginx)],
   ["nginx same-origin CSP", /connect-src 'self'/.test(nginx)],
