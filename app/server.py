@@ -140,6 +140,12 @@ class PayoutIn(BaseModel):
     mode: str
     idempotency_key: str = Field(min_length=16, max_length=128)
 
+class ShipmentIn(BaseModel):
+    order_id: UUID
+    carrier: str | None = Field(default=None, max_length=80)
+    tracking_reference: str | None = Field(default=None, max_length=256)
+    status: str = "preparing"
+
 class ReconcileIn(BaseModel):
     asset_code: str = Field(min_length=3, max_length=3)
     network: str = Field(min_length=2, max_length=64)
@@ -505,24 +511,31 @@ async def create_payment_intent(body: PaymentIntentIn, request: Request, account
                            VALUES(%s,%s,%s,%s,%s,'mainnet',%s,'awaiting_payment',%s,now()+interval '30 minutes') RETURNING id""",
                         (q[1], account.id, body.quote_id, method, q[3], q[4], body.idempotency_key))
             pid = cur.fetchone()[0]
-            cur.execute("SELECT subtotal_minor,total_minor FROM orders WHERE id=%s AND buyer_id=%s FOR UPDATE",(q[1],account.id))
-            order_amounts=cur.fetchone()
-            if not order_amounts or int(order_amounts[0])<=0 or int(order_amounts[1])<=0: raise HTTPException(400,"order_amount_invalid")
-            cur.execute("""SELECT seller_id,SUM(quantity*unit_price_minor),SUM(seller_fee_minor)
-                           FROM order_items WHERE order_id=%s GROUP BY seller_id ORDER BY seller_id""",(q[1],))
+            cur.execute("SELECT subtotal_minor,buyer_fee_minor,seller_fee_minor,total_minor FROM orders WHERE id=%s AND buyer_id=%s FOR UPDATE",(q[1],account.id))
+            amounts=cur.fetchone()
+            if not amounts: raise HTTPException(404,"order_not_found")
+            subtotal_fiat,buyer_fee_fiat,seller_fee_fiat,total_fiat=map(int,amounts)
+            payment_atomic=int(q[4])
+            seller_net_fiat=subtotal_fiat-seller_fee_fiat
+            if payment_atomic<=0 or total_fiat<=0 or seller_net_fiat<0: raise HTTPException(400,"order_amount_invalid")
+            total_seller_atomic=(payment_atomic*seller_net_fiat)//total_fiat
+            platform_atomic=payment_atomic-total_seller_atomic
+            cur.execute("SELECT seller_id,SUM(quantity*unit_price_minor),SUM(seller_fee_minor) FROM order_items WHERE order_id=%s GROUP BY seller_id ORDER BY seller_id",(q[1],))
             seller_rows=cur.fetchall()
-            asset_subtotal=(int(q[4])*int(order_amounts[0]))//int(order_amounts[1])
-            if asset_subtotal<=0: raise HTTPException(400,"payment_allocation_too_small")
-            positive=[row for row in seller_rows if int(row[1])-int(row[2] or 0)>0]
-            remaining=asset_subtotal
-            for idx,(seller_id,gross,fee) in enumerate(positive):
-                net=int(gross)-int(fee or 0)
-                allocation=(asset_subtotal*net)//int(order_amounts[0]) if idx<len(positive)-1 else remaining
-                if allocation<=0: continue
-                if allocation>remaining: raise HTTPException(409,"payment_allocation_invalid")
-                cur.execute("INSERT INTO payment_allocations(payment_intent_id,seller_account_id,asset_code,amount_atomic) VALUES(%s,%s,%s,%s)",(pid,seller_id,q[3],allocation))
-                remaining-=allocation
+            remaining=total_seller_atomic
+            for idx,(seller_id,gross,fee) in enumerate(seller_rows):
+                seller_net=int(gross)-int(fee or 0)
+                alloc=(total_seller_atomic*seller_net)//seller_net_fiat if idx < len(seller_rows)-1 else remaining
+                if seller_net>0 and alloc>0:
+                    cur.execute("INSERT INTO payment_allocations(payment_intent_id,seller_account_id,asset_code,amount_atomic) VALUES(%s,%s,%s,%s)",(pid,seller_id,q[3],alloc))
+                    remaining-=alloc
             if remaining!=0: raise HTTPException(409,"payment_allocation_remainder")
+            buyer_fee_atomic=(payment_atomic*buyer_fee_fiat)//total_fiat
+            seller_fee_atomic=platform_atomic-buyer_fee_atomic
+            if buyer_fee_atomic>0:
+                cur.execute("INSERT INTO payment_fee_allocations(payment_intent_id,asset_code,kind,amount_atomic) VALUES(%s,%s,'buyer_fee',%s)",(pid,q[3],buyer_fee_atomic))
+            if seller_fee_atomic>0:
+                cur.execute("INSERT INTO payment_fee_allocations(payment_intent_id,asset_code,kind,amount_atomic) VALUES(%s,%s,'seller_fee',%s)",(pid,q[3],seller_fee_atomic))
             cur.execute("UPDATE orders SET status='pending_payment',updated_at=now() WHERE id=%s AND buyer_id=%s", (q[1], account.id))
             conn.commit()
     return {"payment_intent_id": str(pid), "asset_code": q[3], "amount_atomic": str(q[4]), "status": "awaiting_payment"}
@@ -749,6 +762,13 @@ async def rate_seller(order_id:UUID,seller_account_id:UUID,score:int,comment:str
             if not cur.fetchone(): raise HTTPException(403,"seller_not_in_order")
             cur.execute("INSERT INTO seller_ratings(order_id,seller_account_id,buyer_account_id,score,comment) VALUES(%s,%s,%s,%s,%s) RETURNING id",(order_id,seller_account_id,account.id,score,(comment or "")[:2000]))
             rid=cur.fetchone()[0]
+            if score >= 4:
+                cur.execute("SELECT delta_points FROM seller_point_rules WHERE reason_code='verified_positive_review' AND active=true")
+                rule=cur.fetchone()
+                if rule:
+                    cur.execute("""INSERT INTO seller_points_ledger(seller_account_id,delta_points,reason_code,reference_id,idempotency_key,actor)
+                                   VALUES(%s,%s,'verified_positive_review',%s,%s,%s) ON CONFLICT(idempotency_key) DO NOTHING""",
+                                (seller_account_id,int(rule[0]),rid,f"review-positive:{rid}",account.id))
             cur.execute("UPDATE sellers SET reputation_score=((reputation_score*10)+%s)/11,updated_at=now() WHERE account_id=%s",(score,seller_account_id))
             conn.commit()
     return {"id":str(rid)}
@@ -1053,7 +1073,66 @@ async def mark_notification_read(notification_id:UUID,request:Request,account:An
             cur.execute("UPDATE notifications SET read_at=now() WHERE id=%s AND account_id=%s",(notification_id,account.id)); conn.commit()
     return {"status":"read"}
 
+@app.post("/internal/finance/operation-results")
+async def finance_operation_result(request:Request):
+    secret=os.environ.get("MERCORA_FINANCE_CALLBACK_SECRET","")
+    if not secret: raise HTTPException(503,"finance_callback_not_configured")
+    raw=await request.body()
+    signature=request.headers.get("X-MERCORA-Signature","")
+    expected=__import__("hmac").new(secret.encode(),raw,__import__("hashlib").sha256).hexdigest()
+    if not __import__("hmac").compare_digest(signature,expected): raise HTTPException(401,"invalid_signature")
+    try:data=json.loads(raw)
+    except Exception as exc: raise HTTPException(400,"invalid_json") from exc
+    operation_type=data.get("operation_type")
+    operation_id=data.get("operation_id")
+    state=data.get("state")
+    if operation_type not in {"withdrawal","payout"} or state not in {"confirmed","paid","rejected","failed","broadcast"}: raise HTTPException(400,"invalid_financial_event")
+    with connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""INSERT INTO financial_operation_events(operation_type,operation_id,event_key,state,external_reference)
+                           VALUES(%s,%s,%s,%s,%s) ON CONFLICT(event_key) DO NOTHING""",
+                        (operation_type,operation_id,data.get("event_key") or str(uuid4()),state,data.get("reference")))
+            if cur.rowcount==0:
+                conn.commit(); return {"status":"duplicate"}
+            if operation_type=="withdrawal":
+                cur.execute("SELECT account_id,asset_code,amount_atomic,state FROM withdrawal_requests WHERE id=%s FOR UPDATE",(operation_id,))
+                row=cur.fetchone()
+                if not row: raise HTTPException(404,"withdrawal_not_found")
+                if state in {"rejected","failed"}:
+                    customer=ensure_ledger_account(cur,code=f"customer:{row[0]}",asset_code=row[1],account_type="customer_liability",owner_account_id=row[0])
+                    hold=ensure_ledger_account(cur,code=f"withdrawal-hold:{row[0]}",asset_code=row[1],account_type="withdrawal_hold",owner_account_id=row[0])
+                    create_balanced_transaction(cur,asset_code=row[1],transaction_type="withdrawal_release",reference_type="withdrawal",reference_id=operation_id,idempotency_key=f"withdrawal-release:{operation_id}",lines=[(hold,"debit",int(row[2])),(customer,"credit",int(row[2]))])
+                    cur.execute("UPDATE withdrawal_requests SET state='rejected',updated_at=now() WHERE id=%s",(operation_id,))
+                else:
+                    target="confirmed" if state=="confirmed" else "broadcast" if state=="broadcast" else "approved"
+                    cur.execute("UPDATE withdrawal_requests SET state=%s,updated_at=now() WHERE id=%s AND state IN('approved','broadcast','risk_review')",(target,operation_id))
+            else:
+                cur.execute("SELECT seller_account_id,asset_code,amount_atomic,status FROM seller_payout_requests WHERE id=%s FOR UPDATE",(operation_id,))
+                row=cur.fetchone()
+                if not row: raise HTTPException(404,"payout_not_found")
+                if state in {"rejected","failed"}:
+                    customer=ensure_ledger_account(cur,code=f"customer:{row[0]}",asset_code=row[1],account_type="customer_liability",owner_account_id=row[0])
+                    hold=ensure_ledger_account(cur,code=f"payout-hold:{row[0]}",asset_code=row[1],account_type="payout_hold",owner_account_id=row[0])
+                    create_balanced_transaction(cur,asset_code=row[1],transaction_type="payout_release",reference_type="payout",reference_id=operation_id,idempotency_key=f"payout-release:{operation_id}",lines=[(hold,"debit",int(row[2])),(customer,"credit",int(row[2]))])
+                    cur.execute("UPDATE seller_payout_requests SET status='rejected',failure_reason=%s,updated_at=now() WHERE id=%s",(data.get("reason","external_failure"),operation_id))
+                else:
+                    target="paid" if state=="paid" else "processing"
+                    cur.execute("UPDATE seller_payout_requests SET status=%s,updated_at=now() WHERE id=%s AND status IN('approved','processing')",(target,operation_id))
+            conn.commit()
+    return {"status":state}
+
 def _verify_admin_mfa(cur,account_id:UUID,code:str)->bool:
+    import time
+    cur.execute("SELECT encrypted_secret,last_timestep FROM admin_mfa_credentials WHERE account_id=%s FOR UPDATE",(account_id,))
+    row=cur.fetchone()
+    if not row: return False
+    secret=decrypt_secret(bytes(row[0]))
+    totp=__import__("pyotp").TOTP(secret)
+    timestep=totp.timecode(datetime.now(timezone.utc))
+    if row[1] is not None and timestep <= int(row[1]): return False
+    if not totp.verify(code,valid_window=0): return False
+    cur.execute("UPDATE admin_mfa_credentials SET last_timestep=%s,updated_at=now() WHERE account_id=%s",(timestep,account_id))
+    return True
     cur.execute("SELECT encrypted_secret FROM admin_mfa_credentials WHERE account_id=%s",(account_id,))
     row=cur.fetchone()
     return bool(row and verify_code(decrypt_secret(bytes(row[0])),code))
