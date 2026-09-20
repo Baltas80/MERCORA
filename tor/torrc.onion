@@ -1,0 +1,11 @@
+# MERCORA staging Onion Service v3.
+# Generated service keys stay exclusively in the persistent Tor volume.
+
+SocksPort 0
+ControlPort 0
+SafeLogging 1
+Log notice stdout
+
+HiddenServiceDir /data/mercora
+HiddenServiceVersion 3
+HiddenServicePort 80 app:8080
