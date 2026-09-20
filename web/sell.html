@@ -3,80 +3,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="MERCORA seller store activation">
-  <title>MERCORA — Seller store</title>
-  <link rel="stylesheet" href="/styles.css">
+  <meta name="description" content="MERCORA seller workspace visual preview">
+  <title>MERCORA — Seller Preview</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="site-shell">
     <header class="topbar">
-      <a class="brand" href="/" aria-label="MERCORA home">MERCORA</a>
+      <a class="brand" href="./" aria-label="MERCORA home">MERCORA</a>
       <nav class="nav">
-        <a href="/" data-i18n="seller.back">Marketplace</a>
-        <label class="language-select">
-          <span class="sr-only" data-i18n="language.label">Language</span>
-          <select id="languageSelect" aria-label="Language">
-            <option value="es">ES</option><option value="en">EN</option><option value="fr">FR</option>
-            <option value="de">DE</option><option value="it">IT</option><option value="pt">PT</option>
-          </select>
-        </label>
+        <a href="./">Marketplace</a>
       </nav>
     </header>
-
     <main class="section seller-activation">
       <div class="section-head">
         <div>
-          <p class="eyebrow" data-i18n="seller.eyebrow">SELLER STORE</p>
-          <h1 data-i18n="seller.title">Open your MERCORA store</h1>
-          <p class="muted" data-i18n="seller.copy">Opening a seller store normally requires an activation fee. A valid invitation code can waive or reduce that fee.</p>
+          <p class="eyebrow">SELLER WORKSPACE · PREVIEW</p>
+          <h1>Open your MERCORA store</h1>
+          <p class="muted">Prototype only. No account, fee, payment intent or store is created by this preview.</p>
         </div>
       </div>
-
       <div class="split">
         <section class="system-panel">
-          <div class="panel-title" data-i18n="seller.activation">ACTIVATION</div>
+          <div class="panel-title">STORE SETUP</div>
           <form id="sellerForm" novalidate>
-            <label>
-              <span data-i18n="seller.storeName">Store name</span>
-              <input id="storeName" name="storeName" maxlength="80" required autocomplete="organization">
-            </label>
-            <label>
-              <span data-i18n="seller.storeSlug">Store address</span>
-              <input id="storeSlug" name="storeSlug" maxlength="80" required inputmode="lowercase" autocomplete="off" placeholder="my-store">
-            </label>
-            <label>
-              <span data-i18n="seller.paymentAsset">Payment asset</span>
-              <select id="paymentAsset" name="paymentAsset">
-                <option value="BTC">BTC</option>
-                <option value="LTC">LTC</option>
-                <option value="XMR">XMR</option>
-              </select>
-            </label>
-            <label>
-              <span data-i18n="seller.promo">Invitation / promotion code</span>
-              <input id="promoCode" name="promoCode" maxlength="128" autocomplete="off" spellcheck="false">
-            </label>
-            <p id="feeSummary" class="muted" data-i18n="seller.feePending">The current activation fee will be shown after the server evaluates the selected payment asset.</p>
+            <label>Store name<input id="storeName" name="storeName" maxlength="80" required></label>
+            <label>Store address<input id="storeSlug" name="storeSlug" maxlength="80" required inputmode="lowercase" placeholder="my-store"></label>
+            <label>Payment asset<select id="paymentAsset" name="paymentAsset"><option value="BTC">BTC</option><option value="LTC">LTC</option><option value="XMR">XMR</option></select></label>
+            <label>Invitation / promotion code<input id="promoCode" name="promoCode" maxlength="128" autocomplete="off" spellcheck="false"></label>
+            <p id="feeSummary" class="muted">Demo activation fee: €0 · production pricing is not active.</p>
             <p id="formMessage" class="muted" role="status" aria-live="polite"></p>
-            <button class="button button-primary" type="submit" data-i18n="seller.continue">Continue</button>
+            <button class="button button-primary" type="submit">Preview store setup</button>
           </form>
         </section>
-
         <aside class="system-panel">
-          <div class="panel-title" data-i18n="seller.rulesTitle">STORE RULES</div>
-          <div class="status-row"><span data-i18n="seller.rule1">Payment is verified server-side</span><strong>✓</strong></div>
-          <div class="status-row"><span data-i18n="seller.rule2">Promotion redemptions are atomic</span><strong>✓</strong></div>
-          <div class="status-row"><span data-i18n="seller.rule3">Moderation still applies</span><strong>✓</strong></div>
-          <div class="status-row"><span data-i18n="seller.rule4">No client-side activation</span><strong>✓</strong></div>
+          <div class="panel-title">PREVIEW RULES</div>
+          <div class="status-row"><span>Payment verification</span><strong>DEMO</strong></div>
+          <div class="status-row"><span>Promotion redemption</span><strong>DEMO</strong></div>
+          <div class="status-row"><span>Moderation</span><strong>DESIGNED</strong></div>
+          <div class="status-row"><span>Production writes</span><strong>DISABLED</strong></div>
         </aside>
       </div>
     </main>
-
-    <footer>
-      <span>MERCORA</span>
-      <span data-i18n="footer.tagline">Privacy-first marketplace</span>
-    </footer>
+    <footer><span>MERCORA</span><span>Isolated visual preview</span></footer>
   </div>
-  <script type="module" src="/sell.js"></script>
+  <script type="module" src="./sell.js"></script>
 </body>
 </html>

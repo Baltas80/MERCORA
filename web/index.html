@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="MERCORA — private second-hand marketplace">
-  <title>MERCORA — Marketplace</title>
-  <link rel="stylesheet" href="/styles.css">
+  <meta name="description" content="MERCORA — private second-hand marketplace visual preview">
+  <title>MERCORA — Marketplace Preview</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="site-shell">
     <header class="topbar">
-      <a class="brand" href="/" aria-label="MERCORA home">MERCORA</a>
+      <a class="brand" href="./" aria-label="MERCORA home">MERCORA</a>
       <form id="searchForm" class="search" role="search">
         <input id="searchInput" name="q" type="search" maxlength="120" placeholder="Search products..." autocomplete="off">
         <button type="submit">SEARCH</button>
@@ -19,7 +19,7 @@
         <a href="#categories">Categories</a>
         <a href="#sell">Sell</a>
         <a href="#wallet">Wallet</a>
-        <a href="/account.html">Account</a>
+        <a href="./account.html">Account</a>
         <button id="cartButton" class="cart-button" type="button">Cart <span id="cartCount">0</span></button>
       </nav>
     </header>
@@ -27,19 +27,19 @@
     <main>
       <section class="hero">
         <div>
-          <p class="eyebrow">PRIVATE MARKETPLACE · ONION SERVICE</p>
+          <p class="eyebrow">MERCORA VISUAL PREVIEW · DEMO ONLY</p>
           <h1>Buy. Sell. Keep control.</h1>
-          <p class="hero-copy">A second-hand marketplace built around privacy, strong security boundaries and a clean buying experience.</p>
+          <p class="hero-copy">A second-hand marketplace concept built around privacy, strong security boundaries and a clean buying experience.</p>
           <div class="hero-actions">
             <a class="button button-primary" href="#catalog">Browse listings</a>
             <a class="button button-ghost" href="#sell">List an item</a>
           </div>
         </div>
         <aside class="system-panel">
-          <div class="panel-title">SYSTEM STATUS</div>
-          <div class="status-row"><span>Onion service</span><strong>READY</strong></div>
-          <div class="status-row"><span>External trackers</span><strong>NONE</strong></div>
-          <div class="status-row"><span>Payments</span><strong>BTC · XMR · LTC</strong></div>
+          <div class="panel-title">PREVIEW STATUS</div>
+          <div class="status-row"><span>Environment</span><strong>STATIC DEMO</strong></div>
+          <div class="status-row"><span>Production data</span><strong>NONE</strong></div>
+          <div class="status-row"><span>Payments</span><strong>DEMO ONLY</strong></div>
         </aside>
       </section>
 
@@ -61,17 +61,28 @@
 
       <section id="catalog" class="section">
         <div class="section-head">
-          <div><p class="eyebrow">CURATED LISTINGS</p><h2>Featured</h2></div>
+          <div><p class="eyebrow">CURATED PREVIEW</p><h2>Featured</h2></div>
           <span id="resultCount" class="muted"></span>
         </div>
         <div id="productGrid" class="product-grid"></div>
       </section>
 
+      <section id="sell" class="section split">
+        <div>
+          <p class="eyebrow">SELLER WORKSPACE</p>
+          <h2>Ready to list when the marketplace goes live.</h2>
+          <p class="muted">The visual preview is isolated from production accounts, orders, wallets and custody services.</p>
+        </div>
+        <div class="wallet-strip">
+          <a class="button button-primary" href="./sell.html">Open seller preview</a>
+        </div>
+      </section>
+
       <section id="wallet" class="section split">
         <div>
-          <p class="eyebrow">MERCORA CUSTODY</p>
-          <h2>Wallets & payments</h2>
-          <p class="muted">The interface is prepared for isolated payment adapters. No production keys or wallet secrets are stored in the application source.</p>
+          <p class="eyebrow">PAYMENT ARCHITECTURE</p>
+          <h2>BTC · XMR · LTC</h2>
+          <p class="muted">Payment adapters are represented visually here only. No live transaction, wallet or custody operation is available from this preview.</p>
         </div>
         <div class="wallet-strip">
           <span>BTC</span><span>XMR</span><span>LTC</span>
@@ -81,17 +92,17 @@
 
     <footer>
       <span>MERCORA</span>
-      <span>Privacy-first marketplace</span>
+      <span>Isolated visual preview · no production data</span>
     </footer>
   </div>
 
   <dialog id="cartDialog">
-    <div class="dialog-head"><h2>Your cart</h2><button id="closeCart" type="button">Close</button></div>
+    <div class="dialog-head"><h2>Your preview cart</h2><button id="closeCart" type="button">Close</button></div>
     <div id="cartItems"></div>
     <div class="cart-total"><span>Total</span><strong id="cartTotal">€0</strong></div>
-    <button id="checkoutButton" class="button button-primary" type="button">Continue to checkout</button>
+    <button id="checkoutButton" class="button button-primary" type="button">Preview checkout</button>
   </dialog>
 
-  <script src="/app.js" defer></script>
+  <script src="./app.js" defer></script>
 </body>
 </html>
