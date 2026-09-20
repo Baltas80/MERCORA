@@ -37,6 +37,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
 
       - name: Check server syntax
         run: node --check server/server.js
@@ -46,6 +50,9 @@ jobs:
 
       - name: Verify container network isolation
         run: node scripts/verify-compose-security.mjs
+
+      - name: Build production container
+        run: docker build --tag mercora-ci:security-check .
 
       - name: Dependency audit
         run: npm audit --audit-level=high
