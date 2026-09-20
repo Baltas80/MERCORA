@@ -9,8 +9,10 @@ const HOST = process.env.HOST ?? "127.0.0.1";
 const PORT = Number(process.env.PORT ?? "8080");
 
 const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 120;
-const buckets = new Map();
+const MAX_REQUESTS_PER_SOCKET = 120;
+const MAX_REQUESTS_GLOBAL = 2_000;
+const socketBuckets = new WeakMap();
+let globalBucket = { start: Date.now(), count: 0 };
 
 function securityHeaders() {
   return {
@@ -34,19 +36,23 @@ function securityHeaders() {
   };
 }
 
-function clientKey(req) {
-  return req.socket.remoteAddress ?? "local";
-}
-
-function rateAllowed(key) {
+function rateAllowed(socket) {
   const now = Date.now();
-  const current = buckets.get(key);
+
+  if (now - globalBucket.start >= WINDOW_MS) {
+    globalBucket = { start: now, count: 0 };
+  }
+  globalBucket.count += 1;
+  if (globalBucket.count > MAX_REQUESTS_GLOBAL) return false;
+
+  const current = socketBuckets.get(socket);
   if (!current || now - current.start >= WINDOW_MS) {
-    buckets.set(key, { start: now, count: 1 });
+    socketBuckets.set(socket, { start: now, count: 1 });
     return true;
   }
+
   current.count += 1;
-  return current.count <= MAX_REQUESTS;
+  return current.count <= MAX_REQUESTS_PER_SOCKET;
 }
 
 function contentType(file) {
@@ -71,7 +77,10 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  if (!rateAllowed(clientKey(req))) {
+  // Do not rate-limit by client IP: behind an Onion Service, many users can
+  // legitimately arrive through the same Tor-facing application socket.
+  // Account/session/API-specific limits will be added at the authenticated API layer.
+  if (!rateAllowed(req.socket)) {
     res.writeHead(429, { "Retry-After": "60" });
     return res.end("Too Many Requests");
   }
@@ -109,13 +118,6 @@ const server = http.createServer(async (req, res) => {
     return res.end("Not Found");
   }
 });
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, bucket] of buckets) {
-    if (now - bucket.start >= WINDOW_MS * 2) buckets.delete(key);
-  }
-}, WINDOW_MS).unref();
 
 server.listen(PORT, HOST, () => {
   console.log(`MERCORA listening on http://${HOST}:${PORT}`);
