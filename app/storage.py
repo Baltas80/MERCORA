@@ -30,7 +30,15 @@ def validate_bytes(data: bytes, media_type: str) -> None:
             raise ValueError("upload_rejected") from exc
         return
     if media_type == PDF:
-        if not data.startswith(b"%PDF-"):
+        # This is only a structural gate. Production PDF uploads still require
+        # an isolated malware/AV pipeline and resource limits before delivery.
+        stripped = data.rstrip()
+        if (
+            not stripped.startswith(b"%PDF-")
+            or not stripped.endswith(b"%%EOF")
+            or b"startxref" not in stripped
+            or b"trailer" not in stripped
+        ):
             raise ValueError("upload_rejected")
         return
     raise ValueError("upload_type_invalid")
