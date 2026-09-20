@@ -1,6 +1,12 @@
+const PREVIEW=location.hostname.endsWith(".github.io")||new URLSearchParams(location.search).has("preview");
 const nav=document.querySelectorAll(".admin-nav"),content=document.querySelector("#adminContent");
-function api(path){return fetch("/api"+path,{credentials:"same-origin"}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||d.detail||"request_failed");return d})}
+async function api(path){return fetch("/api"+path,{credentials:"same-origin"}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||d.detail||"request_failed");return d})}
 const sections={overview:["Overview","Global operational status."],users:["Users","Account state, sessions and security."],sellers:["Sellers & stores","Store state, activation and risk."],sales:["Sales & orders","Orders and delivery."],payments:["Payments","Payment intents and verification."],wallets:["Wallets","Custody metadata only."],escrow:["Escrow","Held funds and guarded operations."],points:["Points & levels","Append-only seller scoring."],payouts:["Payout modes","Policy-gated seller payouts."],moderation:["Moderation","Reports and enforcement."],disputes:["Disputes","Cases, evidence, decisions and appeals."],promos:["Promotion codes","Seller activation promotions."],audit:["Audit log","Administrative security events."],emergency:["Emergency controls","Fail-closed recovery controls."]};
 function showText(name,title,desc){for(const b of nav)b.classList.toggle("active",b.dataset.section===name);content.innerHTML="<h2></h2><p class='muted'></p>";content.querySelector("h2").textContent=title;content.querySelector("p").textContent=desc}
-async function show(name){showText(name,sections[name][0],sections[name][1]);if(name!=="overview")return;try{const d=await api("/admin/overview");content.textContent="Users: "+d.users+" | Active sellers: "+d.active_sellers+" | Orders: "+d.orders+" | Disputes: "+d.open_disputes+" | Custody: "+d.custody_mode}catch(e){content.textContent=e.message}}
-for(const b of nav)b.addEventListener("click",()=>show(b.dataset.section));show("overview");
+async function show(name){
+  showText(name,sections[name][0],PREVIEW?"Preview information architecture only. No production operations are available.":sections[name][1]);
+  if(name!=="overview"||PREVIEW)return;
+  try{const d=await api("/admin/overview");content.textContent="Users: "+d.users+" | Active sellers: "+d.active_sellers+" | Orders: "+d.orders+" | Disputes: "+d.open_disputes+" | Custody: "+d.custody_mode}catch(e){content.textContent=e.message}
+}
+for(const b of nav)b.addEventListener("click",()=>show(b.dataset.section));
+show("overview");
