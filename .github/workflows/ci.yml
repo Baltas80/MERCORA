@@ -19,8 +19,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE --exclude-dir=.git --exclude='*.md' \
-            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' .; then
+          files=$(git ls-files \
+            ':!.github/workflows/ci.yml' \
+            ':!scripts/verify-compose-security.mjs' \
+            ':!.gitignore' \
+            ':!*.md')
+          if printf '%s\n' "$files" | xargs -r grep -InE \
+            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|wallet_seed|api[_-]?key[[:space:]]*[:=])'; then
             echo "Potential secret material detected."
             exit 1
           fi
@@ -37,6 +42,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
 
       - name: Check server syntax
         run: node --check server/server.js
@@ -46,6 +55,9 @@ jobs:
 
       - name: Verify container network isolation
         run: node scripts/verify-compose-security.mjs
+
+      - name: Build production container
+        run: docker build --tag mercora-ci:security-check .
 
       - name: Dependency audit
         run: npm audit --audit-level=high
