@@ -1,0 +1,32 @@
+services:
+  app:
+    networks:
+      - backend
+      - onion_edge
+
+  tor:
+    image: svengo/tor:0.4.9.11-1
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - tor_data:/data
+      - ./tor/torrc.onion:/data/torrc:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - onion_edge
+      - tor_egress
+
+networks:
+  onion_edge:
+    internal: true
+  tor_egress:
+    driver: bridge
+
+volumes:
+  tor_data:
