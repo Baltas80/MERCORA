@@ -1,0 +1,37 @@
+name: MERCORA visual preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/mercora-visual-preview]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
+      - name: Upload static frontend
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6eac1f2a2f4e4 # v3
+        with:
+          path: ./web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6b1e6d2c5a4f4f7c8f2a8e3c9e7d6b5a4c3b2a1 # v4
