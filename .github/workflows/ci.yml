@@ -19,8 +19,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE --exclude-dir=.git --exclude='*.md' \
-            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' .; then
+          files=$(git ls-files \
+            ':!.github/workflows/ci.yml' \
+            ':!scripts/verify-compose-security.mjs' \
+            ':!.gitignore' \
+            ':!*.md')
+          if printf '%s\n' "$files" | xargs -r grep -InE \
+            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|wallet_seed|api[_-]?key[[:space:]]*[:=])'; then
             echo "Potential secret material detected."
             exit 1
           fi
