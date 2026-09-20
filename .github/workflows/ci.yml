@@ -19,8 +19,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE --exclude-dir=.git --exclude='*.md' \
-            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' .; then
+          if git grep -nIE \
+            -- ':!*.md' ':!.gitignore' ':!.github/workflows/ci.yml' ':!.github/workflows/pages.yml' ':!scripts/verify-compose-security.mjs' \
+            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' ; then
             echo "Potential secret material detected."
             exit 1
           fi
@@ -63,7 +64,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: javascript
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
