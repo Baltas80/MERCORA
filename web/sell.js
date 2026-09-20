@@ -1,0 +1,1 @@
+const form=document.querySelector("#sellerForm"),message=document.querySelector("#formMessage");form?.addEventListener("submit",e=>{e.preventDefault();message.textContent="PREVIEW — configuración validada visualmente. No se crea ninguna tienda ni pago."});
