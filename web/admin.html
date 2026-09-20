@@ -1,18 +1,16 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="MERCORA administration">
-  <title>MERCORA — Admin</title>
-  <link rel="stylesheet" href="/styles.css">
+  <title>MERCORA — Admin Preview</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="site-shell admin-shell">
     <header class="topbar">
-      <a class="brand" href="/">MERCORA</a>
-      <div class="admin-title">ADMIN CONSOLE</div>
-      <label class="language-select"><span class="sr-only">Language</span><select id="languageSelect" aria-label="Language"><option value="es">ES</option><option value="en">EN</option><option value="fr">FR</option><option value="de">DE</option><option value="it">IT</option><option value="pt">PT</option></select></label>
+      <a class="brand" href="./">MERCORA</a>
+      <div class="admin-title">ADMIN PREVIEW</div>
     </header>
     <main class="admin-layout">
       <aside class="admin-sidebar">
@@ -34,22 +32,22 @@
       </aside>
       <section class="admin-main">
         <div class="admin-header">
-          <div><p class="eyebrow">MERCORA ADMIN</p><h1>Operations dashboard</h1></div>
-          <div class="admin-security">HIGH-RISK ACTIONS REQUIRE STEP-UP + SECOND APPROVER</div>
+          <div><p class="eyebrow">MERCORA ADMIN · PREVIEW</p><h1>Operations dashboard</h1></div>
+          <div class="admin-security">SIMULATION ONLY · NO PRODUCTION WRITES</div>
         </div>
         <div class="admin-grid">
-          <article class="admin-card"><span>Users</span><strong>—</strong><small>Live API required</small></article>
-          <article class="admin-card"><span>Active stores</span><strong>—</strong><small>Live API required</small></article>
-          <article class="admin-card"><span>Orders</span><strong>—</strong><small>Live API required</small></article>
-          <article class="admin-card"><span>Escrow held</span><strong>—</strong><small>Financial service required</small></article>
+          <article class="admin-card"><span>Users</span><strong>1,284</strong><small>Preview dataset</small></article>
+          <article class="admin-card"><span>Active stores</span><strong>146</strong><small>Preview dataset</small></article>
+          <article class="admin-card"><span>Orders</span><strong>392</strong><small>Preview dataset</small></article>
+          <article class="admin-card"><span>Escrow held</span><strong>€84.2k</strong><small>Simulated value</small></article>
         </div>
         <div id="adminContent" class="admin-panel">
           <h2>Centralized control</h2>
-          <p class="muted">The production console will expose account, seller, marketplace, payments, wallet metadata, escrow, points, payouts, moderation, promotions, audit and emergency operations through authenticated APIs.</p>
+          <p class="muted">This preview demonstrates the information architecture only. Production operations remain behind authenticated APIs and independent security controls.</p>
         </div>
       </section>
     </main>
   </div>
-  <script type="module" src="/admin.js"></script>
+  <script type="module" src="./admin.js"></script>
 </body>
 </html>
