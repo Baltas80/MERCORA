@@ -1,41 +1,30 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="MERCORA dispute resolution">
-  <title>MERCORA — Dispute</title>
-  <link rel="stylesheet" href="/styles.css">
+  <title>MERCORA — Dispute Preview</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="site-shell">
     <header class="topbar">
-      <a class="brand" href="/">MERCORA</a>
-      <span class="admin-title">ORDER DISPUTE</span>
-      <a href="/" class="button button-ghost">Marketplace</a>
+      <a class="brand" href="./">MERCORA</a>
+      <span class="admin-title">ORDER DISPUTE · PREVIEW</span>
+      <a href="./" class="button button-ghost">Marketplace</a>
     </header>
     <main class="section dispute-page">
-      <p class="eyebrow">BUYER PROTECTION</p>
+      <p class="eyebrow">BUYER PROTECTION · PREVIEW</p>
       <h1>Resolve an order fairly.</h1>
-      <p class="muted">Provide facts and evidence. Financial decisions are executed only after server-side validation.</p>
+      <p class="muted">Prototype workflow only. No real dispute, evidence or financial decision is created.</p>
       <section class="split dispute-grid">
         <div class="system-panel">
           <div class="panel-title">DISPUTE</div>
-          <div class="status-row"><span>Order</span><strong id="orderRef">—</strong></div>
-          <div class="status-row"><span>Status</span><strong id="disputeStatus">—</strong></div>
-          <label>Reason
-            <select id="reason">
-              <option value="non_delivery">Non-delivery</option>
-              <option value="item_not_as_described">Item not as described</option>
-              <option value="damaged_in_transit">Damaged in transit</option>
-              <option value="suspected_counterfeit">Suspected counterfeit</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-          <label>Description
-            <textarea id="description" maxlength="10000" rows="8"></textarea>
-          </label>
-          <button id="openDispute" class="button button-primary" type="button">Open dispute</button>
+          <div class="status-row"><span>Order</span><strong id="orderRef">DEMO-2048</strong></div>
+          <div class="status-row"><span>Status</span><strong id="disputeStatus">DRAFT</strong></div>
+          <label>Reason<select id="reason"><option value="non_delivery">Non-delivery</option><option value="item_not_as_described">Item not as described</option><option value="damaged_in_transit">Damaged in transit</option><option value="suspected_counterfeit">Suspected counterfeit</option><option value="other">Other</option></select></label>
+          <label>Description<textarea id="description" maxlength="10000" rows="8"></textarea></label>
+          <button id="openDispute" class="button button-primary" type="button">Simulate dispute</button>
           <p id="message" class="muted" role="status" aria-live="polite"></p>
         </div>
         <aside class="system-panel">
@@ -50,6 +39,6 @@
       </section>
     </main>
   </div>
-  <script src="/dispute.js"></script>
+  <script src="./dispute.js"></script>
 </body>
 </html>
