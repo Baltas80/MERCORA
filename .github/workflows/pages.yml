@@ -3,7 +3,7 @@ name: MERCORA visual preview
 on:
   workflow_dispatch:
   push:
-    branches: [feat/mercora-visual-preview]
+    branches: [master, feat/mercora-visual-preview]
 
 permissions:
   contents: read
