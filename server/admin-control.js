@@ -56,7 +56,8 @@ function composeArgs(action, service) {
 export function createAdminController({
   cwd = path.resolve(process.cwd()),
   runner = defaultRunner,
-  probe = defaultProbe
+  probe = defaultProbe,
+  backendProbe: backendProbeOverride = backendProbe
 } = {}) {
   async function run(action, service) {
     const args = composeArgs(action, service);
@@ -85,8 +86,6 @@ export function createAdminController({
       }
     }
 
-    // Recovery is component-scoped first; the final verification is deliberately
-    // broader and ordered so a failed dependency does not cause a blind full restart.
     const health = await healthCheck();
     steps.push({ step: 'health', result: health });
     return {
@@ -103,7 +102,7 @@ export function createAdminController({
     checks.docker = await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd });
     checks.compose = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps'], { cwd }).then(sanitizeResult);
     // Then application, database, Tor and Onion Service in explicit order.
-    checks.backend = await backendProbe();
+    checks.backend = await backendProbeOverride();
     checks.postgres = await runner(
       'docker',
       [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'],
