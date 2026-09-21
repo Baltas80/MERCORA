@@ -1,1 +1,41 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MERCORA — Seller Preview</title><link rel="stylesheet" href="./styles.css"></head><body><div class="site-shell"><header class="topbar"><a class="brand" href="./">MERCORA</a><nav class="nav"><a href="./">Marketplace</a></nav></header><main class="section seller-activation"><div class="section-head"><div><p class="eyebrow">SELLER WORKSPACE · PREVIEW</p><h1>Open your MERCORA store</h1><p class="muted">Prototype only. No account, fee, payment or store is created.</p></div></div><div class="split"><section class="system-panel"><div class="panel-title">STORE SETUP</div><form id="sellerForm"><label>Store name<input name="storeName" maxlength="80" required></label><label>Store address<input name="storeSlug" maxlength="80" required></label><label>Payment asset<select name="paymentAsset"><option>BTC</option><option>LTC</option><option>XMR</option></select></label><label>Invitation / promotion code<input name="promoCode" maxlength="128"></label><p id="formMessage" class="muted"></p><button class="button button-primary" type="submit">Preview store setup</button></form></section><aside class="system-panel"><div class="panel-title">PREVIEW RULES</div><div class="status-row"><span>Payment verification</span><strong>DEMO</strong></div><div class="status-row"><span>Production writes</span><strong>DISABLED</strong></div></aside></div></main><footer><span>MERCORA</span><span>Isolated visual preview</span></footer></div><script type="module" src="./sell.js"></script></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="MERCORA — área de vendedor">
+<title>MERCORA — Vender</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="site-shell">
+<header class="topbar"><a class="brand" href="./">MERCORA</a><nav class="nav"><a href="./">Marketplace</a><a href="./account.html">Cuenta</a><button id="sellerLogout" class="cart-button" type="button">Cerrar sesión</button></nav></header>
+<main class="section seller-activation">
+<div class="section-head"><div><p class="eyebrow">ÁREA DE VENDEDOR</p><h1>Gestiona tu tienda y tus anuncios.</h1><p id="authState" class="muted">Comprobando sesión…</p></div></div>
+<div id="sellerWorkspace" class="two-col">
+<section class="system-panel"><div class="panel-title">CREAR TIENDA</div><form id="storeForm">
+<label>Nombre de tienda<input name="name" maxlength="120" required></label>
+<label>Slug<input name="slug" maxlength="63" pattern="[a-z0-9-]+" required></label>
+<label>Nombre público del vendedor<input name="display_name" maxlength="120" required></label>
+<button class="button button-primary" type="submit">CREAR TIENDA</button>
+</form>
+<ul id="storesList"></ul>
+</section>
+<section class="system-panel"><div class="panel-title">NUEVO ANUNCIO</div><form id="listingForm">
+<label>Tienda<select id="storeSelect" name="store_id" required></select></label>
+<label>Categoría<select id="categorySelect" name="category_slug" required></select></label>
+<label>Título<input name="title" maxlength="160" required></label>
+<label>Precio (atomic units)<input name="price_atomic" inputmode="numeric" pattern="[0-9]+" required></label>
+<label>Activo<select name="price_asset"><option>BTC</option><option>LTC</option><option>XMR</option></select></label>
+<label>Estado del artículo<input name="condition" maxlength="80" value="usado" required></label>
+<label>Descripción<textarea name="description" rows="8" maxlength="10000" required></textarea></label>
+<label><input name="publish" type="checkbox"> Publicar inmediatamente</label>
+<button class="button button-primary" type="submit">GUARDAR ANUNCIO</button>
+</form></section>
+</div>
+<section id="sellerState" class="system-panel"><div class="panel-title">MIS ANUNCIOS</div><ul id="listingsList"></ul><p id="sellerMessage" class="muted" aria-live="polite"></p></section>
+</main>
+<footer><span>MERCORA</span><span>Área de vendedor</span></footer>
+</div>
+<script type="module" src="./seller.js"></script>
+</body>
+</html>
