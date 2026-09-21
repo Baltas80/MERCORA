@@ -76,6 +76,7 @@ export function createAdminApi({ controller, management, reputation: reputationO
 
     try{
       const input = JSON.parse(body || '{}');
+      if(input === null || typeof input !== 'object' || Array.isArray(input)) throw new Error('request body must be a JSON object');
 
       if(req.method === 'POST' && url.pathname === '/v1/control'){
         const action = String(input.action || '').toUpperCase();
@@ -129,9 +130,10 @@ export function createAdminApi({ controller, management, reputation: reputationO
 
       res.writeHead(404); return res.end(JSON.stringify({error:'not found'}));
     }catch(error){
-      const status = /not found|unsupported|invalid|must contain|is not|cannot|not allowed|transition/i.test(String(error.message || '')) ? 400 : 503;
+      const message = String(error.message || 'operation failed');
+      const status = /JSON|request body|not found|unsupported|invalid|must contain|is not|cannot|not allowed|transition/i.test(message) ? 400 : 503;
       res.writeHead(status);
-      return res.end(JSON.stringify({error:String(error.message || 'operation failed').slice(0,1500)}));
+      return res.end(JSON.stringify({error:message.slice(0,1500)}));
     }
   });
 
