@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node server/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "admin:api": "node scripts/mercora-admin-api.mjs",
+    "admin": "node scripts/mercora-admin.mjs"
   },
   "engines": {
     "node": ">=20"
