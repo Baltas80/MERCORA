@@ -52,12 +52,20 @@ export function createSellerApi({databaseUrl=process.env.DATABASE_URL,run=runner
     const listings=await json("SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.updated_at DESC),'[]'::json)::text FROM (SELECT l.id,l.title,l.status,l.price_atomic::text AS price_atomic,l.price_asset,l.condition,l.created_at,l.updated_at,c.name AS category,s.name AS store_name FROM listings l LEFT JOIN categories c ON c.id=l.category_id LEFT JOIN mercora_stores s ON s.id=l.store_id WHERE l.seller_account_id=:'id'::uuid ORDER BY l.updated_at DESC LIMIT 100) x",{id:accountId});
     return {account,stores:Array.isArray(stores)?stores:[],listings:Array.isArray(listings)?listings:[]};
   }
+  async function siteSetting(key){
+    return json("SELECT row_to_json(x)::text FROM (SELECT value FROM site_settings WHERE key=:'key' LIMIT 1) x",{key});
+  }
   async function siteSettingEnabled(key){
-    const row=await json("SELECT row_to_json(x)::text FROM (SELECT value FROM site_settings WHERE key=:'key' LIMIT 1) x",{key});
+    const row=await siteSetting(key);
     return row?.value==='true';
+  }
+  async function publicMode(){
+    const row=await siteSetting('site_mode');
+    return row?.value||'public';
   }
   async function createStore(accountId,payload={}){
     uuid(accountId,'account_id');
+    if(await publicMode()!=='public')throw new Error('seller registration is disabled while marketplace is not public');
     if(!await siteSettingEnabled('seller_registration_enabled'))throw new Error('seller registration is disabled');
     const name=text(payload.name,'name',2,120);
     const storeSlug=slug(payload.slug);
@@ -70,6 +78,7 @@ export function createSellerApi({databaseUrl=process.env.DATABASE_URL,run=runner
   }
   async function createListing(accountId,payload={}){
     uuid(accountId,'account_id');
+    if(await publicMode()!=='public')throw new Error('new listings are disabled while marketplace is not public');
     if(!await siteSettingEnabled('new_listings_enabled'))throw new Error('new listings are disabled');
     const title=text(payload.title,'title',3,160);
     const description=text(payload.description,'description',1,10000);
