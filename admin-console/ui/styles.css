@@ -14,3 +14,5 @@ button:hover{filter:brightness(1.08)}button:disabled{opacity:.45;cursor:not-allo
 @media(max-width:1080px){.sidebar{width:190px}.main{margin-left:190px}.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.system-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:800px){.sidebar{position:static;width:auto;border-right:0;border-bottom:1px solid #242424}.main{margin-left:0}.sidebar nav{grid-template-columns:repeat(3,minmax(0,1fr))}.metric-grid,.system-grid,.two-col{grid-template-columns:repeat(2,minmax(0,1fr))}.sidebar-footer{grid-template-columns:1fr 1fr;margin-top:14px}.form-grid{grid-template-columns:1fr}.form-grid button,.form-grid.wide .span2{grid-column:span 1}}
 @media(max-width:520px){.view{padding:18px}.metric-grid,.system-grid,.two-col{grid-template-columns:1fr}.sidebar nav{grid-template-columns:repeat(2,minmax(0,1fr))}.topbar{padding:0 18px}}
+
+.featured-picker{min-height:260px;margin-bottom:12px}
