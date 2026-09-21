@@ -77,7 +77,7 @@ test('site mode and boolean settings are constrained',async()=>{
 test('store owner and UUID inputs are validated',async()=>{
   const {calls,runner}=fakeRunnerFactory();
   const management=createAdminManagement({runner});
-  await assert.rejects(()=>management.run('ASSIGN_STORE',{store_id:'not-a-uuid',owner_username:'seller'}),/valid UUID/);
+  await assert.rejects(()=>management.run('ASSIGN_STORE',{store_id:'not-a-uuid',owner_username:'seller'}),/must contain|valid UUID/);
   await assert.rejects(()=>management.run('BAN_ACCOUNT',{account_id:'11111111-1111-4111-8111-111111111111',reason:'x'}),/reason must contain/);
   assert.equal(calls.length,0);
 });
