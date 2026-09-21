@@ -60,7 +60,8 @@ function state(ok, positive = 'ONLINE') {
 export function createAdminController({
   cwd = path.resolve(process.cwd()),
   runner = defaultRunner,
-  probe = defaultProbe
+  probe = defaultProbe,
+  backendProbeFn = backendProbe
 } = {}) {
   async function run(action, service) {
     const args = composeArgs(action, service);
@@ -112,7 +113,7 @@ export function createAdminController({
     checks.push(await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd }));
     checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps'], { cwd }).then(sanitizeResult));
     checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'], { cwd }).then(sanitizeResult));
-    checks.push(await backendProbe());
+    checks.push(await backendProbeFn());
     checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd }).then(sanitizeResult));
     checks.push(await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd }));
     return {
