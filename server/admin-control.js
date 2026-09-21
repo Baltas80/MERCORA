@@ -11,6 +11,7 @@ const PORT = Number(process.env.ADMIN_CONTROL_PORT ?? "8090");
 const TOKEN = process.env.MERCORA_ADMIN_CONTROL_TOKEN ?? "";
 const MERCORA_HOST = process.env.MERCORA_HOST ?? "127.0.0.1";
 const MERCORA_PORT = Number(process.env.MERCORA_PORT ?? "8080");
+const ONION_SERVICE_DIR = process.env.MERCORA_ONION_SERVICE_DIR ?? "/var/lib/tor/mercora";
 const MAX_BODY = 8 * 1024;
 const ACTION_TIMEOUT_MS = 30_000;
 
@@ -29,10 +30,11 @@ const ACTIONS = Object.freeze({
   torStop: ["scripts/tor-service-wsl.sh", "stop"],
   torRestart: ["scripts/tor-service-wsl.sh", "restart"],
   torStatus: ["scripts/tor-service-wsl.sh", "status"],
-  torValidate: ["scripts/tor-service-wsl.sh", "validate"]
+  torValidate: ["scripts/tor-service-wsl.sh", "validate"],
+  recover: null
 });
 
-const ACTION_MUTATIONS = new Set(["start", "stop", "restart", "torStart", "torStop", "torRestart"]);
+const ACTION_MUTATIONS = new Set(["start", "stop", "restart", "torStart", "torStop", "torRestart", "recover"]);
 let mutationInProgress = false;
 
 function authorized(req) {
@@ -88,20 +90,7 @@ function runAction(action) {
   });
 }
 
-async function runGuardedAction(action) {
-  if (ACTION_MUTATIONS.has(action)) {
-    if (mutationInProgress) return { ok: false, code: null, stdout: "", stderr: "another_mutating_action_is_in_progress" };
-    mutationInProgress = true;
-    try {
-      return await runAction(action);
-    } finally {
-      mutationInProgress = false;
-    }
-  }
-  return runAction(action);
-}
-
-function checkHttp(pathname) {
+async function checkHttp(pathname) {
   return new Promise((resolve) => {
     const request = http.get({ hostname: MERCORA_HOST, port: MERCORA_PORT, path: pathname, timeout: 2500 }, (response) => {
       response.resume();
@@ -129,6 +118,82 @@ async function checkStorage() {
   }
 }
 
+async function checkOnionConfigured() {
+  try {
+    await fs.access(path.join(ONION_SERVICE_DIR, "hostname"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function collectStatus() {
+  const [mercora, tor, health, postgresql, storage, onionConfigured] = await Promise.all([
+    runAction("status"),
+    runAction("torStatus"),
+    checkHttp("/api/healthz"),
+    checkPostgres(),
+    checkStorage(),
+    checkOnionConfigured()
+  ]);
+
+  return {
+    service: "mercora-admin-control",
+    mercora: mercora.ok ? "running" : "stopped",
+    backend: health ? "online" : "offline",
+    health: health ? "ok" : "error",
+    tor: tor.ok ? "running" : "stopped",
+    postgresql: postgresql ? "online" : "unknown",
+    storage,
+    // "configured" means Tor is running and a v3 service identity has been
+    // provisioned. It does not prove reachability from another Tor client.
+    onionService: tor.ok && onionConfigured ? "configured" : "offline"
+  };
+}
+
+async function runRecovery() {
+  const stages = [];
+
+  const appBefore = await runAction("status");
+  stages.push({ step: "mercora_status", ok: appBefore.ok, stdout: appBefore.stdout, stderr: appBefore.stderr });
+  if (!appBefore.ok) {
+    const appStart = await runAction("start");
+    stages.push({ step: "mercora_start", ok: appStart.ok, stdout: appStart.stdout, stderr: appStart.stderr });
+    if (!appStart.ok) return { ok: false, code: appStart.code, recovery: "failed", stages };
+  }
+
+  const torBefore = await runAction("torStatus");
+  stages.push({ step: "tor_status", ok: torBefore.ok, stdout: torBefore.stdout, stderr: torBefore.stderr });
+  if (!torBefore.ok) {
+    const torStart = await runAction("torStart");
+    stages.push({ step: "tor_start", ok: torStart.ok, stdout: torStart.stdout, stderr: torStart.stderr });
+    if (!torStart.ok) return { ok: false, code: torStart.code, recovery: "failed", stages };
+  }
+
+  const status = await collectStatus();
+  stages.push({ step: "final_status", ok: status.mercora === "running" && status.tor === "running" && status.backend === "online" && status.health === "ok" });
+  return {
+    ok: status.mercora === "running" && status.tor === "running" && status.backend === "online" && status.health === "ok",
+    code: 0,
+    recovery: "complete",
+    status,
+    stages
+  };
+}
+
+async function runGuardedAction(action) {
+  if (ACTION_MUTATIONS.has(action)) {
+    if (mutationInProgress) return { ok: false, code: null, stdout: "", stderr: "another_mutating_action_is_in_progress" };
+    mutationInProgress = true;
+    try {
+      return action === "recover" ? await runRecovery() : await runAction(action);
+    } finally {
+      mutationInProgress = false;
+    }
+  }
+  return runAction(action);
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.socket.remoteAddress !== "127.0.0.1" && req.socket.remoteAddress !== "::1") {
     return json(res, 403, { error: "local_only" });
@@ -138,23 +203,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${HOST}:${PORT}`);
 
   if (req.method === "GET" && url.pathname === "/api/admin/status") {
-    const [mercora, tor, health, postgresql, storage] = await Promise.all([
-      runAction("status"),
-      runAction("torStatus"),
-      checkHttp("/api/healthz"),
-      checkPostgres(),
-      checkStorage()
-    ]);
-    return json(res, 200, {
-      service: "mercora-admin-control",
-      mercora: mercora.ok ? "running" : "stopped",
-      backend: health ? "online" : "offline",
-      health: health ? "ok" : "error",
-      tor: tor.ok ? "running" : "stopped",
-      postgresql: postgresql ? "online" : "unknown",
-      storage,
-      onionService: "unknown"
-    });
+    return json(res, 200, await collectStatus());
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/action") {
