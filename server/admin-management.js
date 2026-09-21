@@ -134,7 +134,9 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
       "'open_reports',(SELECT count(*) FROM listing_reports WHERE status IN ('open','reviewing')),"+
       "'active_orders',(SELECT count(*) FROM orders WHERE status IN ('pending','awaiting_payment','paid','processing','shipped','disputed')),"+
       "'active_promos',(SELECT count(*) FROM promotion_codes WHERE active=true),"+
-      "'active_discounts',(SELECT count(*) FROM discount_rules WHERE active=true)"+
+      "'active_discounts',(SELECT count(*) FROM discount_rules WHERE active=true),"+
+      "'active_escrows',(SELECT count(*) FROM order_escrows WHERE state IN ('held','mid_release_authorized','early_pay_authorized','disputed','frozen')),"+
+      "'pending_escrow_authorizations',(SELECT count(*) FROM escrow_authorizations WHERE state='authorized')"+
       ")::text"
     );
   }
