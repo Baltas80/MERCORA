@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 
 const COMPOSE = ['compose','-f','docker-compose.yml','-f','docker-compose.onion.yml'];
 const ACTIONS = new Set([
-  'GET_POLICY','SET_POLICY','GET_CUSTODY_STATE','LIST_CASES','OPEN_ESCROW',
+  'GET_POLICY','SET_POLICY','GET_CUSTODY_STATE','SET_CUSTODY_STATE','LIST_CASES','OPEN_ESCROW',
   'AUTHORIZE_MID_RELEASE','AUTHORIZE_EARLY_PAY','AUTHORIZE_RELEASE',
   'AUTHORIZE_REFUND','FREEZE_CASE','UNFREEZE_CASE','LIST_AUTHORIZATIONS'
 ]);
@@ -113,7 +113,7 @@ export function createAdminEscrow({
   }
 
   async function getPolicy(){
-    return row("SELECT id,escrow_enabled,mid_escrow_enabled,mid_release_bps,early_pay_enabled,early_pay_delay_hours,early_pay_max_bps,dispute_window_hours,auto_release_hours,new_seller_escrow_required,new_seller_hold_hours,high_value_review_enabled,high_value_threshold_atomic,manual_release_required,updated_at,updated_by FROM escrow_policies WHERE id=1");
+    return row("SELECT row_to_json(x) FROM (SELECT id,escrow_enabled,mid_escrow_enabled,mid_release_bps,early_pay_enabled,early_pay_delay_hours,early_pay_max_bps,dispute_window_hours,auto_release_hours,new_seller_escrow_required,new_seller_hold_hours,high_value_review_enabled,high_value_threshold_atomic,manual_release_required,updated_at,updated_by FROM escrow_policies WHERE id=1) x");
   }
   async function setPolicy(payload={}){
     const keys=Object.keys(payload).filter(k=>POLICY_KEYS.has(k));
@@ -136,7 +136,15 @@ export function createAdminEscrow({
     return getPolicy();
   }
   async function getCustodyState(){
-    return row("SELECT key,value,updated_at FROM system_state WHERE key='custody_mode'");
+    return row("SELECT row_to_json(x) FROM (SELECT key,value,updated_at FROM system_state WHERE key='custody_mode') x");
+  }
+  async function setCustodyState(payload={}){
+    if(payload.value!=='normal' && payload.value!=='frozen') throw new Error('unsupported custody mode');
+    const current=await getCustodyState();
+    if(current?.value===payload.value) return current;
+    await db("INSERT INTO system_state(key,value,updated_at) VALUES('custody_mode',"+sqlString(payload.value)+",now()) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now()");
+    await audit(null,'SET_CUSTODY_MODE',{from:current?.value||null,to:payload.value,reason:payload.reason||'Administrative custody control'});
+    return getCustodyState();
   }
   async function listCases(payload={}){
     const limit=integer(payload.limit??50,'limit',1,100);
@@ -155,8 +163,8 @@ export function createAdminEscrow({
   async function openEscrow(payload){
     const orderId=uuid(payload.order_id,'order_id');
     const order=await row(
-      "SELECT o.id,o.status,o.total_atomic,o.total_asset,o.updated_at,ep.escrow_enabled,ep.dispute_window_hours,ep.auto_release_hours "+
-      "FROM orders o CROSS JOIN escrow_policies ep WHERE o.id="+sqlString(orderId)+"::uuid"
+      "SELECT row_to_json(x) FROM (SELECT o.id,o.status,o.total_atomic,o.total_asset,o.updated_at,ep.escrow_enabled,ep.dispute_window_hours,ep.auto_release_hours "+
+      "FROM orders o CROSS JOIN escrow_policies ep WHERE o.id="+sqlString(orderId)+"::uuid) x"
     );
     if(!order) throw new Error('order not found');
     if(!order.escrow_enabled) throw new Error('escrow is disabled');
@@ -166,8 +174,8 @@ export function createAdminEscrow({
     const rowResult=await row(
       "INSERT INTO order_escrows(order_id,asset_code,escrowed_atomic,state,release_available_at,dispute_until) VALUES("+
       sqlString(orderId)+"::uuid,"+sqlString(order.total_asset)+","+sqlString(String(order.total_atomic))+",'held',"+
-      "(now()+("+String(order.auto_release_hours)+"||' hours')::interval),"+
-      "(now()+("+String(order.dispute_window_hours)+"||' hours')::interval)"+
+      "(now()+make_interval(hours=>"+String(order.auto_release_hours)+")),"+
+      "(now()+make_interval(hours=>"+String(order.dispute_window_hours)+"))"+
       ") RETURNING order_id,asset_code,escrowed_atomic,released_atomic,refunded_atomic,state,opened_at,release_available_at,dispute_until"
     );
     await audit(orderId,'OPEN_ESCROW',{amount_atomic:String(order.total_atomic),asset:order.total_asset});
@@ -286,7 +294,7 @@ export function createAdminEscrow({
     switch(op){
       case 'GET_POLICY': return getPolicy();
       case 'SET_POLICY': return setPolicy(payload);
-      case 'GET_CUSTODY_STATE': return getCustodyState();
+      case 'GET_CUSTODY_STATE': return getCustodyState(); case 'SET_CUSTODY_STATE': return setCustodyState(payload);
       case 'LIST_CASES': return listCases(payload);
       case 'OPEN_ESCROW': return openEscrow(payload);
       case 'AUTHORIZE_MID_RELEASE': return authorizeMidRelease(payload);
