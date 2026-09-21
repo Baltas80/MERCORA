@@ -41,6 +41,8 @@ jobs:
 
       - name: Check server syntax
         run: node --check server/server.js
+      - name: Check admin control syntax
+        run: node --check server/admin-control.js
 
       - name: Check frontend syntax
         run: node --check web/app.js
