@@ -117,6 +117,6 @@ El código administrativo queda integrado y preparado para la infraestructura re
 
 ## Vinculación de la web
 
-La consola administra una configuración pública controlada (runtime/site-config.json) que el servidor expone mediante el endpoint de solo lectura /api/site-config. La aplicación pública puede aplicar nombre, avisos, modo de mantenimiento y restricciones de registro sin ejecutar contenido administrativo arbitrario.
+La consola administra una configuración pública controlada (runtime/site-config.json) que el servidor expone mediante el endpoint de solo lectura /api/site-config. La misma pantalla permite editar título, descripción y textos de llamada a la acción de la portada, además de avisos y modo de mantenimiento. La aplicación pública puede aplicar nombre, avisos, modo de mantenimiento y restricciones de registro sin ejecutar contenido administrativo arbitrario.
 
 El directorio runtime se monta en el contenedor de aplicación como solo lectura. La configuración generada se excluye de Git. La preview de GitHub Pages continúa siendo una superficie estática aislada y no se considera una instalación de producción.
