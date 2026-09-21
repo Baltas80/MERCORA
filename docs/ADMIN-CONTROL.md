@@ -15,7 +15,22 @@ The admin surface does **not** expose a shell or arbitrary command execution.
 - `HEALTH_CHECK`
 - `RECOVER [app|postgres|tor]`
 
-`RECOVER` first restarts only the requested component. If that fails, it attempts to start that same component. It then runs the health sequence rather than restarting unrelated services.
+`RECOVER` first restarts only the requested component. If that fails, it attempts to start that same component. A failed restart and failed start abort recovery rather than restarting unrelated services. When the component is running, recovery performs the full health sequence and reports the final state.
+
+## Recovery verification order
+
+After the component-level repair, verification is ordered as:
+
+1. Node.js runtime;
+2. Docker daemon;
+3. Docker Compose/base + Onion service state;
+4. backend `GET /api/healthz`;
+5. PostgreSQL readiness;
+6. Tor service state;
+7. Onion Service hostname presence;
+8. persistent storage volume.
+
+This ordering keeps diagnosis deterministic and avoids broad restarts as a recovery mechanism.
 
 ## Local API
 
@@ -40,14 +55,7 @@ On Windows PowerShell, set the environment variable for the current session befo
 
 ## Health coverage
 
-The health sequence checks:
-
-1. Node.js availability;
-2. Docker Compose service state for the base and Onion configurations;
-3. Docker daemon availability;
-4. backend `GET /api/healthz` on the local application binding;
-5. Onion Service hostname file inside the Tor data volume;
-6. PostgreSQL Docker volume presence.
+The health sequence checks runtime/dependencies first, then backend, database, Tor, Onion Service and storage in the explicit order above.
 
 Diagnostics are truncated and filter common secret-bearing lines before they are returned to the console.
 
@@ -62,7 +70,10 @@ The control API is fail-closed to localhost binding and must remain local-only. 
 - **IMPLEMENTED:** allowlisted control operations.
 - **IMPLEMENTED:** local authenticated control API.
 - **IMPLEMENTED:** component-targeted recovery.
+- **IMPLEMENTED:** ordered post-recovery verification.
+- **IMPLEMENTED:** failed repair aborts without unrelated restarts.
 - **IMPLEMENTED:** secret-filtered diagnostics.
 - **IMPLEMENTED:** fail-closed localhost-only API binding.
 - **TEST ADDED:** non-local bind attempts are rejected.
+- **TEST ADDED:** recovery ordering and failed-repair abort path.
 - **PENDING:** full repository `npm test` and live Docker/Tor health checks require the actual MERCORA runtime environment with Docker available.
