@@ -271,8 +271,8 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
     const where=clauses.length?'WHERE '+clauses.join(' AND '):'';
     return queryJson(
       "SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.updated_at DESC),'[]'::json)::text FROM ("+
-      "SELECT l.id,l.title,l.status,l.price_atomic,l.price_asset,l.condition,l.created_at,l.updated_at,sp.display_name AS seller,c.name AS category "+
-      "FROM listings l LEFT JOIN seller_profiles sp ON sp.account_id=l.seller_account_id LEFT JOIN categories c ON c.id=l.category_id "+where+
+      "SELECT l.id,l.title,l.status,l.price_atomic,l.price_asset,l.condition,l.created_at,l.updated_at,sp.display_name AS seller,COALESCE(sr.verified_sales_count,0)::text AS seller_verified_sales,c.name AS category "+
+      "FROM listings l LEFT JOIN seller_profiles sp ON sp.account_id=l.seller_account_id LEFT JOIN seller_reputation sr ON sr.account_id=l.seller_account_id LEFT JOIN categories c ON c.id=l.category_id "+where+
       " ORDER BY l.updated_at DESC LIMIT "+limit(payload.limit)+" OFFSET "+offset(payload.offset)+") x"
     );
   }
