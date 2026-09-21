@@ -157,7 +157,10 @@ async function loadOrders(){
     const select=document.createElement('select');(nextOrderStates[o.status]||[]).forEach(v=>{const opt=document.createElement('option');opt.value=v;opt.textContent=v;select.append(opt)});
     const b=document.createElement('button');b.className='small';b.textContent='GUARDAR';b.disabled=select.options.length===0;
     b.onclick=async()=>{try{await management('UPDATE_ORDER_STATUS',{order_id:o.id,status:select.value});await loadOrders();await refreshDashboard()}catch(e){alert(e.message||e)}};
-    tbody.append(rowCells(o,[r=>shortId(r.id),r=>r.buyer_username,r=>moneyAtomic(r.total_atomic,r.total_asset),r=>r.item_count,r=>r.status],[select,b]));
+    const escrow=document.createElement('button');escrow.className='small secondary';escrow.textContent='ESCROW';
+    escrow.disabled=!['paid','processing','shipped','disputed','completed'].includes(o.status);
+    escrow.onclick=async()=>{try{await escrowApi('OPEN_ESCROW',{order_id:o.id});showView('escrow');await loadEscrowPolicy();await loadEscrowCases();await loadEscrowAuthorizations()}catch(e){alert(e.message||String(e))}};
+    tbody.append(rowCells(o,[r=>shortId(r.id),r=>r.buyer_username,r=>moneyAtomic(r.total_atomic,r.total_asset),r=>r.item_count,r=>r.status],[select,b,escrow]));
   });
 }
 async function loadReports(){
@@ -256,6 +259,8 @@ async function loadEscrowPolicy(){
   const badge=document.querySelector('#custody-badge');
   badge.textContent='CUSTODY '+String(custody?.value||'UNKNOWN').toUpperCase();
   badge.className='badge '+(custody?.value==='normal'?'ok':'bad');
+  document.querySelector('#custody-freeze').disabled=custody?.value==='frozen';
+  document.querySelector('#custody-unfreeze').disabled=custody?.value!=='frozen';
   document.querySelector('#escrow-policy-output').textContent='Actualizado: '+date(policy?.updated_at)+' · actor: '+text(policy?.updated_by);
 }
 async function loadEscrowCases(){
@@ -458,6 +463,19 @@ document.querySelector('#discount-create').addEventListener('submit',async e=>{
     });
     f.reset();await loadDiscounts();await refreshDashboard();
   }catch(err){alert(err.message||String(err))}
+});
+
+
+document.querySelector('#custody-freeze').addEventListener('click',async()=>{
+  if(!confirm('Congelar custodia detendrá las operaciones que consulten este estado. ¿Continuar?'))return;
+  const reason=prompt('Motivo de congelación:','Revisión de seguridad / riesgo');
+  if(reason===null)return;
+  try{await escrowApi('SET_CUSTODY_STATE',{value:'frozen',reason});await loadEscrowPolicy();await refreshDashboard()}catch(e){alert(e.message||String(e))}
+});
+document.querySelector('#custody-unfreeze').addEventListener('click',async()=>{
+  const reason=prompt('Motivo para reanudar custodia:','Incidente resuelto y controles verificados');
+  if(reason===null)return;
+  try{await escrowApi('SET_CUSTODY_STATE',{value:'normal',reason});await loadEscrowPolicy();await refreshDashboard()}catch(e){alert(e.message||String(e))}
 });
 
 document.querySelector('#escrow-policy').addEventListener('submit',async e=>{
