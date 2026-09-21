@@ -31,11 +31,11 @@ PostgreSQL
 - `scripts/mercora-service.sh`: WSL process manager for the current Node.js application.
 - `scripts/tor-service-wsl.sh`: WSL Tor process manager with configuration validation and no key generation/replacement.
 - `scripts/start-onion-wsl.sh`: existing staging launcher remains available for initial Onion Service setup.
-- `.github/workflows/ci.yml`: includes a Windows runner that builds the Tauri application and publishes the generated NSIS/MSI installers as short-lived CI artifacts.
+- `.github/workflows/ci.yml`: includes a Windows runner that checks Rust and builds the Tauri NSIS installer as a short-lived CI artifact.
 
 The desktop client keeps the administrator token only in the running Tauri process and sends administrative requests through the Rust bridge to `127.0.0.1:8090`. It does not write the token to the UI's local storage.
 
-The Tauri global JavaScript API is disabled (`withGlobalTauri: false`) so the UI only has access to the explicitly registered Rust commands used by the console.
+Tauri's global JavaScript API is enabled because the current UI uses the documented `window.__TAURI__.core.invoke` bridge. The exposed operations remain limited to the explicitly registered Rust commands (`set_token`, `clear_token`, and `admin_request`); the Rust bridge itself allow-lists the Admin Control API endpoints and never exposes arbitrary shell execution.
 
 ## Security boundaries
 
@@ -46,6 +46,7 @@ The Tauri global JavaScript API is disabled (`withGlobalTauri: false`) so the UI
 - Onion Service private keys are never returned by the API.
 - Secrets must be supplied through the environment/secure secret storage and never committed.
 - The desktop UI cannot directly open a shell or invoke arbitrary system commands.
+- The desktop Rust bridge validates request methods/paths, limits request and response sizes, applies network timeouts, and stores the admin token only in process memory.
 
 ## Development
 
@@ -66,7 +67,7 @@ The API defaults to `http://127.0.0.1:8090` and the MERCORA service manager defa
 
 ## Windows build
 
-The repository CI now performs a real Windows Tauri build on `windows-latest` for pull requests. The build runs `npm run build` inside `admin-console` and publishes the generated NSIS/MSI installers as a CI artifact for 14 days.
+The repository CI performs a real Windows Tauri build on `windows-latest` for pull requests. The build uses the published Tauri 2.6.2 CLI/core versions, checks the Rust application, builds the NSIS installer, and publishes the generated `.exe` as a CI artifact for 14 days.
 
 The local equivalent is:
 
@@ -76,10 +77,10 @@ npm install --no-audit --no-fund
 npm run build
 ```
 
-This produces the Windows installers under:
+This produces the Windows installer under:
 
 ```text
-admin-console/src-tauri/target/release/bundle/
+admin-console/src-tauri/target/release/bundle/nsis/
 ```
 
 The installer build is not considered an end-to-end runtime test: the installed application still needs to be exercised against the target Windows/WSL/Tor environment.
@@ -99,7 +100,9 @@ The current WSL service manager deliberately refuses to force-kill a process tha
 
 ## Verification status
 
-The Windows build is now enforced by CI, but the repository execution environment does not provide the user's live WSL/Windows desktop runtime. Therefore the following remain pending until executed on the target machine:
+The Windows build is enforced by CI, but the last recorded Windows run failed before Rust compilation because the branch requested the unpublished `@tauri-apps/cli@2.6.3`. That dependency has now been corrected to the published 2.6.2 release; a new CI run is required to verify the correction. No successful Windows installer build is claimed yet.
+
+The following remain pending until executed on the target machine:
 
 - installed Tauri application startup;
 - live Admin Control API startup;
