@@ -63,7 +63,7 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_validate_seller_rating ON seller_ratings;
 CREATE TRIGGER trg_validate_seller_rating
-BEFORE INSERT OR UPDATE OF order_id, seller_account_id, buyer_account_id
+BEFORE INSERT OR UPDATE
 ON seller_ratings
 FOR EACH ROW
 EXECUTE FUNCTION mercora_validate_seller_rating();
