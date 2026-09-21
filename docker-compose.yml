@@ -13,6 +13,7 @@ services:
       - ./db/004_admin_management.sql:/docker-entrypoint-initdb.d/004_admin_management.sql:ro
       - ./db/005_escrow.sql:/docker-entrypoint-initdb.d/005_escrow.sql:ro
       - ./db/006_reputation.sql:/docker-entrypoint-initdb.d/006_reputation.sql:ro
+      - ./db/007_site_content_versions.sql:/docker-entrypoint-initdb.d/007_site_content_versions.sql:ro
     networks: [backend]
     restart: unless-stopped
     healthcheck:
@@ -30,6 +31,7 @@ services:
       PORT: 8080
       DATABASE_URL: postgresql://mercora:${POSTGRES_PASSWORD}@postgres:5432/mercora
       MERCORA_ENV: staging
+      MERCORA_COOKIE_SECURE: ${MERCORA_COOKIE_SECURE:-false}
     depends_on:
       postgres:
         condition: service_healthy
