@@ -6,8 +6,10 @@ WORKDIR /app
 COPY package.json ./
 COPY server ./server
 COPY web ./web
+COPY runtime ./runtime
 
-RUN addgroup -S mercora && adduser -S mercora -G mercora \
+RUN apk add --no-cache postgresql-client \
+    && addgroup -S mercora && adduser -S mercora -G mercora \
     && chown -R mercora:mercora /app
 
 USER mercora
