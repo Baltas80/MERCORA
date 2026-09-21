@@ -31,6 +31,10 @@ jobs:
       - name: Install admin console dependencies
         working-directory: admin-console
         run: npm install --no-audit --no-fund
+      - name: Generate Tauri icon set
+        working-directory: admin-console
+        run: npm run tauri icon ../admin-console/app-icon.svg
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Check Rust
