@@ -35,10 +35,11 @@ async function load(){
     seller.replaceChildren();
     const strong=document.createElement('strong');
     strong.textContent=data.seller||'Vendedor';
-    const p=document.createElement('p');
-    p.className='muted';
-    p.textContent='✓ '+(data.verified_sales_count||'0')+' ventas verificadas'+rating+' · '+(data.verified_rating_count||'0')+' valoraciones';
-    seller.append(strong,p);
+    const sellerLink=document.createElement('a');
+    sellerLink.href='./seller.html?name='+encodeURIComponent(data.seller||'');
+    sellerLink.className='muted';
+    sellerLink.textContent='✓ '+(data.verified_sales_count||'0')+' ventas verificadas'+rating+' · '+(data.verified_rating_count||'0')+' valoraciones';
+    seller.append(strong,sellerLink);
     add.disabled=false;
   }catch(error){
     message.textContent=error.message||String(error);
