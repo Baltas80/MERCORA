@@ -15,7 +15,9 @@ The admin surface does **not** expose a shell or arbitrary command execution.
 - `HEALTH_CHECK`
 - `RECOVER [app|postgres|tor]`
 
-`RECOVER` first restarts only the requested component. If that fails, it attempts to start that same component. It then runs the health sequence rather than restarting unrelated services.
+`RECOVER` first restarts only the requested component. If that fails, it attempts to start that same component. A successful fallback is treated as a successful recovery. It then runs the health sequence rather than restarting unrelated services.
+
+`STATUS` returns a structured, secret-free summary for MERCORA, Node.js, PostgreSQL, backend, Tor, Onion Service, storage, and overall health. It is derived from the same health probes rather than exposing raw Docker output to the UI.
 
 ## Local API
 
@@ -50,12 +52,14 @@ The Rust bridge performs the validation before forwarding to the local API. The 
 The health sequence checks:
 
 1. Node.js availability;
-2. Docker Compose service state for the base and Onion configurations;
-3. Docker daemon availability;
-4. backend `GET /api/healthz` on the local application binding;
-5. Onion Service hostname file inside the Tor data volume;
-6. PostgreSQL readiness;
+2. Docker daemon availability;
+3. Docker Compose service state for the base and Onion configurations;
+4. PostgreSQL readiness;
+5. backend `GET /api/healthz` on the local application binding;
+6. Onion Service hostname file inside the Tor data volume;
 7. PostgreSQL Docker volume presence.
+
+The sequence is used after recovery to verify dependencies and affected services without performing an unnecessary full-system restart.
 
 Diagnostics are truncated and filter common secret-bearing lines before they are returned to the console.
 
@@ -69,10 +73,12 @@ The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its
 
 - **IMPLEMENTED:** allowlisted control operations.
 - **IMPLEMENTED:** local authenticated control API.
-- **IMPLEMENTED:** component-targeted recovery.
+- **IMPLEMENTED:** component-targeted recovery with restart-to-start fallback.
+- **IMPLEMENTED:** successful fallback is reflected in recovery result state.
+- **IMPLEMENTED:** structured infrastructure status.
 - **IMPLEMENTED:** secret-filtered diagnostics.
 - **IMPLEMENTED:** Tauri bridge/API endpoint alignment.
 - **IMPLEMENTED:** UI action-to-operation mapping.
-- **TESTED:** admin UI JavaScript syntax check passed locally in this execution.
-- **TESTED/CI:** repository CI runs Node unit tests, security checks, dependency audit, Rust `cargo check`, and Windows Admin Console build checks on pushes to `master`.
+- **TESTED:** admin controller unit coverage includes allowlists, shell-injection rejection, targeted recovery, fallback recovery success, diagnostics filtering, and structured status mapping.
+- **TESTED:** admin UI JavaScript syntax check was previously verified locally.
 - **PENDING:** live Docker/PostgreSQL/Tor health checks require the actual MERCORA runtime environment with Docker available.
