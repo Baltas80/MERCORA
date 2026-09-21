@@ -26,3 +26,23 @@ WHERE key IN (
   AND NOT EXISTS (
     SELECT 1 FROM site_content_versions v WHERE v.site_key = site_settings.key
   );
+
+-- Keep the publication invariant at the database boundary even under concurrent admin edits.
+WITH latest AS (
+  SELECT site_key, max(id) AS keep_id
+  FROM site_content_versions
+  WHERE published=true
+  GROUP BY site_key
+)
+UPDATE site_content_versions v
+SET published=false
+WHERE v.published=true
+  AND EXISTS (
+    SELECT 1 FROM latest l
+    WHERE l.site_key=v.site_key
+      AND l.keep_id<>v.id
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_content_versions_one_published
+  ON site_content_versions(site_key)
+  WHERE published=true;
