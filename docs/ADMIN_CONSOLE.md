@@ -121,6 +121,44 @@ La consola administra una configuración pública controlada (runtime/site-confi
 
 El directorio runtime se monta en el contenedor de aplicación como solo lectura. La configuración generada se excluye de Git. La preview de GitHub Pages continúa siendo una superficie estática aislada y no se considera una instalación de producción.
 
+
+## Reputación y ventas verificadas
+
+La reputación de vendedores está vinculada a compras verificadas y no a un contador editable.
+
+- Una valoración solo puede existir cuando el pedido está en estado `completed`.
+- El comprador debe ser el comprador real del pedido.
+- El vendedor valorado debe aparecer en `order_items` de ese pedido.
+- La autoevaluación está bloqueada.
+- En un pedido con varios vendedores, cada vendedor puede recibir su propia valoración.
+- Una misma relación pedido + comprador + vendedor solo admite una valoración.
+- Las valoraciones llevan estado `published`, `under_review` u `hidden`; ocultar o poner en revisión desde la consola exige un motivo y queda auditado.
+- `verified_purchase_at` se valida en la base de datos y no debe ser generado por la interfaz pública.
+- La reputación publicada se recalcula desde valoraciones verificadas.
+
+### Ventas reales del vendedor
+
+La vista `seller_reputation` deriva las ventas desde `order_items` + `orders` y cuenta como venta verificada cada pedido completado que contiene al vendedor. También expone las unidades vendidas y la media de valoración.
+
+La cifra pública que se mostrará junto al nombre del vendedor debe proceder de `verified_sales_count`, por ejemplo:
+
+`MercoraShop · 1.284 ventas verificadas · ★ 4,92 · 247 valoraciones`
+
+No se debe usar un campo editable de perfil para representar ventas. Las ventas canceladas, pendientes o disputadas que no hayan terminado en `completed` no incrementan el contador.
+
+### Consola
+
+El módulo **Reputación** permite:
+
+- Buscar vendedores y consultar ventas verificadas, unidades, media y número de valoraciones.
+- Buscar comentarios y filtrar por estado.
+- Poner valoraciones en revisión, ocultarlas o volver a publicarlas.
+- Consultar el vínculo interno con el pedido verificado.
+- Recalcular los contadores denormalizados de `seller_profiles`.
+- Mantener auditoría administrativa de las actuaciones.
+
+La preview pública actual es estática y muestra datos de ejemplo únicamente para validar la presentación visual. El flujo de producción deberá consumir la vista/servicio de reputación del backend cuando la API transaccional pública quede conectada a PostgreSQL.
+
 ## Escrow / Mid-Escrow / Early Pay
 
 La consola dispone de un módulo dedicado de pagos y liquidación.
