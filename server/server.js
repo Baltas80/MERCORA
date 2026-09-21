@@ -164,6 +164,13 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { categories: await publicData.categories() });
     }
 
+    if (url.pathname.startsWith("/api/listings/")) {
+      const id = url.pathname.slice("/api/listings/".length);
+      const listing = await publicData.listing(id);
+      if (!listing) return sendJson(res, 404, { error: "listing not found" });
+      return sendJson(res, 200, listing);
+    }
+
     if (url.pathname === "/api/listings") {
       const q = url.searchParams.get("q") ?? "";
       const category = url.searchParams.get("category") ?? "";
