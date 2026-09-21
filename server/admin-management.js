@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 
 const COMPOSE = ['compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.onion.yml'];
 const ACTIONS = new Set([
-  'OVERVIEW','LIST_USERS','SET_ACCOUNT_STATUS','BAN_ACCOUNT','UNBAN_ACCOUNT',
+  'OVERVIEW','LIST_FEATURED','LIST_USERS','SET_ACCOUNT_STATUS','BAN_ACCOUNT','UNBAN_ACCOUNT',
   'LIST_STORES','CREATE_STORE','ASSIGN_STORE','UPDATE_STORE',
   'LIST_LISTINGS','UPDATE_LISTING_STATUS','LIST_ORDERS','UPDATE_ORDER_STATUS',
   'LIST_REPORTS','UPDATE_REPORT','LIST_PROMOS','CREATE_PROMO','DISABLE_PROMO',
@@ -401,6 +401,7 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
     return row;
   }
   async function siteGet(){ return queryJson("SELECT COALESCE(json_object_agg(key,value),'{}'::json)::text FROM site_settings"); }
+  async function listFeatured(){ return queryJson("SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.position),'[]'::json)::text FROM (SELECT h.position,h.listing_id,l.title,l.status FROM homepage_featured_listings h JOIN listings l ON l.id=h.listing_id ORDER BY h.position) x"); }
   async function siteSet(payload){
     const key=assertString(payload.key,'key',1,64); if(!SITE_KEYS.has(key)) throw new Error('unsupported site setting');
     const value=assertString(String(payload.value===undefined?'':payload.value),'value',0,4000);
@@ -430,7 +431,7 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
 
   async function run(action,payload){ 
     switch(assertAction(action)){
-      case 'OVERVIEW': return overview();
+      case 'OVERVIEW': return overview(); case 'LIST_FEATURED': return listFeatured();
       case 'LIST_USERS': return listUsers(payload); case 'SET_ACCOUNT_STATUS': return setAccountStatus(payload);
       case 'BAN_ACCOUNT': return banAccount(payload); case 'UNBAN_ACCOUNT': return unbanAccount(payload);
       case 'LIST_STORES': return listStores(payload); case 'CREATE_STORE': return createStore(payload);
