@@ -8,6 +8,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HOST = process.env.ADMIN_CONTROL_HOST ?? "127.0.0.1";
 const PORT = Number(process.env.ADMIN_CONTROL_PORT ?? "8090");
 const TOKEN = process.env.MERCORA_ADMIN_CONTROL_TOKEN ?? "";
+const MERCORA_HOST = process.env.MERCORA_HOST ?? "127.0.0.1";
+const MERCORA_PORT = Number(process.env.MERCORA_PORT ?? "8080");
 const MAX_BODY = 8 * 1024;
 
 if (!TOKEN) {
@@ -55,7 +57,6 @@ function runAction(action) {
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"]
     });
-
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
@@ -65,23 +66,49 @@ function runAction(action) {
   });
 }
 
+function checkHttp(pathname) {
+  return new Promise((resolve) => {
+    const request = http.get({ hostname: MERCORA_HOST, port: MERCORA_PORT, path: pathname, timeout: 2500 }, (response) => {
+      response.resume();
+      resolve(response.statusCode === 200);
+    });
+    request.on("timeout", () => request.destroy());
+    request.on("error", () => resolve(false));
+  });
+}
+
+function checkPostgres() {
+  return new Promise((resolve) => {
+    const child = spawn("pg_isready", [], { stdio: ["ignore", "ignore", "ignore"] });
+    child.on("close", (code) => resolve(code === 0));
+    child.on("error", () => resolve(false));
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.socket.remoteAddress !== "127.0.0.1" && req.socket.remoteAddress !== "::1") {
     return json(res, 403, { error: "local_only" });
   }
-
-  if (!authorized(req)) {
-    return json(res, 401, { error: "unauthorized" });
-  }
+  if (!authorized(req)) return json(res, 401, { error: "unauthorized" });
 
   const url = new URL(req.url ?? "/", `http://${HOST}:${PORT}`);
 
   if (req.method === "GET" && url.pathname === "/api/admin/status") {
-    const [mercora, tor] = await Promise.all([runAction("status"), runAction("torStatus")]);
+    const [mercora, tor, health, postgresql] = await Promise.all([
+      runAction("status"),
+      runAction("torStatus"),
+      checkHttp("/api/healthz"),
+      checkPostgres()
+    ]);
     return json(res, 200, {
       service: "mercora-admin-control",
       mercora: mercora.ok ? "running" : "stopped",
-      tor: tor.ok ? "running" : "stopped"
+      backend: health ? "online" : "offline",
+      health: health ? "ok" : "error",
+      tor: tor.ok ? "running" : "stopped",
+      postgresql: postgresql ? "online" : "unknown",
+      storage: "online",
+      onionService: tor.ok ? "running" : "unknown"
     });
   }
 
