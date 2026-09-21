@@ -62,3 +62,21 @@ Los scripts montados en docker-entrypoint-initdb.d/ solo se ejecutan automática
 El código administrativo queda integrado y preparado para la infraestructura real, pero la aprobación de producción requiere ejecutar en el equipo objetivo la build Windows, Docker/WSL, PostgreSQL, Tor, Onion Service y los procedimientos de backup/restore de extremo a extremo. No se marcan esas verificaciones como superadas hasta que se ejecutan realmente.
 
 El editor de contenido está implementado en código y con tests unitarios; su ejecución contra PostgreSQL real queda pendiente de disponer del runtime Docker operativo.
+
+
+## Web pública conectada a datos reales
+
+La portada consume categorías, anuncios publicados y reputación verificada desde PostgreSQL mediante la capa de datos pública. No se utilizan productos ficticios para representar el catálogo operativo.
+
+Las rutas públicas soportadas incluyen:
+
+- `/api/categories`
+- `/api/listings`
+- `/api/sellers/:displayName`
+- `/api/site-config`
+
+La web también dispone de autenticación pseudónima real, sesiones y área de vendedor. Las contraseñas se almacenan mediante el módulo scrypt existente y las sesiones utilizan tokens aleatorios almacenando solo su hash.
+
+En el Onion Service actual, que publica HTTP, `MERCORA_COOKIE_SECURE=false` es el modo de compatibilidad necesario para que el navegador acepte la sesión. Si se despliega el servicio público detrás de HTTPS, debe establecerse `MERCORA_COOKIE_SECURE=true`. HttpOnly y SameSite=Strict permanecen activos en ambos casos.
+
+El administrador puede bloquear el registro de vendedores y la creación de nuevos anuncios desde la consola; esos controles se validan también en el backend y no dependen exclusivamente de la UI.
