@@ -31,8 +31,11 @@ PostgreSQL
 - `scripts/mercora-service.sh`: WSL process manager for the current Node.js application.
 - `scripts/tor-service-wsl.sh`: WSL Tor process manager with configuration validation and no key generation/replacement.
 - `scripts/start-onion-wsl.sh`: existing staging launcher remains available for initial Onion Service setup.
+- `.github/workflows/ci.yml`: includes a Windows runner that builds the Tauri application and publishes the generated NSIS/MSI installers as short-lived CI artifacts.
 
 The desktop client keeps the administrator token only in the running Tauri process and sends administrative requests through the Rust bridge to `127.0.0.1:8090`. It does not write the token to the UI's local storage.
+
+The Tauri global JavaScript API is disabled (`withGlobalTauri: false`) so the UI only has access to the explicitly registered Rust commands used by the console.
 
 ## Security boundaries
 
@@ -61,6 +64,26 @@ npm run admin:desktop
 
 The API defaults to `http://127.0.0.1:8090` and the MERCORA service manager defaults to `127.0.0.1:8080`.
 
+## Windows build
+
+The repository CI now performs a real Windows Tauri build on `windows-latest` for pull requests. The build runs `npm run build` inside `admin-console` and publishes the generated NSIS/MSI installers as a CI artifact for 14 days.
+
+The local equivalent is:
+
+```powershell
+cd admin-console
+npm install --no-audit --no-fund
+npm run build
+```
+
+This produces the Windows installers under:
+
+```text
+admin-console/src-tauri/target/release/bundle/
+```
+
+The installer build is not considered an end-to-end runtime test: the installed application still needs to be exercised against the target Windows/WSL/Tor environment.
+
 ## Status and recovery
 
 The dashboard requests `GET /api/admin/status` and can issue only allow-listed actions through `POST /api/admin/action`.
@@ -76,9 +99,9 @@ The current WSL service manager deliberately refuses to force-kill a process tha
 
 ## Verification status
 
-Source-level integration has been added, but this repository execution environment does not provide the user's live WSL/Windows desktop runtime. Therefore the following remain pending until executed on the target machine:
+The Windows build is now enforced by CI, but the repository execution environment does not provide the user's live WSL/Windows desktop runtime. Therefore the following remain pending until executed on the target machine:
 
-- Tauri Windows build and installer generation;
+- installed Tauri application startup;
 - live Admin Control API startup;
 - live Node.js start/stop/restart through the console;
 - live Tor start/stop/restart and Onion Service health verification;
