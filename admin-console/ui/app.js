@@ -119,7 +119,9 @@ async function loadUsers(){
     };
     const freeze=document.createElement('button');freeze.className='small secondary';freeze.textContent=u.status==='frozen'?'ACTIVAR':'CONGELAR';
     freeze.onclick=async()=>{try{await management('SET_ACCOUNT_STATUS',{account_id:u.id,status:u.status==='frozen'?'active':'frozen'});await loadUsers();}catch(e){alert(String(e.message||e))}};
-    tbody.append(rowCells(u,[r=>r.username,r=>r.status,r=>r.banned?'SÍ':'NO',r=>date(r.created_at)],[ban,freeze]));
+    const sessions=document.createElement('button');sessions.className='small secondary';sessions.textContent='CERRAR SESIONES';
+    sessions.onclick=async()=>{if(!confirm('Cerrar todas las sesiones activas de '+u.username+'?'))return;try{await management('REVOKE_ACCOUNT_SESSIONS',{account_id:u.id});alert('Sesiones revocadas.');}catch(e){alert(String(e.message||e))}};
+    tbody.append(rowCells(u,[r=>r.username,r=>r.status,r=>r.banned?'SÍ':'NO',r=>date(r.created_at)],[ban,freeze,sessions]));
   });
 }
 async function loadStores(){
@@ -347,7 +349,9 @@ document.querySelector('#promo-create').addEventListener('submit',async e=>{
       discount_bps:f.elements.discount_bps.value?Number(f.elements.discount_bps.value):null,
       discount_atomic:f.elements.discount_atomic.value||null,discount_asset:f.elements.discount_asset.value||null,
       max_redemptions:f.elements.max_redemptions.value?Number(f.elements.max_redemptions.value):null,
-      min_order_atomic:f.elements.min_order_atomic.value||'0'
+      min_order_atomic:f.elements.min_order_atomic.value||'0',
+      starts_at:f.elements.starts_at.value?new Date(f.elements.starts_at.value).toISOString():null,
+      ends_at:f.elements.ends_at.value?new Date(f.elements.ends_at.value).toISOString():null
     });
     f.reset();document.querySelector('#promo-once').textContent='CÓDIGO NUEVO (se muestra una sola vez): '+p.code;document.querySelector('#promo-once').classList.remove('hidden');
     await loadPromos();await refreshDashboard();
@@ -359,7 +363,9 @@ document.querySelector('#discount-create').addEventListener('submit',async e=>{
     await management('CREATE_DISCOUNT',{
       target_type:f.elements.target_type.value,target_id:f.elements.target_id.value||null,
       discount_type:f.elements.discount_type.value,discount_bps:f.elements.discount_bps.value?Number(f.elements.discount_bps.value):null,
-      discount_atomic:f.elements.discount_atomic.value||null,discount_asset:f.elements.discount_asset.value||null
+      discount_atomic:f.elements.discount_atomic.value||null,discount_asset:f.elements.discount_asset.value||null,
+      starts_at:f.elements.starts_at.value?new Date(f.elements.starts_at.value).toISOString():null,
+      ends_at:f.elements.ends_at.value?new Date(f.elements.ends_at.value).toISOString():null
     });
     f.reset();await loadDiscounts();await refreshDashboard();
   }catch(err){alert(err.message||String(err))}
