@@ -37,6 +37,16 @@ const ACTIONS = Object.freeze({
 const ACTION_MUTATIONS = new Set(["start", "stop", "restart", "torStart", "torStop", "torRestart", "recover"]);
 let mutationInProgress = false;
 
+function isLoopback(address) {
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+}
+
+function redactDiagnostics(value) {
+  return String(value ?? "")
+    .replace(/(MERCORA_ADMIN_CONTROL_TOKEN|POSTGRES_PASSWORD|DATABASE_URL)=\\S+/gi, "$1=[REDACTED]")
+    .replace(/Bearer\\s+\\S+/gi, "Bearer [REDACTED]");
+}
+
 function authorized(req) {
   const header = req.headers.authorization ?? "";
   const prefix = "Bearer ";
@@ -80,12 +90,12 @@ function runAction(action) {
 
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    child.on("close", (code) => finish({ ok: code === 0, code, stdout: stdout.slice(-4000), stderr: stderr.slice(-4000) }));
+    child.on("close", (code) => finish({ ok: code === 0, code, stdout: redactDiagnostics(stdout.slice(-4000)), stderr: redactDiagnostics(stderr.slice(-4000)) }));
     child.on("error", (error) => finish({ ok: false, code: null, stdout: "", stderr: error.message }));
 
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
-      finish({ ok: false, code: null, stdout: stdout.slice(-4000), stderr: `${stderr.slice(-3500)}\noperation_timeout` });
+      finish({ ok: false, code: null, stdout: redactDiagnostics(stdout.slice(-4000)), stderr: `${stderr.slice(-3500)}\noperation_timeout` });
     }, ACTION_TIMEOUT_MS);
   });
 }
@@ -195,7 +205,7 @@ async function runGuardedAction(action) {
 }
 
 const server = http.createServer(async (req, res) => {
-  if (req.socket.remoteAddress !== "127.0.0.1" && req.socket.remoteAddress !== "::1") {
+  if (!isLoopback(req.socket.remoteAddress)) {
     return json(res, 403, { error: "local_only" });
   }
   if (!authorized(req)) return json(res, 401, { error: "unauthorized" });
