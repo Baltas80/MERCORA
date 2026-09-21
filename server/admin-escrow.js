@@ -162,7 +162,7 @@ export function createAdminEscrow({
   async function openEscrow(payload){
     const orderId=uuid(payload.order_id,'order_id');
     const order=await row(
-      "SELECT row_to_json(x) FROM (SELECT o.id,o.status,o.total_atomic,o.total_asset,o.updated_at,ep.escrow_enabled,ep.dispute_window_hours,ep.auto_release_hours "+
+      "SELECT row_to_json(x) FROM (SELECT o.id,o.status,o.total_atomic::text AS total_atomic,o.total_asset,o.updated_at,ep.escrow_enabled,ep.dispute_window_hours,ep.auto_release_hours "+
       "FROM orders o CROSS JOIN escrow_policies ep WHERE o.id="+sqlString(orderId)+"::uuid) x"
     );
     if(!order) throw new Error('order not found');
@@ -183,7 +183,7 @@ export function createAdminEscrow({
   async function caseRow(orderId){
     const id=uuid(orderId,'order_id');
     const result=await row(
-      "SELECT e.*,o.status AS order_status,o.updated_at AS order_updated_at FROM order_escrows e JOIN orders o ON o.id=e.order_id WHERE e.order_id="+sqlString(id)+"::uuid"
+      "SELECT e.order_id,e.asset_code,e.escrowed_atomic::text AS escrowed_atomic,e.released_atomic::text AS released_atomic,e.refunded_atomic::text AS refunded_atomic,e.state,e.opened_at,e.release_available_at,e.dispute_until,e.updated_at,o.status AS order_status,o.updated_at AS order_updated_at FROM order_escrows e JOIN orders o ON o.id=e.order_id WHERE e.order_id="+sqlString(id)+"::uuid"
     );
     if(!result) throw new Error('escrow not found');
     return result;
