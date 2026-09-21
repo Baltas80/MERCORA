@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { createWriteStream } from 'node:fs';
+import { createWriteStream, createReadStream } from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -48,15 +48,6 @@ async function defaultRunner(file,args,options={}){
     child.stderr.on('data',chunk=>collect(err,chunk));
     child.on('error',e=>resolve({ok:false,code:null,stdout:'',stderr:e.message}));
     child.on('close',code=>resolve({ok:code===0,code,stdout:Buffer.concat(out).toString(),stderr:Buffer.concat(err).toString()}));
-  });
-}
-
-function streamCommand(file,args,options={}){
-  return new Promise((resolve,reject)=>{
-    const child=spawn(file,args,{cwd:options.cwd,shell:false,windowsHide:true,stdio:['pipe','pipe','pipe']});
-    const stderr=[]; let stderrBytes=0; const MAX_ERR=512*1024;
-    child.stderr.on('data',chunk=>{if(stderrBytes<MAX_ERR){stderr.push(chunk);stderrBytes+=chunk.length;}});
-    resolve({child,stderr});
   });
 }
 
@@ -133,7 +124,7 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
       const out=[];const err=[];let bytes=0;
       child.stdout.on('data',chunk=>{if(bytes<524288){out.push(chunk);bytes+=chunk.length}});
       child.stderr.on('data',chunk=>{if(bytes<1048576){err.push(chunk);bytes+=chunk.length}});
-      const input=requireReadable(full);
+      const input=createReadStream(full,{flags:'r',mode:0o400});
       input.on('error',reject);
       input.pipe(child.stdin);
       child.on('error',reject);
@@ -159,8 +150,3 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
   return Object.freeze({logs,metrics,migrateDb,backupDb,listBackups,verifyBackup,restoreBackup});
 }
 
-function requireReadable(file){
-  // Dynamic import keeps this module's main API promise-based while avoiding a global stream handle.
-  const { createReadStream } = require('node:fs');
-  return createReadStream(file,{flags:'r',mode:0o400});
-}
