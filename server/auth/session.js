@@ -13,13 +13,14 @@ export function hashSessionToken(token) {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
-export function sessionCookie(token, maxAgeSeconds = 60 * 60 * 24 * 7) {
-  return [
+export function sessionCookie(token, maxAgeSeconds = 60 * 60 * 24 * 7, secure = true) {
+  const attributes = [
     `mercora_session=${token}`,
     "Path=/",
     "HttpOnly",
-    "Secure",
     "SameSite=Strict",
     `Max-Age=${maxAgeSeconds}`
-  ].join("; ");
+  ];
+  if (secure) attributes.splice(3, 0, "Secure");
+  return attributes.join("; ");
 }
