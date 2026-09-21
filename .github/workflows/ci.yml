@@ -9,6 +9,10 @@ permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: mercora-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   static-security:
     runs-on: ubuntu-latest
