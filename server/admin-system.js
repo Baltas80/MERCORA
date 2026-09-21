@@ -51,7 +51,13 @@ async function defaultRunner(file,args,options={}){
   });
 }
 
-export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaultRunner,backupDir=path.resolve(cwd,'backups'),audit=async()=>{}}={}){
+export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaultRunner,backupDir=path.resolve(cwd,'backups'),audit=async()=>{},actor=process.env.MERCORA_ADMIN_ACTOR || 'admin'}={}){
+  async function recordAudit(action,resourceType,resourceId,metadata){
+    if(audit) await audit(action,resourceType,resourceId,metadata);
+    else await runCommand(COMPOSE.concat(['exec','-T','postgres','psql','-U','mercora','-d','mercora','-v','ON_ERROR_STOP=1','-q','-c',
+      'INSERT INTO admin_audit_log(actor,action,resource_type,resource_id,metadata) VALUES ('+
+      sqlString(actor)+','+sqlString(action)+','+sqlString(resourceType)+','+sqlNullable(resourceId)+','+sqlString(JSON.stringify(metadata || {}))+'::jsonb)']));
+  }
   async function runCommand(args){
     return commandResult(await runner('docker',args,{cwd}));
   }
@@ -112,7 +118,7 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
       throw new Error(clean(errors.join(' ')||'database backup failed'));
     }
     const stat=await fs.stat(destination);
-    await audit('BACKUP_DB','backup',id,{size_bytes:stat.size});
+    await recordAudit('BACKUP_DB','backup',id,{size_bytes:stat.size});
     return {ok:true,id,size_bytes:stat.size,created_at:stat.mtime.toISOString()};
   }
   async function withBackupInput(id,args){
@@ -143,7 +149,7 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     const result=await withBackupInput(safe,COMPOSE.concat([
       'exec','-T','postgres','pg_restore','--clean','--if-exists','--no-owner','-U','mercora','-d','mercora'
     ]));
-    await audit('RESTORE_DB','backup',safe,{pre_restore_backup:safety.id,ok:result.ok});
+    await recordAudit('RESTORE_DB','backup',safe,{pre_restore_backup:safety.id,ok:result.ok});
     return {ok:result.ok,backup_id:safe,pre_restore_backup:safety.id,diagnostic:commandResult(result)};
   }
 
