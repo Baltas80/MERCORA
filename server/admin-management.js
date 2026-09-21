@@ -19,8 +19,7 @@ const REPORT_STATUSES = new Set(['open','reviewing','resolved','dismissed']);
 const MONEY_TYPES = new Set(['percent','fixed']);
 const DISCOUNT_TARGETS = new Set(['global','store','listing','category']);
 const SITE_KEYS = new Set([
-  'site_name','site_mode','announcement','maintenance_message',
-  'new_listings_enabled','seller_registration_enabled','footer_notice','hero_title','hero_copy','buy_cta','sell_cta'
+  'site_mode','new_listings_enabled','seller_registration_enabled'
 ]);
 const SITE_MODES = new Set(['public','maintenance','restricted']);
 const SITE_BOOLEAN_KEYS = new Set(['new_listings_enabled','seller_registration_enabled']);
