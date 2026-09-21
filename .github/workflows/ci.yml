@@ -75,8 +75,22 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Check Rust application
+        id: cargo_check
         working-directory: admin-console
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --manifest-path src-tauri/Cargo.toml --verbose 2>&1 | tee cargo-check.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload Rust diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mercora-admin-console-rust-diagnostic
+          path: admin-console/cargo-check.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Build Windows NSIS installer
         working-directory: admin-console
