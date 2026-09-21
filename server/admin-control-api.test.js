@@ -70,8 +70,8 @@ test('admin API rejects oversized requests before controller execution', async (
   await withApi(controller, async (base) => {
     const response = await fetch(`${base}/v1/control`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'content-length': '4097' },
-      body: JSON.stringify({ action: 'STATUS' })
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: 'x'.repeat(4097)
     });
     assert.equal(response.status, 413);
     assert.equal(calls, 0);
