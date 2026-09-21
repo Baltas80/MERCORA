@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ACTIONS, createAdminController, sanitizeResult } from './admin-control.js';
+import { createAdminApi } from './admin-control-api.js';
 
 function fakeRunner(log, result = { ok: true, code: 0, stdout: '', stderr: '' }) {
   return async (file, args) => {
@@ -10,6 +11,23 @@ function fakeRunner(log, result = { ok: true, code: 0, stdout: '', stderr: '' })
 }
 
 const RUNNING_SERVICES = 'app\npostgres\ntor\n';
+const ADMIN_TOKEN = 'x'.repeat(64);
+
+async function withApi(controller, fn) {
+  const api = createAdminApi({ controller, token: ADMIN_TOKEN, port: 0 });
+  await api.listen();
+  const address = api.server.address();
+  try {
+    return await fn(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise((resolve) => api.server.close(resolve));
+  }
+}
+
+const apiHeaders = {
+  authorization: `Bearer ${ADMIN_TOKEN}`,
+  'content-type': 'application/json'
+};
 
 test('exposes only the six allowlisted operations', () => {
   assert.deepEqual(ACTIONS, ['START', 'STOP', 'RESTART', 'STATUS', 'HEALTH_CHECK', 'RECOVER']);
@@ -96,4 +114,89 @@ test('diagnostics remove secret-bearing lines', () => {
   const result = sanitizeResult({ ok: false, code: 1, stdout: 'safe\nTOKEN=do-not-show', stderr: 'password=secret' });
   assert.equal(result.stdout, 'safe');
   assert.equal(result.stderr, '');
+});
+
+test('admin API rejects missing or invalid authentication', async () => {
+  const controller = { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) };
+  await withApi(controller, async (base) => {
+    const missing = await fetch(`${base}/v1/control`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'STATUS' })
+    });
+    assert.equal(missing.status, 401);
+
+    const invalid = await fetch(`${base}/v1/control`, {
+      method: 'POST', headers: { authorization: 'Bearer wrong', 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'STATUS' })
+    });
+    assert.equal(invalid.status, 401);
+  });
+});
+
+test('admin API forwards only validated operations', async () => {
+  const calls = [];
+  const controller = {
+    run: async (action, service) => {
+      calls.push([action, service]);
+      return { ok: true, action, service };
+    },
+    healthCheck: async () => ({ ok: true })
+  };
+  await withApi(controller, async (base) => {
+    const response = await fetch(`${base}/v1/control`, {
+      method: 'POST', headers: apiHeaders,
+      body: JSON.stringify({ action: 'restart', service: 'app' })
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(calls, [['RESTART', 'app']]);
+
+    const rejected = await fetch(`${base}/v1/control`, {
+      method: 'POST', headers: apiHeaders,
+      body: JSON.stringify({ action: 'restart', service: 'app;whoami' })
+    });
+    assert.equal(rejected.status, 400);
+    assert.deepEqual(calls, [['RESTART', 'app']]);
+  });
+});
+
+test('admin API routes HEALTH_CHECK without invoking an arbitrary action', async () => {
+  const calls = [];
+  const controller = {
+    run: async (...args) => calls.push(['run', ...args]),
+    healthCheck: async () => ({ ok: true, checks: [] })
+  };
+  await withApi(controller, async (base) => {
+    const response = await fetch(`${base}/v1/control`, {
+      method: 'POST', headers: apiHeaders,
+      body: JSON.stringify({ action: 'health_check' })
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true, checks: [] });
+    assert.deepEqual(calls, []);
+  });
+});
+
+test('admin API rejects bodies larger than 4 KiB', async () => {
+  const controller = { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) };
+  await withApi(controller, async (base) => {
+    const response = await fetch(`${base}/v1/control`, {
+      method: 'POST',
+      headers: { ...apiHeaders, 'content-length': '4097' },
+      body: JSON.stringify({ action: 'STATUS', padding: 'x'.repeat(4100) })
+    });
+    assert.equal(response.status, 413);
+  });
+});
+
+test('admin API exposes defensive response headers', async () => {
+  const controller = { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) };
+  await withApi(controller, async (base) => {
+    const response = await fetch(`${base}/v1/control`, {
+      method: 'POST', headers: apiHeaders,
+      body: JSON.stringify({ action: 'status' })
+    });
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  });
 });
