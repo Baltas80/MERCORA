@@ -83,6 +83,44 @@ function authRateAllowed(socket) {
   return current.count <= 20;
 }
 
+async function readJson(req, maxBytes = 16 * 1024) {
+  let body = "";
+  for await (const chunk of req) {
+    body += chunk;
+    if (Buffer.byteLength(body) > maxBytes) {
+      const error = new Error("request too large");
+      error.code = "PAYLOAD_TOO_LARGE";
+      throw error;
+    }
+  }
+  try {
+    const value = JSON.parse(body || "{}");
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("request body must be a JSON object");
+    }
+    return value;
+  } catch (error) {
+    if (error.code === "PAYLOAD_TOO_LARGE") throw error;
+    const bad = new Error("invalid JSON request");
+    bad.code = "BAD_JSON";
+    throw bad;
+  }
+}
+
+function cookieValue(req, name) {
+  const raw = req.headers.cookie || "";
+  for (const part of raw.split(";")) {
+    const pieces = part.trim().split("=");
+    const key = pieces.shift();
+    if (key === name) return decodeURIComponent(pieces.join("="));
+  }
+  return null;
+}
+
+function clearSessionCookie() {
+  return "mercora_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0";
+}
+
 function contentType(file) {
   if (file.endsWith(".html")) return "text/html; charset=utf-8";
   if (file.endsWith(".css")) return "text/css; charset=utf-8";
