@@ -24,7 +24,8 @@ fn allowed_endpoint(method: &str, path: &str) -> bool {
             | ("POST", "/v1/management")
             | ("POST", "/v1/reputation")
             | ("POST", "/v1/escrow")
-            | ("POST", "/v1/system")\n            | ("POST", "/v1/content")
+            | ("POST", "/v1/system")
+            | ("POST", "/v1/content")
     )
 }
 
