@@ -51,7 +51,7 @@ async function defaultRunner(file,args,options={}){
   });
 }
 
-export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaultRunner,backupDir=path.resolve(cwd,'backups'),audit=async()=>{},actor=process.env.MERCORA_ADMIN_ACTOR || 'admin'}={}){
+export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaultRunner,backupDir=path.resolve(cwd,'backups'),audit=null,actor=process.env.MERCORA_ADMIN_ACTOR || 'admin'}={}){
   async function recordAudit(action,resourceType,resourceId,metadata){
     if(audit) await audit(action,resourceType,resourceId,metadata);
     else await runCommand(COMPOSE.concat(['exec','-T','postgres','psql','-U','mercora','-d','mercora','-v','ON_ERROR_STOP=1','-q','-c',
