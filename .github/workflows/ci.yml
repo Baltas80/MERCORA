@@ -50,8 +50,10 @@ jobs:
           node --check server/admin-control.js
           node --check server/admin-control-api.js
           node --check server/admin-management.js
+          node --check server/admin-escrow.js
           node --check server/admin-system.js
           node --check server/admin-management.test.js
+          node --check server/admin-escrow.test.js
           node --check server/admin-system.test.js
           node --check admin-console/ui/app.js
 
