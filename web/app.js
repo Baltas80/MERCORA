@@ -1,3 +1,29 @@
+async function applySiteConfig(){
+  try{
+    const response=await fetch('./api/site-config',{cache:'no-store'});
+    if(!response.ok)return;
+    const config=await response.json();
+    document.title=(config.site_name||'MERCORA')+' — Marketplace';
+    const brand=document.querySelector('.brand');if(brand)brand.textContent=config.site_name||'MERCORA';
+    const announcement=document.querySelector('#siteAnnouncement');
+    if(announcement&&config.announcement){announcement.textContent=config.announcement;announcement.hidden=false;}
+    const maintenance=document.querySelector('#maintenanceNotice');
+    if(maintenance&&config.site_mode==='maintenance'){
+      maintenance.textContent=config.maintenance_message||'El marketplace está temporalmente en mantenimiento.';
+      maintenance.hidden=false;
+      document.querySelectorAll('.add,.hero-actions .button-primary,#checkoutButton').forEach(el=>{el.setAttribute('aria-disabled','true');el.classList.add('disabled')});
+    }
+    if(config.site_mode==='restricted'){
+      const heroCopy=document.querySelector('.hero-copy');
+      if(heroCopy)heroCopy.textContent='Acceso restringido. Algunas funciones del marketplace no están disponibles.';
+    }
+    const sellButton=document.querySelector('#sell .button-primary');
+    if(sellButton&&config.seller_registration_enabled==='false'){sellButton.textContent='Registro de vendedores cerrado';sellButton.classList.add('disabled');sellButton.removeAttribute('href')}
+    const footerName=document.querySelector('#footerSiteName');if(footerName)footerName.textContent=config.site_name||'MERCORA';
+    const footerNotice=document.querySelector('#footerNotice');if(footerNotice&&config.footer_notice)footerNotice.textContent=config.footer_notice;
+  }catch{}
+}
+
 import {applyTranslations,getLocale,t} from "./i18n.js";
 const SAMPLE_ITEMS=[{id:"preview-1",title:"ThinkPad X1 Carbon Gen 9",seller_id:"northstar",currency:"EUR",price_minor:48900,category:"Computing"},{id:"preview-2",title:"Fujifilm X-T4 Body",seller_id:"grainlab",currency:"EUR",price_minor:92500,category:"Cameras"},{id:"preview-3",title:"Mechanical Keyboard — Brass Edition",seller_id:"keystatic",currency:"EUR",price_minor:17900,category:"Computing"},{id:"preview-4",title:"Vintage Desk Lamp",seller_id:"atelier7",currency:"EUR",price_minor:7400,category:"Home"},{id:"preview-5",title:"Sony WH-1000XM5",seller_id:"signalroom",currency:"EUR",price_minor:24900,category:"Electronics"},{id:"preview-6",title:"Leica M6 Strap",seller_id:"analogworks",currency:"EUR",price_minor:6200,category:"Collectibles"},{id:"preview-7",title:"Arc Utility Jacket",seller_id:"northline",currency:"EUR",price_minor:11800,category:"Clothing"},{id:"preview-8",title:"Precision Hand Tool Set",seller_id:"benchmarks",currency:"EUR",price_minor:15600,category:"Tools"}];
 const state={items:[...SAMPLE_ITEMS],cart:[],locale:getLocale()};
@@ -8,3 +34,6 @@ grid?.addEventListener("click",e=>{const b=e.target.closest("[data-id]");if(!b)r
 document.querySelector("#searchForm")?.addEventListener("submit",e=>{e.preventDefault();const q=(searchInput?.value||"").trim().toLowerCase();state.items=q?SAMPLE_ITEMS.filter(p=>(p.title+" "+p.category+" "+p.seller_id).toLowerCase().includes(q)):[...SAMPLE_ITEMS];render()});
 document.querySelectorAll(".category").forEach(b=>b.addEventListener("click",()=>{state.items=SAMPLE_ITEMS.filter(p=>p.category===b.dataset.category);render()}));
 document.querySelector("#cartButton")?.addEventListener("click",()=>{render();dialog?.showModal()});document.querySelector("#closeCart")?.addEventListener("click",()=>dialog?.close());document.querySelector("#checkoutButton")?.addEventListener("click",()=>{if(state.cart.length)alert("PREVIEW: checkout simulada. No se crea ningún pedido ni pago real.")});render();
+
+
+applySiteConfig();
