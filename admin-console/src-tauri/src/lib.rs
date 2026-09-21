@@ -21,7 +21,10 @@ fn allowed_endpoint(method: &str, path: &str) -> bool {
         (method, path),
         ("GET", "/v1/overview")
             | ("POST", "/v1/control")
-            | ("POST", "/v1/management") | ("POST", "/v1/reputation") | ("POST", "/v1/system")
+            | ("POST", "/v1/management")
+            | ("POST", "/v1/reputation")
+            | ("POST", "/v1/escrow")
+            | ("POST", "/v1/system")
     )
 }
 
