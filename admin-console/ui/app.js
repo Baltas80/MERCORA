@@ -77,7 +77,7 @@ function renderMetrics(metrics){
     ['Usuarios','users'],['Usuarios activos','active_users'],['Baneados','banned_users'],
     ['Tiendas','stores'],['Tiendas activas','active_stores'],['Anuncios activos','active_listings'],
     ['Anuncios bloqueados','blocked_listings'],['Reportes abiertos','open_reports'],
-    ['Pedidos activos','active_orders'],['Promos activas','active_promos'],['Descuentos activos','active_discounts']
+    ['Pedidos activos','active_orders'],['Promos activas','active_promos'],['Descuentos activos','active_discounts'],['Escrows activos','active_escrows'],['Autorizaciones escrow','pending_escrow_authorizations']
   ];
   map.forEach(([label,key])=>{
     const c=document.createElement('article');c.className='metric cardish';
@@ -276,7 +276,7 @@ async function loadEscrowCases(){
       }
     }
     if(e.state!=='completed'&&e.state!=='frozen'){
-      if(e.order_status==='shipped'){
+      if(!e.has_pending_authorization && e.order_status==='shipped'){
         const mid=document.createElement('button');mid.className='small secondary';mid.textContent='MID';
         mid.onclick=async()=>{const reason=prompt('Motivo de la autorización mid-escrow:','Pago parcial tras envío');if(reason===null)return;try{await escrowApi('AUTHORIZE_MID_RELEASE',{order_id:e.order_id,reason});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
         actions.push(mid);
@@ -285,6 +285,7 @@ async function loadEscrowCases(){
         actions.push(early);
       }
       const release=document.createElement('button');release.className='small';release.textContent='LIBERAR';
+      release.disabled=Boolean(e.has_pending_authorization);
       release.onclick=async()=>{const reason=prompt('Motivo de la liberación final:','Pedido completado');if(reason===null)return;try{await escrowApi('AUTHORIZE_RELEASE',{order_id:e.order_id,reason,confirm:true});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
       actions.push(release);
       if(e.order_status==='cancelled'||e.order_status==='disputed'){
