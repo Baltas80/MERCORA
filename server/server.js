@@ -5,6 +5,12 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "web");
+const RUNTIME_CONFIG = path.join(ROOT, "runtime", "site-config.json");
+const DEFAULT_SITE_CONFIG = Object.freeze({
+  site_name: "MERCORA", site_mode: "public", announcement: "",
+  maintenance_message: "", new_listings_enabled: "true",
+  seller_registration_enabled: "true", footer_notice: ""
+});
 const HOST = process.env.HOST ?? "127.0.0.1";
 const PORT = Number(process.env.PORT ?? "8080");
 
@@ -69,6 +75,25 @@ function sendJson(res, status, payload) {
   return res.end(JSON.stringify(payload));
 }
 
+async function runtimeConfig() {
+  try {
+    const parsed = JSON.parse(await readFile(RUNTIME_CONFIG, "utf8"));
+    const config = {};
+    for (const key of Object.keys(DEFAULT_SITE_CONFIG)) {
+      config[key] = typeof parsed[key] === "string" ? parsed[key] : DEFAULT_SITE_CONFIG[key];
+    }
+    if (!["public", "maintenance", "restricted"].includes(config.site_mode)) {
+      config.site_mode = DEFAULT_SITE_CONFIG.site_mode;
+    }
+    for (const key of ["new_listings_enabled", "seller_registration_enabled"]) {
+      if (config[key] !== "true" && config[key] !== "false") config[key] = DEFAULT_SITE_CONFIG[key];
+    }
+    return config;
+  } catch {
+    return { ...DEFAULT_SITE_CONFIG };
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   for (const [name, value] of Object.entries(securityHeaders())) res.setHeader(name, value);
 
@@ -93,6 +118,10 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === "/api/version") {
     return sendJson(res, 200, { service: "mercora", api: "v1" });
+  }
+
+  if (url.pathname === "/api/site-config") {
+    return sendJson(res, 200, await runtimeConfig());
   }
 
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
