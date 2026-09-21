@@ -52,7 +52,7 @@ export function createAdminContent({cwd=path.resolve(process.cwd()),runner=defau
     return json(await db(`SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.created_at DESC),'[]'::json)::text FROM (SELECT id,site_key,value,published,actor,created_at FROM site_content_versions ${where} ORDER BY created_at DESC LIMIT 200) x`));
   }
   async function current(){
-    return json(await db("SELECT COALESCE(json_object_agg(key,value),'{}'::json)::text FROM site_settings WHERE key IN ('site_name','announcement','maintenance_message','footer_notice','hero_title','hero_copy','buy_cta','sell_cta')"));
+    return json(await db("SELECT COALESCE(json_object_agg(key,value),'{}'::json)::text FROM site_settings WHERE key IN ('site_name','announcement','maintenance_message','footer_notice','hero_title','hero_copy','buy_cta','sell_cta','terms_of_use','privacy_notice','publication_rules')"));
   }
   async function update(payload={}){
     const key=assertKey(payload.site_key);
