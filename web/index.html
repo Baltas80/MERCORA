@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="MERCORA — private second-hand marketplace visual preview">
-  <title>MERCORA — Marketplace Preview</title>
+  <meta name="description" content="MERCORA — marketplace privado de segunda mano.">
+  <title>MERCORA — Marketplace</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -12,61 +12,90 @@
     <header class="topbar">
       <a class="brand" href="./" aria-label="MERCORA home">MERCORA</a>
       <form id="searchForm" class="search" role="search">
-        <input id="searchInput" name="q" type="search" maxlength="120" placeholder="Search products..." autocomplete="off">
-        <button type="submit">SEARCH</button>
+        <input id="searchInput" name="q" type="search" maxlength="120" placeholder="Buscar anuncios…" autocomplete="off">
+        <button type="submit">BUSCAR</button>
       </form>
       <nav class="nav">
-        <a href="#categories">Categories</a>
-        <a href="#sell">Sell</a>
-        <a href="#wallet">Wallet</a>
-        <a href="./account.html">Account</a>
-        <button id="cartButton" class="cart-button" type="button">Cart <span id="cartCount">0</span></button>
+        <a href="#categories">Categorías</a>
+        <a href="#sell">Vender</a>
+        <a href="#wallet">Pagos</a>
+        <a href="./account.html">Cuenta</a>
+        <button id="cartButton" class="cart-button" type="button">Carrito <span id="cartCount">0</span></button>
       </nav>
     </header>
+
     <main>
       <div id="siteAnnouncement" class="site-announcement" hidden></div>
+
       <section class="hero">
         <div>
-          <p class="eyebrow">MERCORA VISUAL PREVIEW · DEMO ONLY</p>
+          <p class="eyebrow">MERCORA · MARKETPLACE PRIVADO</p>
           <h1 id="heroTitle">Buy. Sell. Keep control.</h1>
-          <p id="heroCopy" class="hero-copy">A second-hand marketplace concept built around privacy, strong security boundaries and a clean buying experience.</p>
+          <p id="heroCopy" class="hero-copy">Un marketplace de segunda mano centrado en privacidad, límites de seguridad y una experiencia de compra limpia.</p>
           <div class="hero-actions">
-            <a id="buyCta" class="button button-primary" href="#catalog">Browse listings</a>
-            <a id="sellCta" class="button button-ghost" href="#sell">List an item</a>
+            <a id="buyCta" class="button button-primary" href="#catalog">Ver anuncios</a>
+            <a id="sellCta" class="button button-ghost" href="./sell.html">Vender un artículo</a>
           </div>
         </div>
         <div id="maintenanceNotice" class="maintenance-notice" hidden></div>
         <aside class="system-panel">
-          <div class="panel-title">PREVIEW STATUS</div>
-          <div class="status-row"><span>Environment</span><strong>STATIC DEMO</strong></div>
-          <div class="status-row"><span>Production data</span><strong>NONE</strong></div>
-          <div class="status-row"><span>Payments</span><strong>DEMO ONLY</strong></div>
+          <div class="panel-title">ESTADO DEL MARKETPLACE</div>
+          <div class="status-row"><span>Catálogo</span><strong id="catalogStatus">CARGANDO</strong></div>
+          <div class="status-row"><span>Base de datos</span><strong id="databaseStatus">PROTEGIDA</strong></div>
+          <div class="status-row"><span>Pagos</span><strong>CONTROLADOS</strong></div>
         </aside>
       </section>
+
       <section id="categories" class="section">
-        <div class="section-head"><div><p class="eyebrow">EXPLORE</p><h2>Categories</h2></div></div>
-        <div class="category-grid">
-          <button class="category" data-category="Electronics">Electronics</button><button class="category" data-category="Computing">Computing</button><button class="category" data-category="Cameras">Cameras</button><button class="category" data-category="Home">Home</button>
-          <button class="category" data-category="Collectibles">Collectibles</button><button class="category" data-category="Tools">Tools</button><button class="category" data-category="Clothing">Clothing</button><button class="category" data-category="Other">Other</button>
+        <div class="section-head">
+          <div><p class="eyebrow">EXPLORAR</p><h2>Categorías</h2></div>
+          <button id="clearCategory" class="button button-ghost" type="button">Todas</button>
         </div>
+        <div id="categoryGrid" class="category-grid"></div>
       </section>
+
       <section id="catalog" class="section">
-        <div class="section-head"><div><p class="eyebrow">CURATED PREVIEW</p><h2>Featured</h2></div><span id="resultCount" class="muted"></span></div>
+        <div class="section-head">
+          <div><p class="eyebrow">CATÁLOGO</p><h2>Anuncios publicados</h2></div>
+          <span id="resultCount" class="muted">Cargando…</span>
+        </div>
+        <p id="catalogMessage" class="muted" hidden></p>
         <div id="productGrid" class="product-grid"></div>
       </section>
+
       <section id="sell" class="section split">
-        <div><p class="eyebrow">SELLER WORKSPACE</p><h2>Ready to list when the marketplace goes live.</h2><p class="muted">The visual preview is isolated from production accounts, orders, wallets and custody services.</p></div>
-        <div class="wallet-strip"><a class="button button-primary" href="./sell.html">Open seller preview</a></div>
+        <div>
+          <p class="eyebrow">VENDE</p>
+          <h2>Publica tu artículo desde tu cuenta.</h2>
+          <p class="muted">La gestión de vendedores se conecta a cuentas y tiendas reales cuando el backend de publicación está habilitado.</p>
+        </div>
+        <div class="wallet-strip"><a class="button button-primary" href="./sell.html">Abrir área de vendedor</a></div>
       </section>
+
       <section id="wallet" class="section split">
-        <div><p class="eyebrow">PAYMENT ARCHITECTURE</p><h2>BTC · XMR · LTC</h2><p class="muted">Payment adapters are represented visually here only. No live transaction, wallet or custody operation is available from this preview.</p></div>
+        <div>
+          <p class="eyebrow">PAGOS</p>
+          <h2>BTC · XMR · LTC</h2>
+          <p class="muted">Los activos forman parte del modelo de MERCORA. Las operaciones de custodia y liquidación permanecen separadas de la interfaz pública.</p>
+        </div>
         <div class="wallet-strip"><span>BTC</span><span>XMR</span><span>LTC</span></div>
       </section>
     </main>
-    <footer><span id="footerSiteName">MERCORA</span><span id="footerNotice">Isolated visual preview · no production data</span></footer>
+
+    <footer>
+      <span id="footerSiteName">MERCORA</span>
+      <span id="footerNotice">Marketplace privado</span>
+    </footer>
   </div>
-  <dialog id="cartDialog"><div class="dialog-head"><h2>Your preview cart</h2><button id="closeCart" type="button">Close</button></div><div id="cartItems"></div><div class="cart-total"><span>Total</span><strong id="cartTotal">€0</strong></div><button id="checkoutButton" class="button button-primary" type="button">Preview checkout</button></dialog>
+
+  <dialog id="cartDialog">
+    <div class="dialog-head"><h2>Carrito</h2><button id="closeCart" type="button">Cerrar</button></div>
+    <div id="cartItems"></div>
+    <div class="cart-total"><span>Total</span><strong id="cartTotal">—</strong></div>
+    <button id="checkoutButton" class="button button-primary" type="button">Iniciar pedido</button>
+    <p id="checkoutMessage" class="muted"></p>
+  </dialog>
+
   <script type="module" src="./app.js" defer></script>
-  <script type="module" src="./reputation.js" defer></script>
 </body>
 </html>
