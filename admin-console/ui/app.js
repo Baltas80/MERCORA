@@ -252,6 +252,65 @@ document.querySelectorAll('[data-control]').forEach(b=>b.addEventListener('click
 document.querySelector('#users-search').addEventListener('click',()=>loadUsers());
 document.querySelector('#stores-search').addEventListener('click',()=>loadStores());
 document.querySelector('#listings-search').addEventListener('click',()=>loadListings());
+document.querySelector('#logs-load').addEventListener('click',async()=>{
+  try{
+    const r=await api('/v1/system',{action:'LOGS',payload:{
+      service:document.querySelector('#logs-service').value,
+      lines:Number(document.querySelector('#logs-lines').value)
+    }});
+    document.querySelector('#logs-output').textContent=r.result.stdout || r.result.stderr || 'Sin salida.';
+  }catch(e){document.querySelector('#logs-output').textContent=e.message||String(e)}
+});
+document.querySelector('#metrics-load').addEventListener('click',async()=>{
+  try{
+    const r=await api('/v1/system',{action:'METRICS',payload:{}});
+    document.querySelector('#metrics-output').textContent=r.result.stdout || r.result.stderr || 'Sin datos.';
+  }catch(e){document.querySelector('#metrics-output').textContent=e.message||String(e)}
+});
+document.querySelector('#migrate-db').addEventListener('click',async()=>{
+  try{
+    const r=await api('/v1/system',{action:'MIGRATE_DB',payload:{}});
+    document.querySelector('#backup-output').textContent=r.result.stdout || r.result.stderr || 'Migración completada.';
+  }catch(e){document.querySelector('#backup-output').textContent=e.message||String(e)}
+});
+async function reloadBackups(){
+  try{
+    const r=await api('/v1/system',{action:'LIST_BACKUPS',payload:{}});
+    const select=document.querySelector('#backup-select');select.replaceChildren(new Option('Selecciona backup…',''));
+    (r.result||[]).forEach(b=>{
+      const o=new Option(b.id+' · '+Math.round(b.size_bytes/1024/1024)+' MB',b.id);select.append(o);
+    });
+    document.querySelector('#backup-output').textContent=(r.result||[]).length+' backup(s) disponibles.';
+  }catch(e){document.querySelector('#backup-output').textContent=e.message||String(e)}
+}
+document.querySelector('#backup-db').addEventListener('click',async()=>{
+  try{
+    const r=await api('/v1/system',{action:'BACKUP_DB',payload:{}});
+    document.querySelector('#backup-output').textContent='Backup creado: '+r.result.id+' ('+r.result.size_bytes+' bytes)';
+    await reloadBackups();
+  }catch(e){document.querySelector('#backup-output').textContent=e.message||String(e)}
+});
+document.querySelector('#list-backups').addEventListener('click',reloadBackups);
+document.querySelector('#verify-backup').addEventListener('click',async()=>{
+  const id=document.querySelector('#backup-select').value;if(!id)return;
+  try{
+    const r=await api('/v1/system',{action:'VERIFY_BACKUP',payload:{backup_id:id}});
+    document.querySelector('#backup-output').textContent=JSON.stringify(r.result,null,2);
+  }catch(e){document.querySelector('#backup-output').textContent=e.message||String(e)}
+});
+document.querySelector('#restore-backup').addEventListener('click',async()=>{
+  const id=document.querySelector('#backup-select').value;if(!id)return;
+  const first=confirm('RESTORE reemplaza el contenido actual de la base de datos. ¿Continuar?');
+  if(!first)return;
+  const second=prompt('Escribe RESTORE_MERCORA para confirmar:','');
+  if(second!=='RESTORE_MERCORA')return;
+  try{
+    const r=await api('/v1/system',{action:'RESTORE_BACKUP',payload:{backup_id:id,confirm:second}});
+    document.querySelector('#backup-output').textContent=JSON.stringify(r.result,null,2);
+    await refreshDashboard();
+  }catch(e){document.querySelector('#backup-output').textContent=e.message||String(e)}
+});
+
 
 document.querySelector('#store-create').addEventListener('submit',async e=>{
   e.preventDefault();const f=e.currentTarget;
