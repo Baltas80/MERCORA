@@ -25,6 +25,10 @@ test('admin API rejects short tokens',()=>{
   assert.throws(()=>createAdminApi({token:'short'}),/at least 32/);
 });
 
+test('admin API rejects non-local bind addresses',()=>{
+  assert.throws(()=>createAdminApi({token,host:'0.0.0.0'}),/localhost only/);
+});
+
 test('admin API requires bearer authentication',async()=>{
   const api=makeApi(); const address=await start(api);
   const response=await fetch('http://127.0.0.1:'+address.port+'/v1/control',{method:'POST',body:'{}'});
