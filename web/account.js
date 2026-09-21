@@ -72,6 +72,10 @@ loginForm.addEventListener('submit',async e=>{
     loginForm.reset();
     showMessage('Sesión iniciada.',true);
     await refresh();
+    if(sessionStorage.getItem('mercora_checkout_return')==='1'){
+      sessionStorage.removeItem('mercora_checkout_return');
+      location.href='./#catalog';
+    }
   }catch(error){showMessage(error.message);}
 });
 registerForm.addEventListener('submit',async e=>{
@@ -81,6 +85,10 @@ registerForm.addEventListener('submit',async e=>{
     registerForm.reset();
     showMessage('Cuenta creada y sesión iniciada.',true);
     await refresh();
+    if(sessionStorage.getItem('mercora_checkout_return')==='1'){
+      sessionStorage.removeItem('mercora_checkout_return');
+      location.href='./#catalog';
+    }
   }catch(error){showMessage(error.message);}
 });
 document.querySelector('#logout').addEventListener('click',async()=>{
