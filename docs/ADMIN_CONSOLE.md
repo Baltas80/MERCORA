@@ -32,6 +32,7 @@ PostgreSQL
 - `scripts/tor-service-wsl.sh`: WSL Tor process manager with configuration validation and no key generation/replacement.
 - `scripts/start-onion-wsl.sh`: existing staging launcher remains available for initial Onion Service setup.
 - `.github/workflows/ci.yml`: includes a Windows runner that checks Rust and builds the Tauri NSIS installer as a short-lived CI artifact.
+- `admin-console/src-tauri/icons/icon.ico`: Windows application icon required by `tauri-build`.
 
 The desktop client keeps the administrator token only in the running Tauri process and sends administrative requests through the Rust bridge to `127.0.0.1:8090`. It does not write the token to the UI's local storage.
 
@@ -47,6 +48,8 @@ Tauri's global JavaScript API is enabled because the current UI uses the documen
 - Secrets must be supplied through the environment/secure secret storage and never committed.
 - The desktop UI cannot directly open a shell or invoke arbitrary system commands.
 - The desktop Rust bridge validates request methods/paths, limits request and response sizes, applies network timeouts, and stores the admin token only in process memory.
+- Mutating operations are serialized so two lifecycle-changing actions cannot execute concurrently.
+- Recovery is implemented as an explicit allow-listed workflow; it does not accept commands, paths or scripts from the UI.
 
 ## Development
 
@@ -92,22 +95,33 @@ The dashboard requests `GET /api/admin/status` and can issue only allow-listed a
 Available actions include:
 
 - start / stop / restart / status / health for MERCORA;
-- torStart / torStop / torRestart / torStatus / torValidate for Tor.
+- torStart / torStop / torRestart / torStatus / torValidate for Tor;
+- recover for a component-aware recovery pass.
 
-Recovery must be component-aware. Prefer restarting the failed component rather than restarting the entire stack. After every recovery operation, perform dependency checks and an application health check.
+Recovery follows this order:
+
+1. inspect MERCORA;
+2. start MERCORA only when it is stopped;
+3. inspect Tor;
+4. start Tor only when it is stopped;
+5. collect final MERCORA/Tor/backend/PostgreSQL/storage/health status.
+
+A failed dependency stops the recovery sequence and returns the stage diagnostics without exposing secrets. Recovery deliberately does not force-kill processes and does not restart healthy components unnecessarily.
+
+The Onion Service status shown by the console is intentionally conservative: `CONFIGURED` means Tor is running and the expected v3 service identity file exists. It does **not** claim external Onion reachability has been proven. Live end-to-end Onion reachability remains a target-machine verification step.
 
 The current WSL service manager deliberately refuses to force-kill a process that does not stop gracefully. Production orchestration should provide an explicit, separately audited escalation policy rather than silently using `SIGKILL`.
 
 ## Verification status
 
-The Windows build is enforced by CI, but the last recorded Windows run failed before Rust compilation because the branch requested the unpublished `@tauri-apps/cli@2.6.3`. That dependency has now been corrected to the published 2.6.2 release; a new CI run is required to verify the correction. No successful Windows installer build is claimed yet.
+The Windows build had previously failed before Rust compilation because the branch was missing `admin-console/src-tauri/icons/icon.ico`. The required icon is now committed on the Admin Console branch; the next Windows CI execution must verify the corrected build.
 
 The following remain pending until executed on the target machine:
 
 - installed Tauri application startup;
 - live Admin Control API startup;
 - live Node.js start/stop/restart through the console;
-- live Tor start/stop/restart and Onion Service health verification;
+- live Tor start/stop/restart and Onion Service reachability verification;
 - live PostgreSQL health verification;
 - end-to-end recovery tests;
 - OS credential-store integration;
