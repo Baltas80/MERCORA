@@ -130,7 +130,9 @@ async function loadStores(){
     assign.onclick=async()=>{const username=prompt('Usuario propietario: ',s.owner_username||'');if(!username)return;try{await management('ASSIGN_STORE',{store_id:s.id,owner_username:username});await loadStores();await refreshDashboard()}catch(e){alert(e.message||e)}};
     const toggle=document.createElement('button');toggle.className='small secondary';toggle.textContent=s.status==='active'?'SUSPENDER':'ACTIVAR';
     toggle.onclick=async()=>{try{await management('UPDATE_STORE',{store_id:s.id,status:s.status==='active'?'suspended':'active'});await loadStores();}catch(e){alert(e.message||e)}};
-    tbody.append(rowCells(s,[r=>r.name+' / '+r.slug,r=>r.owner_username||'SIN ASIGNAR',r=>r.status,r=>date(r.updated_at)],[assign,toggle]));
+    const unassign=document.createElement('button');unassign.className='small secondary';unassign.textContent='DESASIGNAR';unassign.disabled=!s.owner_account_id;
+    unassign.onclick=async()=>{if(!confirm('Desasignar el propietario de esta tienda?'))return;try{await management('UNASSIGN_STORE',{store_id:s.id});await loadStores();await refreshDashboard()}catch(e){alert(e.message||e)}};
+    tbody.append(rowCells(s,[r=>r.name+' / '+r.slug,r=>r.owner_username||'SIN ASIGNAR',r=>r.status,r=>date(r.updated_at)],[assign,unassign,toggle]));
   });
 }
 async function loadListings(){
@@ -162,7 +164,9 @@ async function loadReports(){
     const note=document.createElement('input');note.value=r.admin_note||'';note.maxLength=4000;note.placeholder='Nota interna';
     const b=document.createElement('button');b.className='small';b.textContent='GUARDAR';
     b.onclick=async()=>{try{await management('UPDATE_REPORT',{report_id:r.id,status:select.value,admin_note:note.value});await loadReports();await refreshDashboard()}catch(e){alert(e.message||e)}};
-    tbody.append(rowCells(r,[x=>shortId(x.id),x=>x.listing_title,x=>x.reason_code,x=>x.status,x=>x.reporter_username||'anónimo'],[note,select,b]));
+    const block=document.createElement('button');block.className='small danger';block.textContent='BLOQUEAR ANUNCIO';
+    block.onclick=async()=>{if(!confirm('Bloquear el anuncio relacionado con este reporte?'))return;try{await management('UPDATE_LISTING_STATUS',{listing_id:r.listing_id,status:'blocked'});await refreshDashboard()}catch(e){alert(e.message||e)}};
+    tbody.append(rowCells(r,[x=>shortId(x.id),x=>x.listing_title,x=>x.reason_code,x=>x.reporter_username||'anónimo',x=>x.status],[note,select,b,block]));
   });
 }
 async function loadPromos(){
