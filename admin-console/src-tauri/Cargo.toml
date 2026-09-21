@@ -1,0 +1,19 @@
+[package]
+name = "mercora-admin-console"
+version = "0.1.0"
+description = "MERCORA administrative desktop console"
+authors = ["MERCORA"]
+edition = "2021"
+rust-version = "1.80"
+
+[lib]
+name = "mercora_admin_console_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.2" }
+
+[dependencies]
+tauri = { version = "2.6.2" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -1,0 +1,50 @@
+name: MERCORA Admin Console
+
+on:
+  pull_request:
+    paths:
+      - 'admin-console/**'
+      - '.github/workflows/admin-console.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'admin-console/**'
+      - '.github/workflows/admin-console.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mercora-admin-console-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install admin console dependencies
+        working-directory: admin-console
+        run: npm install --no-audit --no-fund
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check Rust
+        working-directory: admin-console
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Check JavaScript
+        run: node --check admin-console/ui/app.js
+      - name: Build Windows installer
+        working-directory: admin-console
+        run: npm run tauri build -- --bundles nsis
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: mercora-admin-console-windows
+          path: admin-console/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
