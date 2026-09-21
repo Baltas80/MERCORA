@@ -310,4 +310,10 @@ document.querySelector("#checkoutButton")?.addEventListener("click", async () =>
   }
 });
 
-Promise.all([applySiteConfig(), loadCategories(), loadListings()]);
+Promise.all([applySiteConfig(), loadCategories(), loadListings()]).then(()=>{
+  if(sessionStorage.getItem("mercora_checkout_return")==="1"){
+    sessionStorage.removeItem("mercora_checkout_return");
+    renderCart();
+    dialog?.showModal();
+  }
+});
