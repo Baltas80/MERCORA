@@ -3,6 +3,7 @@ import { createWriteStream, createReadStream } from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
 
 const COMPOSE = ['compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.onion.yml'];
@@ -127,17 +128,19 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
         callback(null,chunk);
       }
     });
-    const streamDone=new Promise((resolve,reject)=>{
-      output.on('error',reject);
-      limiter.on('error',reject);
+    const childDone=new Promise((resolve,reject)=>{
       child.on('error',reject);
       child.on('close',code=>resolve(code));
     });
-    child.stdout.pipe(limiter).pipe(output);
     let code;
-    try { code=await streamDone; }
-    catch(error){ child.kill('SIGTERM'); await new Promise(resolve=>output.end(resolve)); await fs.rm(destination,{force:true}); throw new Error(clean(error.message)); }
-    await new Promise((resolve,reject)=>output.on('close',resolve).on('error',reject));
+    try {
+      await pipeline(child.stdout,limiter,output);
+      code=await childDone;
+    } catch(error) {
+      child.kill('SIGTERM');
+      await fs.rm(destination,{force:true});
+      throw new Error(clean(error.message));
+    }
     if(code!==0 || bytes>MAX_BACKUP_BYTES){
       await fs.rm(destination,{force:true});
       throw new Error(clean(errors.join(' ')||'database backup failed'));
