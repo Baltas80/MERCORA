@@ -142,7 +142,9 @@ async function loadListings(){
     const target=l.status==='blocked'?'active':'blocked';
     const b=document.createElement('button');b.className='small '+(target==='blocked'?'danger':'secondary');b.textContent=target==='blocked'?'BLOQUEAR':'DESBLOQUEAR';
     b.onclick=async()=>{try{await management('UPDATE_LISTING_STATUS',{listing_id:l.id,status:target});await loadListings();await refreshDashboard()}catch(e){alert(e.message||e)}};
-    tbody.append(rowCells(l,[r=>r.title,r=>r.seller||'—',r=>r.category||'—',r=>moneyAtomic(r.price_atomic,r.price_asset),r=>r.status],[b]));
+    const assign=document.createElement('button');assign.className='small secondary';assign.textContent='TIENDA';
+    assign.onclick=async()=>{const storeId=prompt('ID de la tienda del vendedor:',l.store_id||'');if(!storeId)return;try{await management('ASSIGN_LISTING_STORE',{listing_id:l.id,store_id:storeId});await loadListings()}catch(e){alert(e.message||String(e))}};
+    tbody.append(rowCells(l,[r=>r.title,r=>r.seller||'—',r=>r.store_name||'—',r=>r.category||'—',r=>moneyAtomic(r.price_atomic,r.price_asset),r=>r.status],[assign,b]));
   });
 }
 const nextOrderStates={pending:['cancelled'],awaiting_payment:['cancelled'],paid:['processing','cancelled'],processing:['shipped','cancelled','disputed'],shipped:['completed','disputed'],disputed:['processing','shipped','completed','cancelled'],completed:[],cancelled:[]};
