@@ -198,9 +198,18 @@ async function loadCategories(){
 async function loadWebsite(){
   const settings=await management('SITE_GET');const form=document.querySelector('#site-settings');
   Object.keys(settings).forEach(k=>{const el=form.elements[k];if(el)el.value=settings[k]});
-  const featured=await management('LIST_FEATURED');
-  document.querySelector('#featured-ids').value=featured.map(x=>x.listing_id).join('\n');
-  document.querySelector('#featured-list').textContent=featured.map(x=>x.position+'. '+x.title).join(' | ');
+  const [featured,listings]=await Promise.all([
+    management('LIST_FEATURED'),
+    management('LIST_LISTINGS',{status:'active',limit:100})
+  ]);
+  const selected=new Set(featured.map(x=>x.listing_id));
+  const picker=document.querySelector('#featured-picker');picker.replaceChildren();
+  listings.forEach(x=>{
+    const option=new Option(x.title+' — '+(x.seller||'—'),x.id);
+    option.selected=selected.has(x.id);
+    picker.append(option);
+  });
+  document.querySelector('#featured-list').textContent=featured.map(x=>x.position+'. '+x.title).join(' | ') || 'Sin destacados.';
 }
 async function loadAudit(){
   const data=await management('LIST_AUDIT',{limit:100});const tbody=document.querySelector('#audit-table');tbody.replaceChildren();
@@ -358,8 +367,10 @@ document.querySelector('#site-settings').addEventListener('submit',async e=>{
   try{for(const key of ['site_name','site_mode','announcement','maintenance_message','new_listings_enabled','seller_registration_enabled','footer_notice'])await management('SITE_SET',{key,value:f.elements[key].value});alert('Configuración guardada.');}catch(err){alert(err.message||String(err))}
 });
 document.querySelector('#featured-save').addEventListener('click',async()=>{
-  const ids=document.querySelector('#featured-ids').value.split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
-  try{const r=await management('SET_FEATURED',{listing_ids:ids});document.querySelector('#featured-list').textContent='Destacados guardados: '+r.length;await refreshDashboard()}catch(err){alert(err.message||String(err))}
+  const picker=document.querySelector('#featured-picker');
+  const ids=Array.from(picker.selectedOptions).slice(0,48).map(o=>o.value);
+  if(picker.selectedOptions.length>48){alert('Solo se pueden seleccionar 48 anuncios.');return}
+  try{const r=await management('SET_FEATURED',{listing_ids:ids});document.querySelector('#featured-list').textContent='Destacados guardados: '+r.length;await loadWebsite();await refreshDashboard()}catch(err){alert(err.message||String(err))}
 });
 ['pointerdown','keydown'].forEach(n=>document.addEventListener(n,()=>{if(authenticated)activity()},{passive:true}));
 if(!invoke){loginError.textContent='La consola debe ejecutarse dentro de Tauri.';loginError.hidden=false}
