@@ -60,6 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_order_escrows_state_updated
 
 CREATE TABLE IF NOT EXISTS escrow_authorizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  idempotency_key TEXT NOT NULL UNIQUE DEFAULT gen_random_uuid()::text,
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   action TEXT NOT NULL CHECK (action IN (
     'mid_release','early_pay','release','refund','freeze','unfreeze'
