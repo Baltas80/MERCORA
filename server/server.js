@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createPublicData } from "./public-data.js";
 import { createAuthApi } from "./auth/api.js";
 import { createSellerApi } from "./seller/api.js";
+import { createOrderApi } from "./order/api.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "web");
@@ -27,6 +28,7 @@ const PORT = Number(process.env.PORT ?? "8080");
 const publicData = createPublicData();
 const auth = createAuthApi();
 const seller = createSellerApi();
+const orders = createOrderApi();
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_SOCKET = 120;
@@ -118,7 +120,8 @@ function cookieValue(req, name) {
 }
 
 function clearSessionCookie() {
-  return "mercora_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0";
+  const secure = process.env.MERCORA_COOKIE_SECURE !== "false";
+  return "mercora_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0" + (secure ? "; Secure" : "");
 }
 
 function contentType(file) {
@@ -193,6 +196,17 @@ const server = http.createServer(async (req, res) => {
     if(req.method==="GET"&&url.pathname==="/api/auth/me"){
       const account=await auth.me(cookieValue(req,"mercora_session"));
       return sendJson(res,200,{account});
+    }
+    if(url.pathname==="/api/orders"){
+      const account=await auth.me(cookieValue(req,"mercora_session"));
+      if(!account)return sendJson(res,401,{error:"authentication required"});
+      if(account.status!=="active")return sendJson(res,403,{error:"account is not active"});
+      if(req.method==="GET")return sendJson(res,200,{orders:await orders.listOrders(account.id)});
+      if(req.method==="POST"){
+        const body=await readJson(req);
+        return sendJson(res,201,{order:await orders.createOrder(account.id,body)});
+      }
+      return sendJson(res,405,{error:"method not allowed"},{Allow:"GET, POST"});
     }
     if(url.pathname==="/api/seller"||url.pathname==="/api/seller/store"||url.pathname==="/api/seller/listings"||url.pathname==="/api/seller/listings/status"){
       const account=await auth.me(cookieValue(req,"mercora_session"));
