@@ -21,6 +21,8 @@ const SITE_KEYS = new Set([
   'site_name','site_mode','announcement','maintenance_message',
   'new_listings_enabled','seller_registration_enabled','footer_notice'
 ]);
+const SITE_MODES = new Set(['public','maintenance','restricted']);
+const SITE_BOOLEAN_KEYS = new Set(['new_listings_enabled','seller_registration_enabled']);
 const ORDER_TRANSITIONS = Object.freeze({
   pending: new Set(['cancelled']),
   awaiting_payment: new Set(['cancelled']),
@@ -405,6 +407,8 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
   async function siteSet(payload){
     const key=assertString(payload.key,'key',1,64); if(!SITE_KEYS.has(key)) throw new Error('unsupported site setting');
     const value=assertString(String(payload.value===undefined?'':payload.value),'value',0,4000);
+    if(key==='site_mode' && !SITE_MODES.has(value)) throw new Error('unsupported site mode');
+    if(SITE_BOOLEAN_KEYS.has(key) && value!=='true' && value!=='false') throw new Error('site setting must be true or false');
     const row=await queryRow(
       "INSERT INTO site_settings(key,value,updated_at,updated_by) VALUES("+sqlString(key)+","+sqlString(value)+",now(),"+sqlString(actor)+") "+
       "ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now(),updated_by=excluded.updated_by RETURNING key,value,updated_at,updated_by"
