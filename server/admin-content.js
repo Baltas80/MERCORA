@@ -2,7 +2,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const COMPOSE = ['compose','-f','docker-compose.yml','-f','docker-compose.onion.yml'];
-const KEYS = new Set(['site_name','announcement','maintenance_message','footer_notice','hero_title','hero_copy','buy_cta','sell_cta']);
+const KEYS = new Set(['site_name','announcement','maintenance_message','footer_notice','hero_title','hero_copy','buy_cta','sell_cta','terms_of_use','privacy_notice','publication_rules']);
 const MAX_VALUE = 6000;
 const OPTIONAL_NOTICE_KEYS = new Set(['announcement','maintenance_message','footer_notice']);
 
