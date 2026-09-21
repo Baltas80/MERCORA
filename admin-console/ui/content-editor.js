@@ -3,6 +3,7 @@
   const keys = [
     ['site_name','Nombre del sitio'],['announcement','Enunciado / aviso'],['maintenance_message','Mensaje de mantenimiento'],
     ['footer_notice','Aviso del pie'],['hero_title','Título de portada'],['hero_copy','Descripción de portada'],
+    ['terms_of_use','Condiciones de uso'],['privacy_notice','Política de privacidad'],['publication_rules','Normas de publicación'],
     ['buy_cta','Botón comprar'],['sell_cta','Botón vender']
   ];
   let currentKey = 'announcement';
