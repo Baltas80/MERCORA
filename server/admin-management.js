@@ -7,7 +7,7 @@ const COMPOSE = ['compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.on
 const ACTIONS = new Set([
   'OVERVIEW','LIST_FEATURED','LIST_USERS','SET_ACCOUNT_STATUS','BAN_ACCOUNT','UNBAN_ACCOUNT',
   'LIST_STORES','CREATE_STORE','ASSIGN_STORE','UNASSIGN_STORE','UPDATE_STORE',
-  'LIST_LISTINGS','UPDATE_LISTING_STATUS','LIST_ORDERS','UPDATE_ORDER_STATUS',
+  'LIST_LISTINGS','UPDATE_LISTING_STATUS','ASSIGN_LISTING_STORE','LIST_ORDERS','UPDATE_ORDER_STATUS',
   'LIST_REPORTS','UPDATE_REPORT','LIST_PROMOS','CREATE_PROMO','DISABLE_PROMO',
   'LIST_DISCOUNTS','CREATE_DISCOUNT','DISABLE_DISCOUNT','LIST_CATEGORIES',
   'CREATE_CATEGORY','UPDATE_CATEGORY','SITE_GET','SITE_SET','SET_FEATURED','LIST_AUDIT'
@@ -256,6 +256,19 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
       " ORDER BY l.updated_at DESC LIMIT "+limit(payload.limit)+" OFFSET "+offset(payload.offset)+") x"
     );
   }
+  async function assignListingStore(payload){
+    const listingId=uuid(payload.listing_id,'listing_id');
+    const storeId=uuid(payload.store_id,'store_id');
+    const listing=await queryRow("SELECT id,seller_account_id FROM listings WHERE id="+sqlString(listingId)+"::uuid");
+    if(!listing) throw new Error('listing not found');
+    const store=await queryRow("SELECT id,owner_account_id,status FROM mercora_stores WHERE id="+sqlString(storeId)+"::uuid");
+    if(!store) throw new Error('store not found');
+    if(!store.owner_account_id) throw new Error('store has no owner');
+    if(store.owner_account_id!==listing.seller_account_id) throw new Error('store owner does not match listing seller');
+    await db("UPDATE listings SET store_id="+sqlString(storeId)+"::uuid,updated_at=now() WHERE id="+sqlString(listingId)+"::uuid");
+    await audit('ASSIGN_LISTING_STORE','listing',listingId,{store_id:storeId});
+    return await queryRow("SELECT l.id,l.title,l.status,l.store_id,s.name AS store_name FROM listings l LEFT JOIN mercora_stores s ON s.id=l.store_id WHERE l.id="+sqlString(listingId)+"::uuid");
+  }
   async function updateListingStatus(payload){
     const id=uuid(payload.listing_id,'listing_id'); if(!LISTING_STATUSES.has(payload.status)) throw new Error('unsupported listing status');
     const row=await queryRow("SELECT id,title,status FROM listings WHERE id="+sqlString(id)+"::uuid");
@@ -461,7 +474,7 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
       case 'BAN_ACCOUNT': return banAccount(payload); case 'UNBAN_ACCOUNT': return unbanAccount(payload);
       case 'LIST_STORES': return listStores(payload); case 'CREATE_STORE': return createStore(payload);
       case 'ASSIGN_STORE': return assignStore(payload); case 'UNASSIGN_STORE': return unassignStore(payload); case 'UPDATE_STORE': return updateStore(payload);
-      case 'LIST_LISTINGS': return listListings(payload); case 'UPDATE_LISTING_STATUS': return updateListingStatus(payload);
+      case 'LIST_LISTINGS': return listListings(payload); case 'UPDATE_LISTING_STATUS': return updateListingStatus(payload); case 'ASSIGN_LISTING_STORE': return assignListingStore(payload);
       case 'LIST_ORDERS': return listOrders(payload); case 'UPDATE_ORDER_STATUS': return updateOrderStatus(payload);
       case 'LIST_REPORTS': return listReports(payload); case 'UPDATE_REPORT': return updateReport(payload);
       case 'LIST_PROMOS': return listPromos(payload); case 'CREATE_PROMO': return createPromo(payload);
