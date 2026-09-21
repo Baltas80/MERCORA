@@ -74,6 +74,8 @@ jobs:
           node --check server/auth/api.test.js
           node --check server/auth/session.test.js
           node --check server/seller/api.test.js
+          node --check server/order/api.js
+          node --check server/order/api.test.js
           node --check server/public-data.test.js
           node --check test/admin-content.test.js
           node --check admin-console/ui/app.js
