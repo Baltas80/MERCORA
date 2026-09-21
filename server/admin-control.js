@@ -70,43 +70,64 @@ export function createAdminController({
 
     const target = service ?? 'app';
     const steps = [];
-    steps.push({ step: `restart:${target}`, result: await run('RESTART', target) });
-    if (!steps.at(-1).result.ok) {
-      steps.push({ step: `start:${target}`, result: await run('START', target) });
+    const restart = await run('RESTART', target);
+    steps.push({ step: `restart:${target}`, result: restart });
+    if (!restart.ok) {
+      const start = await run('START', target);
+      steps.push({ step: `start:${target}`, result: start });
+      if (!start.ok) {
+        return {
+          ok: false,
+          target,
+          steps,
+          recoveryAborted: true
+        };
+      }
     }
-    steps.push({ step: 'health', result: await healthCheck() });
+
+    // Recovery is component-scoped first; the final verification is deliberately
+    // broader and ordered so a failed dependency does not cause a blind full restart.
+    const health = await healthCheck();
+    steps.push({ step: 'health', result: health });
     return {
-      ok: steps.every((entry) => entry.result.ok),
+      ok: health.ok,
       target,
       steps
     };
   }
 
   async function healthCheck() {
-    const checks = {
-      node: await probe('node', ['--version'], { cwd }),
-      docker: await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd }),
-      compose: await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps'], { cwd }).then(sanitizeResult),
-      postgres: await runner(
-        'docker',
-        [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'],
-        { cwd }
-      ).then(sanitizeResult),
-      backend: await backendProbe(),
-      onionService: await runner(
-        'docker',
-        [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'],
-        { cwd }
-      ).then(sanitizeResult),
-      storage: await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd })
-    };
+    const checks = {};
+    // Dependency/runtime checks first.
+    checks.node = await probe('node', ['--version'], { cwd });
+    checks.docker = await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd });
+    checks.compose = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps'], { cwd }).then(sanitizeResult);
+    // Then application, database, Tor and Onion Service in explicit order.
+    checks.backend = await backendProbe();
+    checks.postgres = await runner(
+      'docker',
+      [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'],
+      { cwd }
+    ).then(sanitizeResult);
+    checks.tor = await runner(
+      'docker',
+      [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps', 'tor'],
+      { cwd }
+    ).then(sanitizeResult);
+    checks.onionService = await runner(
+      'docker',
+      [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'],
+      { cwd }
+    ).then(sanitizeResult);
+    checks.storage = await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd });
+
     const components = {
       node: checks.node.ok ? 'OK' : 'ERROR',
       docker: checks.docker.ok ? 'OK' : 'ERROR',
       mercora: checks.compose.ok ? 'ONLINE' : 'DEGRADED',
-      postgres: checks.postgres.ok ? 'ONLINE' : 'ERROR',
       backend: checks.backend.ok ? 'ONLINE' : 'ERROR',
-      tor: checks.compose.ok && checks.onionService.ok ? 'ONLINE' : 'ERROR',
+      postgres: checks.postgres.ok ? 'ONLINE' : 'ERROR',
+      tor: checks.tor.ok ? 'ONLINE' : 'ERROR',
       onionService: checks.onionService.ok ? 'CONFIGURED' : 'ERROR',
       storage: checks.storage.ok ? 'OK' : 'ERROR',
       health: Object.values(checks).every((item) => item.ok) ? 'OK' : 'DEGRADED'
