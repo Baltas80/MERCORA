@@ -6,6 +6,7 @@ const accountPanel=document.querySelector('#accountPanel');
 const accountName=document.querySelector('#accountName');
 const accountStatus=document.querySelector('#accountStatus');
 const sellerLink=document.querySelector('#sellerLink');
+const ordersList=document.querySelector('#ordersList');
 
 async function api(path,options={}){
   const response=await fetch(path,{cache:'no-store',headers:{Accept:'application/json','Content-Type':'application/json',...(options.headers||{})},...options});
@@ -17,6 +18,21 @@ function showMessage(value,ok=false){
   message.textContent=value;
   message.className=ok?'success':'error';
 }
+async function loadOrders(){
+  try{
+    const response=await api('./api/orders');
+    ordersList.replaceChildren();
+    for(const order of response.orders||[]){
+      const row=document.createElement('div');
+      row.className='cart-line';
+      row.textContent=order.id+' · '+order.status+' · '+order.total_atomic+' '+order.total_asset+' · '+order.item_count+' artículo(s)';
+      ordersList.append(row);
+    }
+    if(!(response.orders||[]).length){
+      const empty=document.createElement('p');empty.className='muted';empty.textContent='Todavía no hay pedidos.';ordersList.append(empty);
+    }
+  }catch(error){ordersList.textContent=error.message||String(error);}
+}
 async function refresh(){
   const body=await api('./api/auth/me');
   const account=body.account;
@@ -26,8 +42,10 @@ async function refresh(){
     accountName.textContent=account.username;
     accountStatus.textContent=account.status;
     sellerLink.hidden=false;
+    await loadOrders();
   }else{
     sellerLink.hidden=true;
+    ordersList.replaceChildren();
   }
 }
 loginForm.addEventListener('submit',async e=>{
