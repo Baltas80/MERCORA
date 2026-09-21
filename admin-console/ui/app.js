@@ -51,7 +51,7 @@ async function control(action,service){
 }
 
 function renderSystem(system){
-  const src=system||{};
+  const src=(system&&system.components)?system.components:(system||{});
   const values=[
     ['MERCORA',src.mercora],['NODE.JS',src.node],['POSTGRESQL',src.postgres||src.postgresql],
     ['TOR',src.tor],['ONION SERVICE',src.onionService],['BACKEND',src.backend],
