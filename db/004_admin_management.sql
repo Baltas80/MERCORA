@@ -132,5 +132,9 @@ INSERT INTO site_settings(key, value, updated_by) VALUES
   ('maintenance_message', '', 'migration'),
   ('new_listings_enabled', 'true', 'migration'),
   ('seller_registration_enabled', 'true', 'migration'),
-  ('footer_notice', '', 'migration')
+  ('footer_notice', '', 'migration'),
+  ('hero_title', 'Buy. Sell. Keep control.', 'migration'),
+  ('hero_copy', 'A second-hand marketplace built around privacy, strong security boundaries and a clean buying experience.', 'migration'),
+  ('buy_cta', 'Browse listings', 'migration'),
+  ('sell_cta', 'List an item', 'migration')
 ON CONFLICT (key) DO NOTHING;
