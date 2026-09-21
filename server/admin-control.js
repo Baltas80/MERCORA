@@ -16,11 +16,7 @@ const REQUIRED_SERVICES = Object.freeze(['app', 'postgres', 'tor']);
 const SENSITIVE = /(password|secret|token|seed|private.?key|mnemonic|authorization)/i;
 
 function cleanDiagnostic(text = '') {
-  return String(text)
-    .split(/\r?\n/)
-    .filter((line) => !SENSITIVE.test(line))
-    .join('\n')
-    .slice(0, 4000);
+  return String(text).split(/\r?\n/).filter((line) => !SENSITIVE.test(line)).join('\n').slice(0, 4000);
 }
 
 export function sanitizeResult(result) {
@@ -42,7 +38,6 @@ function composeFiles(action, service) {
 function composeArgs(action, service) {
   if (!ACTIONS.includes(action)) throw new Error('Unsupported admin action');
   if (service !== undefined && !ALLOWED_SERVICES.has(service)) throw new Error('Unsupported service');
-
   const files = composeFiles(action, service);
   switch (action) {
     case 'START': return [...files, 'up', '-d', ...(service ? [service] : [])];
@@ -54,21 +49,18 @@ function composeArgs(action, service) {
   }
 }
 
-function state(ok, positive = 'ONLINE') {
-  return ok ? positive : 'OFFLINE';
-}
+function state(ok, positive = 'ONLINE') { return ok ? positive : 'OFFLINE'; }
 
-function runningServices(stdout = '') {
+function serviceRunning(stdout = '', service) {
   const actual = new Set(String(stdout).split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
-  return REQUIRED_SERVICES.every((service) => actual.has(service));
+  return actual.has(service);
 }
 
-export function createAdminController({
-  cwd = path.resolve(process.cwd()),
-  runner = defaultRunner,
-  probe = defaultProbe,
-  backendProbeFn = backendProbe
-} = {}) {
+function allServicesRunning(stdout = '') {
+  return REQUIRED_SERVICES.every((service) => serviceRunning(stdout, service));
+}
+
+export function createAdminController({ cwd = path.resolve(process.cwd()), runner = defaultRunner, probe = defaultProbe, backendProbeFn = backendProbe } = {}) {
   async function run(action, service) {
     const args = composeArgs(action, service);
     if (action === 'STATUS') return status();
@@ -79,16 +71,16 @@ export function createAdminController({
 
   async function status() {
     const health = await healthCheck();
-    const checks = health.checks;
+    const checks = Object.fromEntries(health.checks.map((check) => [check.name, check]));
     return {
       ok: health.ok,
-      mercora: state(checks[2]?.ok && checks[4]?.ok && checks[3]?.ok && checks[5]?.ok),
-      node: state(checks[0]?.ok),
-      postgresql: state(checks[3]?.ok),
-      backend: state(checks[4]?.ok),
-      tor: state(checks[2]?.ok && checks[5]?.ok),
-      onionService: state(checks[5]?.ok, 'CONFIGURED'),
-      storage: state(checks[6]?.ok, 'OK'),
+      mercora: state(checks.services?.ok && checks.backend?.ok && checks.postgresql?.ok && checks.onionService?.ok),
+      node: state(checks.node?.ok),
+      postgresql: state(checks.postgresql?.ok),
+      backend: state(checks.backend?.ok),
+      tor: state(checks.services?.torRunning && checks.onionService?.ok),
+      onionService: state(checks.onionService?.ok, 'CONFIGURED'),
+      storage: state(checks.storage?.ok, 'OK'),
       health: state(health.ok, 'OK'),
       platform: health.platform
     };
@@ -96,51 +88,54 @@ export function createAdminController({
 
   async function recover(service) {
     if (service !== undefined && !ALLOWED_SERVICES.has(service)) throw new Error('Unsupported service');
-
     const target = service ?? 'app';
     const steps = [];
     const restart = await run('RESTART', target);
     steps.push({ step: `restart:${target}`, result: restart });
+    let repaired = restart.ok;
     if (!restart.ok) {
-      steps.push({ step: `start:${target}`, result: await run('START', target) });
+      const start = await run('START', target);
+      steps.push({ step: `start:${target}`, result: start });
+      repaired = start.ok;
     }
     const health = await healthCheck();
     steps.push({ step: 'health', result: health });
-    return {
-      ok: health.ok && (restart.ok || steps[1]?.result.ok === true),
-      target,
-      steps
-    };
+    const targetHealthy = targetHealthyFromChecks(health, target);
+    return { ok: repaired && targetHealthy && health.ok, target, targetHealthy, repaired, steps };
   }
 
   async function healthCheck() {
     const checks = [];
-    checks.push(await probe('node', ['--version'], { cwd }));
-    checks.push(await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd }));
+    checks.push(named('node', await probe('node', ['--version'], { cwd })));
+    checks.push(named('docker', await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd })));
 
-    const composeServices = await runner(
-      'docker',
-      [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps', '--status', 'running', '--services'],
-      { cwd }
-    );
-    const composeCheck = sanitizeResult({
+    const composeServices = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps', '--status', 'running', '--services'], { cwd });
+    checks.push(named('services', {
       ...composeServices,
-      ok: Boolean(composeServices?.ok) && runningServices(composeServices?.stdout)
-    });
-    checks.push(composeCheck);
+      ok: Boolean(composeServices?.ok) && allServicesRunning(composeServices?.stdout),
+      appRunning: Boolean(composeServices?.ok) && serviceRunning(composeServices?.stdout, 'app'),
+      postgresRunning: Boolean(composeServices?.ok) && serviceRunning(composeServices?.stdout, 'postgres'),
+      torRunning: Boolean(composeServices?.ok) && serviceRunning(composeServices?.stdout, 'tor')
+    }));
 
-    checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'], { cwd }).then(sanitizeResult));
-    checks.push(await backendProbeFn());
-    checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd }).then(sanitizeResult));
-    checks.push(await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd }));
-    return {
-      ok: checks.every((item) => item.ok),
-      checks: checks.map(sanitizeResult),
-      platform: os.platform()
-    };
+    checks.push(named('postgresql', await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'], { cwd })));
+    checks.push(named('backend', await backendProbeFn()));
+    checks.push(named('onionService', await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd })));
+    checks.push(named('storage', await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd })));
+
+    return { ok: checks.every((item) => item.ok), checks, platform: os.platform() };
   }
 
   return Object.freeze({ run, healthCheck, status });
+}
+
+function named(name, result) { return { name, ...sanitizeResult(result) }; }
+
+function targetHealthyFromChecks(health, target) {
+  const checks = Object.fromEntries(health.checks.map((check) => [check.name, check]));
+  if (target === 'postgres') return Boolean(checks.services?.postgresRunning && checks.postgresql?.ok);
+  if (target === 'tor') return Boolean(checks.services?.torRunning && checks.onionService?.ok);
+  return Boolean(checks.services?.appRunning && checks.backend?.ok);
 }
 
 async function backendProbe() {
@@ -154,19 +149,11 @@ async function backendProbe() {
 
 async function defaultRunner(file, args, options) {
   try {
-    const result = await execFileAsync(file, args, {
-      ...options,
-      shell: false,
-      windowsHide: true,
-      timeout: 30_000,
-      maxBuffer: 512 * 1024
-    });
+    const result = await execFileAsync(file, args, { ...options, shell: false, windowsHide: true, timeout: 30_000, maxBuffer: 512 * 1024 });
     return { ok: true, code: 0, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     return { ok: false, code: Number.isInteger(error.code) ? error.code : null, stdout: error.stdout, stderr: error.stderr || error.message };
   }
 }
 
-async function defaultProbe(file, args, options) {
-  return defaultRunner(file, args, options);
-}
+async function defaultProbe(file, args, options) { return defaultRunner(file, args, options); }
