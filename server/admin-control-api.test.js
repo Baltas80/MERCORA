@@ -11,6 +11,7 @@ function makeApi(overrides={}){
     management:{run:async(action,payload)=>({action,payload})},
     reputation:{run:async(action,payload)=>({action,payload})},
     system:{logs:async()=>({ok:true}),metrics:async()=>({ok:true}),migrateDb:async()=>({ok:true}),backupDb:async()=>({ok:true,id:'backup'}),listBackups:async()=>[],verifyBackup:async()=>({ok:true}),restoreBackup:async()=>({ok:true})},
+    content:{run:async(action,payload)=>({action,payload})},
     escrow:{run:async(action,payload)=>({action,payload})},
     port:0,
     ...overrides
@@ -179,5 +180,21 @@ test('escrow endpoint rejects unknown actions',async()=>{
   });
   assert.equal(response.status,400);
   assert.equal(calls,0);
+  api.server.close();
+});
+
+test('content endpoint dispatches explicit versioned actions',async()=>{
+  let received=null;
+  const api=makeApi({content:{run:async(action,payload)=>{received={action,payload};return{id:7}}}});
+  const address=await start(api);
+  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/content',{
+    method:'POST',
+    headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+    body:JSON.stringify({action:'UPDATE',payload:{site_key:'announcement',value:'hello'}})
+  });
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.equal(body.result.id,7);
+  assert.deepEqual(received,{action:'UPDATE',payload:{site_key:'announcement',value:'hello'}});
   api.server.close();
 });
