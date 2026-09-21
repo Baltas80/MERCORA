@@ -2,9 +2,18 @@
 -- Financial settlement must be executed by the isolated ledger/custody service.
 -- The admin console can configure policy and authorize actions but cannot edit balances.
 
-ALTER TABLE system_state
-  ADD CONSTRAINT system_state_custody_mode_values
-  CHECK (key <> 'custody_mode' OR value IN ('normal','frozen'));
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname='system_state_custody_mode_values'
+      AND conrelid='system_state'::regclass
+  ) THEN
+    ALTER TABLE system_state
+      ADD CONSTRAINT system_state_custody_mode_values
+      CHECK (key <> 'custody_mode' OR value IN ('normal','frozen'));
+  END IF;
+END $;
 
 CREATE TABLE IF NOT EXISTS escrow_policies (
   id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id=1),
