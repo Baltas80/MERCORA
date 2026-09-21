@@ -113,3 +113,10 @@ La restauración exige:
 ## Estado de producción
 
 El código administrativo queda integrado y preparado para la infraestructura real, pero la aprobación de producción requiere ejecutar en el equipo objetivo la build Windows, Docker/WSL, PostgreSQL, Tor, Onion Service y los procedimientos de backup/restore de extremo a extremo. No se marcan esas verificaciones como superadas hasta que se ejecutan realmente.
+
+
+## Vinculación de la web
+
+La consola administra una configuración pública controlada (runtime/site-config.json) que el servidor expone mediante el endpoint de solo lectura /api/site-config. La aplicación pública puede aplicar nombre, avisos, modo de mantenimiento y restricciones de registro sin ejecutar contenido administrativo arbitrario.
+
+El directorio runtime se monta en el contenedor de aplicación como solo lectura. La configuración generada se excluye de Git. La preview de GitHub Pages continúa siendo una superficie estática aislada y no se considera una instalación de producción.
