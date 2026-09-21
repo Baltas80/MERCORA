@@ -112,6 +112,8 @@
           <label>Activo/currency<input name="discount_asset" maxlength="12" placeholder="BTC/XMR/LTC"></label>
           <label>Máx. usos<input name="max_redemptions" type="number" min="1"></label>
           <label>Mínimo de pedido (atomic)<input name="min_order_atomic" inputmode="numeric" value="0"></label>
+          <label>Comienza<input name="starts_at" type="datetime-local"></label>
+          <label>Termina<input name="ends_at" type="datetime-local"></label>
           <button type="submit">CREAR CÓDIGO</button>
         </form><div id="promo-once" class="one-time hidden"></div></section>
         <section class="card"><div class="eyebrow">REGLAS DE DESCUENTO</div><h3>Crear descuento</h3><form id="discount-create" class="form-grid">
@@ -121,6 +123,8 @@
           <label>Porcentaje (basis points)<input name="discount_bps" type="number" min="1" max="10000"></label>
           <label>Cantidad fija (atomic)<input name="discount_atomic" inputmode="numeric"></label>
           <label>Activo/currency<input name="discount_asset" maxlength="12" placeholder="BTC/XMR/LTC"></label>
+          <label>Comienza<input name="starts_at" type="datetime-local"></label>
+          <label>Termina<input name="ends_at" type="datetime-local"></label>
           <button type="submit">CREAR DESCUENTO</button>
         </form></section>
       </div>
