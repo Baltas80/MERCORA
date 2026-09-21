@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 const COMPOSE = ['compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.onion.yml'];
 const ACTIONS = new Set([
   'OVERVIEW','LIST_FEATURED','LIST_USERS','SET_ACCOUNT_STATUS','BAN_ACCOUNT','UNBAN_ACCOUNT',
-  'LIST_STORES','CREATE_STORE','ASSIGN_STORE','UPDATE_STORE',
+  'LIST_STORES','CREATE_STORE','ASSIGN_STORE','UNASSIGN_STORE','UPDATE_STORE',
   'LIST_LISTINGS','UPDATE_LISTING_STATUS','LIST_ORDERS','UPDATE_ORDER_STATUS',
   'LIST_REPORTS','UPDATE_REPORT','LIST_PROMOS','CREATE_PROMO','DISABLE_PROMO',
   'LIST_DISCOUNTS','CREATE_DISCOUNT','DISABLE_DISCOUNT','LIST_CATEGORIES',
@@ -143,7 +143,7 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
     const where=q ? "WHERE username ILIKE "+sqlString('%'+q+'%') : '';
     return queryJson(
       "SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.created_at DESC),'[]'::json)::text FROM ("+
-      "SELECT id,username,status,created_at,EXISTS(SELECT 1 FROM account_bans b WHERE b.account_id=accounts.id AND b.active=true) AS banned "+
+      "SELECT id,username,status,created_at,EXISTS(SELECT 1 FROM account_bans b WHERE b.account_id=accounts.id AND b.active=true AND (b.expires_at IS NULL OR b.expires_at>now())) AS banned "+
       "FROM accounts "+where+" ORDER BY created_at DESC LIMIT "+limit(payload.limit)+" OFFSET "+offset(payload.offset)+") x"
     );
   }
@@ -220,6 +220,16 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
     await audit('ASSIGN_STORE','store',storeId,{owner_username:username});
     return row;
   }
+  async function unassignStore(payload){
+    const storeId=uuid(payload.store_id,'store_id');
+    const before=await queryRow("SELECT id,owner_account_id FROM mercora_stores WHERE id="+sqlString(storeId)+"::uuid");
+    if(!before) throw new Error('store not found');
+    await db("UPDATE mercora_stores SET owner_account_id=NULL,status='draft',updated_at=now() WHERE id="+sqlString(storeId)+"::uuid");
+    await db("INSERT INTO store_assignments(store_id,owner_account_id,action,actor) VALUES("+sqlString(storeId)+"::uuid,NULL,'unassigned',"+sqlString(actor)+")");
+    await audit('UNASSIGN_STORE','store',storeId,{});
+    return await queryRow("SELECT id,slug,name,status,owner_account_id FROM mercora_stores WHERE id="+sqlString(storeId)+"::uuid");
+  }
+
   async function updateStore(payload){
     const id=uuid(payload.store_id,'store_id'); const changes=[];
     if(payload.name!==undefined) changes.push("name="+sqlString(assertString(payload.name,'name',2,120)));
@@ -439,7 +449,7 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
       case 'LIST_USERS': return listUsers(payload); case 'SET_ACCOUNT_STATUS': return setAccountStatus(payload);
       case 'BAN_ACCOUNT': return banAccount(payload); case 'UNBAN_ACCOUNT': return unbanAccount(payload);
       case 'LIST_STORES': return listStores(payload); case 'CREATE_STORE': return createStore(payload);
-      case 'ASSIGN_STORE': return assignStore(payload); case 'UPDATE_STORE': return updateStore(payload);
+      case 'ASSIGN_STORE': return assignStore(payload); case 'UNASSIGN_STORE': return unassignStore(payload); case 'UPDATE_STORE': return updateStore(payload);
       case 'LIST_LISTINGS': return listListings(payload); case 'UPDATE_LISTING_STATUS': return updateListingStatus(payload);
       case 'LIST_ORDERS': return listOrders(payload); case 'UPDATE_ORDER_STATUS': return updateOrderStatus(payload);
       case 'LIST_REPORTS': return listReports(payload); case 'UPDATE_REPORT': return updateReport(payload);
