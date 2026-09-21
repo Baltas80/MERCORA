@@ -101,3 +101,12 @@ test('store creation uses a fixed INSERT statement and not a free-form query',as
   assert.ok(calls.some(c=>c.args.at(-1).includes('INSERT INTO mercora_stores')));
   assert.ok(calls.every(c=>c.file==='docker'));
 });
+
+
+test('order cancellation releases reserved listings', async()=>{
+  const {runner,calls}=fakeRunner();
+  const service=createAdminManagement({runner});
+  const result=await service.run('UPDATE_ORDER_STATUS',{order_id:'11111111-1111-4111-8111-111111111111',status:'cancelled'});
+  assert.equal(result.status,'cancelled');
+  assert.ok(calls.some(call=>call.args.at(-1).includes("UPDATE listings l SET status='active'")));
+});
