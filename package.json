@@ -7,6 +7,8 @@
   "scripts": {
     "start": "node server/server.js",
     "admin:control": "node server/admin-control.js",
+    "admin:desktop": "npm --prefix admin-console run dev",
+    "admin:desktop:build": "npm --prefix admin-console run build",
     "test": "node --test"
   },
   "engines": {
