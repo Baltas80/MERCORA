@@ -31,14 +31,18 @@ export function sanitizeResult(result) {
   };
 }
 
+function composeFiles(action, service) {
+  if (service === 'tor' || action === 'STATUS' || action === 'HEALTH_CHECK' || service === undefined) {
+    return [...COMPOSE_BASE, '-f', ONION_COMPOSE];
+  }
+  return COMPOSE_BASE;
+}
+
 function composeArgs(action, service) {
   if (!ACTIONS.includes(action)) throw new Error('Unsupported admin action');
   if (service !== undefined && !ALLOWED_SERVICES.has(service)) throw new Error('Unsupported service');
 
-  const files = service === 'tor' || action === 'STATUS' || action === 'HEALTH_CHECK'
-    ? [...COMPOSE_BASE, '-f', ONION_COMPOSE]
-    : COMPOSE_BASE;
-
+  const files = composeFiles(action, service);
   switch (action) {
     case 'START': return [...files, 'up', '-d', ...(service ? [service] : [])];
     case 'STOP': return [...files, 'stop', ...(service ? [service] : [])];
@@ -81,8 +85,9 @@ export function createAdminController({
   async function healthCheck() {
     const checks = [];
     checks.push(await probe('node', ['--version'], { cwd }));
-    checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps'], { cwd }).then(sanitizeResult));
     checks.push(await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd }));
+    checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps'], { cwd }).then(sanitizeResult));
+    checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'], { cwd }).then(sanitizeResult));
     checks.push(await backendProbe());
     checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd }).then(sanitizeResult));
     checks.push(await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd }));
