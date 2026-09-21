@@ -231,6 +231,7 @@ async function escrowApi(action,payload={}){
   return api('/v1/escrow',{action,payload});
 }
 function policyBool(form,key){return form.elements[key].value==='true'}
+function newIdempotencyKey(){return crypto.randomUUID();}
 function percentToBps(value){
   const n=Number(value);if(!Number.isFinite(n)||n<=0||n>=100)return null;
   return Math.round(n*100);
@@ -278,19 +279,19 @@ async function loadEscrowCases(){
     if(e.state!=='completed'&&e.state!=='frozen'){
       if(!e.has_pending_authorization && e.order_status==='shipped'){
         const mid=document.createElement('button');mid.className='small secondary';mid.textContent='MID';
-        mid.onclick=async()=>{const reason=prompt('Motivo de la autorización mid-escrow:','Pago parcial tras envío');if(reason===null)return;try{await escrowApi('AUTHORIZE_MID_RELEASE',{order_id:e.order_id,reason});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
+        mid.onclick=async()=>{const reason=prompt('Motivo de la autorización mid-escrow:','Pago parcial tras envío');if(reason===null)return;try{await escrowApi('AUTHORIZE_MID_RELEASE',{order_id:e.order_id,reason,idempotency_key:newIdempotencyKey()});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
         actions.push(mid);
         const early=document.createElement('button');early.className='small secondary';early.textContent='EARLY PAY';
-        early.onclick=async()=>{const reason=prompt('Motivo de Early Pay:','Pago anticipado autorizado');if(reason===null)return;try{await escrowApi('AUTHORIZE_EARLY_PAY',{order_id:e.order_id,reason});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
+        early.onclick=async()=>{const reason=prompt('Motivo de Early Pay:','Pago anticipado autorizado');if(reason===null)return;try{await escrowApi('AUTHORIZE_EARLY_PAY',{order_id:e.order_id,reason,idempotency_key:newIdempotencyKey()});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
         actions.push(early);
       }
       const release=document.createElement('button');release.className='small';release.textContent='LIBERAR';
       release.disabled=Boolean(e.has_pending_authorization);
-      release.onclick=async()=>{const reason=prompt('Motivo de la liberación final:','Pedido completado');if(reason===null)return;try{await escrowApi('AUTHORIZE_RELEASE',{order_id:e.order_id,reason,confirm:true});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
+      release.onclick=async()=>{const reason=prompt('Motivo de la liberación final:','Pedido completado');if(reason===null)return;try{await escrowApi('AUTHORIZE_RELEASE',{order_id:e.order_id,reason,confirm:true,idempotency_key:newIdempotencyKey()});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
       actions.push(release);
       if(e.order_status==='cancelled'||e.order_status==='disputed'){
         const refund=document.createElement('button');refund.className='small danger';refund.textContent='REEMBOLSAR';refund.disabled=Boolean(e.has_pending_authorization);
-        refund.onclick=async()=>{const reason=prompt('Motivo del reembolso:','Resolución administrativa');if(reason===null)return;try{await escrowApi('AUTHORIZE_REFUND',{order_id:e.order_id,reason});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
+        refund.onclick=async()=>{const reason=prompt('Motivo del reembolso:','Resolución administrativa');if(reason===null)return;try{await escrowApi('AUTHORIZE_REFUND',{order_id:e.order_id,reason,idempotency_key:newIdempotencyKey()});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
         actions.push(refund);
       }
       const freeze=document.createElement('button');freeze.className='small danger';freeze.textContent='CONGELAR';
