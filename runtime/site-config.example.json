@@ -5,5 +5,9 @@
   "maintenance_message": "",
   "new_listings_enabled": "true",
   "seller_registration_enabled": "true",
-  "footer_notice": ""
+  "footer_notice": "",
+  "hero_title": "Buy. Sell. Keep control.",
+  "hero_copy": "A second-hand marketplace built around privacy, strong security boundaries and a clean buying experience.",
+  "buy_cta": "Browse listings",
+  "sell_cta": "List an item"
 }
