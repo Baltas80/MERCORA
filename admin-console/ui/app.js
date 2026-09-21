@@ -11,6 +11,15 @@ const services = ['MERCORA','TOR','BACKEND','POSTGRESQL','ONION SERVICE','STORAG
 const healthyStates = new Set(['ONLINE','OK','RUNNING','CONFIGURED']);
 const badStates = new Set(['OFFLINE','ERROR','STOPPED']);
 const SESSION_IDLE_MS = 15 * 60 * 1000;
+const ACTIONS = Object.freeze({
+  start: { action: 'START', service: 'app' },
+  restart: { action: 'RESTART', service: 'app' },
+  stop: { action: 'STOP', service: 'app' },
+  torStart: { action: 'START', service: 'tor' },
+  torRestart: { action: 'RESTART', service: 'tor' },
+  recover: { action: 'RECOVER', service: 'app' },
+  health: { action: 'HEALTH_CHECK' }
+});
 let authenticated = false, lastActivity = 0, refreshTimer = null, actionInProgress = false;
 function markActivity(){lastActivity=Date.now()}
 function showDashboard(){login.classList.add('hidden');dashboard.classList.remove('hidden');markActivity()}
@@ -21,5 +30,6 @@ async function refresh(){if(!authenticated)return;if(Date.now()-lastActivity>SES
 async function logout(){authenticated=false;if(refreshTimer){window.clearInterval(refreshTimer);refreshTimer=null}await invoke?.('clear_token').catch(()=>{});dashboard.classList.add('hidden');login.classList.remove('hidden');tokenInput.value='';markActivity()}
 form.addEventListener('submit',async event=>{event.preventDefault();loginError.hidden=true;try{await invoke('set_token',{token:tokenInput.value});await request('GET','/api/admin/status');authenticated=true;tokenInput.value='';showDashboard();await refresh();refreshTimer=window.setInterval(refresh,15000)}catch(error){await invoke('clear_token').catch(()=>{});loginError.textContent='Connection failed. Check the local Admin Control API and token.';loginError.hidden=false}});
 document.querySelector('#logout').addEventListener('click',logout);
-document.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',async()=>{if(!authenticated||actionInProgress)return;actionInProgress=true;for(const candidate of document.querySelectorAll('[data-action]'))candidate.disabled=true;markActivity();const action=button.dataset.action;output.textContent=`Executing ${action}...`;try{const result=await request('POST','/api/admin/action',{action});output.textContent=JSON.stringify(result,null,2);await refresh()}catch(error){output.textContent=String(error.message||error)}finally{actionInProgress=false;for(const candidate of document.querySelectorAll('[data-action]'))candidate.disabled=false}}));
-['pointerdown','keydown'].forEach(eventName=>document.addEventListener(eventName,()=>{if(authenticated)markActivity()},{passive:true}));render({});
+document.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',async()=>{if(!authenticated||actionInProgress)return;actionInProgress=true;for(const candidate of document.querySelectorAll('[data-action]'))candidate.disabled=true;markActivity();const action=ACTIONS[button.dataset.action];output.textContent=`Executing ${action?.action??'UNKNOWN'}...`;try{if(!action)throw new Error('Unsupported console action');const result=await request('POST','/api/admin/action',action);output.textContent=JSON.stringify(result,null,2);await refresh()}catch(error){output.textContent=String(error.message||error)}finally{actionInProgress=false;for(const candidate of document.querySelectorAll('[data-action]'))candidate.disabled=false}}));
+['pointerdown','keydown'].forEach(eventName=>document.addEventListener(eventName,()=>{if(authenticated)markActivity()},{passive:true}));
+render({});
