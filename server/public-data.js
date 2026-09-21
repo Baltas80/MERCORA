@@ -30,6 +30,11 @@ export function publicCategory(value){
   if(text && !/^[a-z0-9][a-z0-9-]{1,62}$/.test(text)) throw new Error('category format is invalid');
   return text;
 }
+export function publicUuid(value,name='id'){
+  const text=String(value??'');
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)) throw new Error(name+' is not a valid UUID');
+  return text;
+}
 
 function cleanDiagnostic(text=''){
   return String(text).split(/\r?\n/)
@@ -121,6 +126,27 @@ export function createPublicData({
       {q:search,category:slug,limit:take,offset:skip}
     );
   }
+  async function listing(id){
+    const uuid=publicUuid(id,'listing_id');
+    return json(
+      `SELECT row_to_json(x)::text
+         FROM (
+           SELECT l.id,l.title,l.description,l.price_atomic::text AS price_atomic,l.price_asset,l.condition,l.created_at,l.updated_at,
+                  c.slug AS category_slug,c.name AS category,
+                  sp.display_name AS seller,
+                  COALESCE(sr.verified_sales_count,0)::text AS verified_sales_count,
+                  sr.rating_average,
+                  COALESCE(sr.verified_rating_count,0)::text AS verified_rating_count
+             FROM listings l
+             LEFT JOIN categories c ON c.id=l.category_id
+             LEFT JOIN seller_profiles sp ON sp.account_id=l.seller_account_id
+             LEFT JOIN seller_reputation sr ON sr.account_id=l.seller_account_id
+            WHERE l.id=:'id'::uuid AND l.status='active'
+            LIMIT 1
+         ) x`,
+      {id:uuid}
+    );
+  }
   async function seller(displayName){
     const name=publicSearch(displayName);
     return json(
@@ -139,5 +165,5 @@ export function createPublicData({
       {name}
     );
   }
-  return Object.freeze({siteConfig,categories,listings,seller});
+  return Object.freeze({siteConfig,categories,listings,listing,seller});
 }
