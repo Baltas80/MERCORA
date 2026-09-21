@@ -160,8 +160,14 @@
     catch(error){document.querySelector('#reputation-output').textContent=error.message||String(error);}
   }
 
-  button.addEventListener('click',()=>setTimeout(loadAll,0));
+  button.addEventListener('click',()=>{
+    document.querySelector('#page-title').textContent='Reputación';
+    setTimeout(loadAll,0);
+  });
   document.querySelector('#reputation-refresh').addEventListener('click',loadAll);
+  document.querySelector('#refresh-all')?.addEventListener('click',()=>{
+    if(document.querySelector('.nav-item.active')?.dataset.view==='reputation') loadAll();
+  });
   document.querySelector('#reputation-seller-search').addEventListener('click',loadSellers);
   document.querySelector('#reputation-review-search').addEventListener('click',loadReviews);
   document.querySelector('#reputation-review-refresh').addEventListener('click',loadReviews);
