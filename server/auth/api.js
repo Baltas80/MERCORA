@@ -45,7 +45,7 @@ export function createAuthApi({
   databaseUrl=process.env.DATABASE_URL,
   runner:exec=runner,
   cookieSecure=process.env.MERCORA_COOKIE_SECURE!=='false'
-}={){
+}={}){
   async function query(statement,variables={}){
     const c=connection(databaseUrl),args=[...c.args];
     for(const [key,value] of Object.entries(variables))args.push('-v',key+'='+String(value));
