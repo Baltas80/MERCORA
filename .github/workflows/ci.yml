@@ -40,10 +40,20 @@ jobs:
           node-version: "22"
 
       - name: Check server syntax
-        run: node --check server/server.js
+        run: |
+          node --check server/server.js
+          node --check server/public-data.js
+          node --check server/auth/api.js
+          node --check server/auth/session.js
+          node --check server/auth/password.js
+          node --check server/seller/api.js
+          node --check server/admin-content.js
 
       - name: Check frontend syntax
-        run: node --check web/app.js
+        run: |
+          node --check web/app.js
+          node --check web/account.js
+          node --check web/seller.js
 
       - name: Check admin syntax
         run: |
