@@ -24,6 +24,7 @@
       </nav>
     </header>
     <main>
+      <div id="siteAnnouncement" class="site-announcement" hidden></div>
       <section class="hero">
         <div>
           <p class="eyebrow">MERCORA VISUAL PREVIEW · DEMO ONLY</p>
@@ -34,6 +35,7 @@
             <a class="button button-ghost" href="#sell">List an item</a>
           </div>
         </div>
+        <div id="maintenanceNotice" class="maintenance-notice" hidden></div>
         <aside class="system-panel">
           <div class="panel-title">PREVIEW STATUS</div>
           <div class="status-row"><span>Environment</span><strong>STATIC DEMO</strong></div>
@@ -61,7 +63,7 @@
         <div class="wallet-strip"><span>BTC</span><span>XMR</span><span>LTC</span></div>
       </section>
     </main>
-    <footer><span>MERCORA</span><span>Isolated visual preview · no production data</span></footer>
+    <footer><span id="footerSiteName">MERCORA</span><span id="footerNotice">Isolated visual preview · no production data</span></footer>
   </div>
   <dialog id="cartDialog"><div class="dialog-head"><h2>Your preview cart</h2><button id="closeCart" type="button">Close</button></div><div id="cartItems"></div><div class="cart-total"><span>Total</span><strong id="cartTotal">€0</strong></div><button id="checkoutButton" class="button button-primary" type="button">Preview checkout</button></dialog>
   <script type="module" src="./app.js" defer></script>
