@@ -83,3 +83,21 @@ La web también dispone de autenticación pseudónima real, sesiones y área de 
 En el Onion Service actual, que publica HTTP, `MERCORA_COOKIE_SECURE=false` es el modo de compatibilidad necesario para que el navegador acepte la sesión. Si se despliega el servicio público detrás de HTTPS, debe establecerse `MERCORA_COOKIE_SECURE=true`. HttpOnly y SameSite=Strict permanecen activos en ambos casos.
 
 El administrador puede bloquear el registro de vendedores y la creación de nuevos anuncios desde la consola; esos controles se validan también en el backend y no dependen exclusivamente de la UI.
+
+
+## Flujos web conectados
+
+La web pública actual incluye:
+
+- catálogo real desde PostgreSQL;
+- búsqueda y filtrado por categoría;
+- ficha de anuncio;
+- perfil público de vendedor con ventas verificadas y anuncios activos;
+- cuenta pseudónima con registro, inicio/cierre de sesión y sesión revocable;
+- área de vendedor para crear tiendas y anuncios;
+- carrito persistente en el navegador;
+- creación de pedidos reales en estado `awaiting_payment`;
+- cancelación de pedidos no pagados desde la cuenta;
+- páginas de condiciones, privacidad y normas de publicación.
+
+La capa web no ejecuta SQL recibido del navegador. Los endpoints del servidor validan identificadores, límites, estados y activos antes de tocar PostgreSQL. Las operaciones de pago blockchain y custodia permanecen fuera del checkout hasta que el servicio de wallets/custodia real esté validado.
