@@ -197,14 +197,18 @@ const server = http.createServer(async (req, res) => {
       const account=await auth.me(cookieValue(req,"mercora_session"));
       return sendJson(res,200,{account});
     }
-    if(url.pathname==="/api/orders"){
+    if(url.pathname==="/api/orders"||url.pathname.startsWith("/api/orders/")){
       const account=await auth.me(cookieValue(req,"mercora_session"));
       if(!account)return sendJson(res,401,{error:"authentication required"});
       if(account.status!=="active")return sendJson(res,403,{error:"account is not active"});
-      if(req.method==="GET")return sendJson(res,200,{orders:await orders.listOrders(account.id)});
-      if(req.method==="POST"){
+      if(req.method==="GET"&&url.pathname==="/api/orders")return sendJson(res,200,{orders:await orders.listOrders(account.id)});
+      if(req.method==="POST"&&url.pathname==="/api/orders"){
         const body=await readJson(req);
         return sendJson(res,201,{order:await orders.createOrder(account.id,body)});
+      }
+      if(req.method==="POST"&&url.pathname.startsWith("/api/orders/")&&url.pathname.endsWith("/cancel")){
+        const orderId=url.pathname.slice("/api/orders/".length,-"/cancel".length);
+        return sendJson(res,200,{order:await orders.cancelOrder(account.id,orderId)});
       }
       return sendJson(res,405,{error:"method not allowed"},{Allow:"GET, POST"});
     }
