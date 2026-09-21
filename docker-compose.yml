@@ -12,6 +12,7 @@ services:
       - ./db/003_sessions.sql:/docker-entrypoint-initdb.d/003_sessions.sql:ro
       - ./db/004_admin_management.sql:/docker-entrypoint-initdb.d/004_admin_management.sql:ro
       - ./db/005_escrow.sql:/docker-entrypoint-initdb.d/005_escrow.sql:ro
+      - ./db/006_reputation.sql:/docker-entrypoint-initdb.d/006_reputation.sql:ro
     networks: [backend]
     restart: unless-stopped
     healthcheck:
