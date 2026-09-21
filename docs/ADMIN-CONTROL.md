@@ -2,7 +2,7 @@
 
 The administrative path is intentionally separated:
 
-`Admin Console -> localhost Admin Control API -> allowlisted operations -> Docker Compose`
+`Admin Console -> Tauri/Rust bridge -> localhost Admin Control API -> allowlisted operations -> Docker Compose`
 
 The admin surface does **not** expose a shell or arbitrary command execution.
 
@@ -19,7 +19,7 @@ The admin surface does **not** expose a shell or arbitrary command execution.
 
 ## Local API
 
-The API binds to `127.0.0.1` only and requires `MERCORA_ADMIN_TOKEN` with at least 32 characters. The token must be supplied through the process environment and must never be committed to the repository.
+The API binds to `127.0.0.1:8787` by default and requires `MERCORA_ADMIN_TOKEN` with at least 32 characters. The token must be supplied through the process environment and must never be committed to the repository.
 
 Start it from the repository root:
 
@@ -27,7 +27,7 @@ Start it from the repository root:
 MERCORA_ADMIN_TOKEN=<local-secret> npm run admin:api
 ```
 
-The console client uses the same token:
+The CLI uses the same authenticated local API:
 
 ```text
 MERCORA_ADMIN_TOKEN=<local-secret> npm run admin -- STATUS
@@ -38,6 +38,13 @@ MERCORA_ADMIN_TOKEN=<local-secret> npm run admin -- HEALTH_CHECK
 
 On Windows PowerShell, set the environment variable for the current session before running the commands. Do not place the token in a script checked into Git.
 
+The Windows Admin Console exposes only two virtual bridge operations to its UI:
+
+- `GET /api/admin/status` -> fixed `POST /v1/control` request with `STATUS`.
+- `POST /api/admin/action` -> validated `POST /v1/control` request with one allowlisted action and optional `app`, `postgres`, or `tor` service.
+
+The Rust bridge performs the validation before forwarding to the local API. The browser UI cannot supply an arbitrary path, command, shell expression, or unallowlisted service.
+
 ## Health coverage
 
 The health sequence checks:
@@ -47,7 +54,8 @@ The health sequence checks:
 3. Docker daemon availability;
 4. backend `GET /api/healthz` on the local application binding;
 5. Onion Service hostname file inside the Tor data volume;
-6. PostgreSQL Docker volume presence.
+6. PostgreSQL readiness;
+7. PostgreSQL Docker volume presence.
 
 Diagnostics are truncated and filter common secret-bearing lines before they are returned to the console.
 
@@ -63,5 +71,8 @@ The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its
 - **IMPLEMENTED:** local authenticated control API.
 - **IMPLEMENTED:** component-targeted recovery.
 - **IMPLEMENTED:** secret-filtered diagnostics.
-- **TESTED:** controller and API unit tests pass in an isolated Node.js test run.
-- **PENDING:** full repository `npm test` and live Docker/Tor health checks require the actual MERCORA runtime environment with Docker available.
+- **IMPLEMENTED:** Tauri bridge/API endpoint alignment.
+- **IMPLEMENTED:** UI action-to-operation mapping.
+- **TESTED:** admin UI JavaScript syntax check passed locally in this execution.
+- **TESTED/CI:** repository CI runs Node unit tests, security checks, dependency audit, Rust `cargo check`, and Windows Admin Console build checks on pushes to `master`.
+- **PENDING:** live Docker/PostgreSQL/Tor health checks require the actual MERCORA runtime environment with Docker available.
