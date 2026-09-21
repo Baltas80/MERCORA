@@ -1,6 +1,7 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,9 +12,10 @@ const TOKEN = process.env.MERCORA_ADMIN_CONTROL_TOKEN ?? "";
 const MERCORA_HOST = process.env.MERCORA_HOST ?? "127.0.0.1";
 const MERCORA_PORT = Number(process.env.MERCORA_PORT ?? "8080");
 const MAX_BODY = 8 * 1024;
+const ACTION_TIMEOUT_MS = 30_000;
 
-if (!TOKEN) {
-  console.error("MERCORA_ADMIN_CONTROL_TOKEN is required; refusing to start admin control API.");
+if (!TOKEN || TOKEN.length > 512 || /[\r\n]/.test(TOKEN)) {
+  console.error("A valid MERCORA_ADMIN_CONTROL_TOKEN is required; refusing to start admin control API.");
   process.exit(1);
 }
 
@@ -29,6 +31,9 @@ const ACTIONS = Object.freeze({
   torStatus: ["scripts/tor-service-wsl.sh", "status"],
   torValidate: ["scripts/tor-service-wsl.sh", "validate"]
 });
+
+const ACTION_MUTATIONS = new Set(["start", "stop", "restart", "torStart", "torStop", "torRestart"]);
+let mutationInProgress = false;
 
 function authorized(req) {
   const header = req.headers.authorization ?? "";
@@ -51,7 +56,10 @@ function json(res, status, payload) {
 
 function runAction(action) {
   return new Promise((resolve) => {
-    const [script, command] = ACTIONS[action];
+    const definition = ACTIONS[action];
+    if (!definition) return resolve({ ok: false, code: null, stdout: "", stderr: "unsupported_action" });
+
+    const [script, command] = definition;
     const child = spawn("bash", [path.join(ROOT, script), command], {
       cwd: ROOT,
       env: process.env,
@@ -59,11 +67,38 @@ function runAction(action) {
     });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(result);
+    };
+
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    child.on("close", (code) => resolve({ ok: code === 0, code, stdout: stdout.slice(-4000), stderr: stderr.slice(-4000) }));
-    child.on("error", (error) => resolve({ ok: false, code: null, stdout: "", stderr: error.message }));
+    child.on("close", (code) => finish({ ok: code === 0, code, stdout: stdout.slice(-4000), stderr: stderr.slice(-4000) }));
+    child.on("error", (error) => finish({ ok: false, code: null, stdout: "", stderr: error.message }));
+
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      finish({ ok: false, code: null, stdout: stdout.slice(-4000), stderr: `${stderr.slice(-3500)}\noperation_timeout` });
+    }, ACTION_TIMEOUT_MS);
   });
+}
+
+async function runGuardedAction(action) {
+  if (ACTION_MUTATIONS.has(action)) {
+    if (mutationInProgress) return { ok: false, code: null, stdout: "", stderr: "another_mutating_action_is_in_progress" };
+    mutationInProgress = true;
+    try {
+      return await runAction(action);
+    } finally {
+      mutationInProgress = false;
+    }
+  }
+  return runAction(action);
 }
 
 function checkHttp(pathname) {
@@ -85,6 +120,15 @@ function checkPostgres() {
   });
 }
 
+async function checkStorage() {
+  try {
+    await fs.access(ROOT);
+    return "online";
+  } catch {
+    return "offline";
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.socket.remoteAddress !== "127.0.0.1" && req.socket.remoteAddress !== "::1") {
     return json(res, 403, { error: "local_only" });
@@ -94,11 +138,12 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${HOST}:${PORT}`);
 
   if (req.method === "GET" && url.pathname === "/api/admin/status") {
-    const [mercora, tor, health, postgresql] = await Promise.all([
+    const [mercora, tor, health, postgresql, storage] = await Promise.all([
       runAction("status"),
       runAction("torStatus"),
       checkHttp("/api/healthz"),
-      checkPostgres()
+      checkPostgres(),
+      checkStorage()
     ]);
     return json(res, 200, {
       service: "mercora-admin-control",
@@ -107,25 +152,39 @@ const server = http.createServer(async (req, res) => {
       health: health ? "ok" : "error",
       tor: tor.ok ? "running" : "stopped",
       postgresql: postgresql ? "online" : "unknown",
-      storage: "online",
-      onionService: tor.ok ? "running" : "unknown"
+      storage,
+      onionService: "unknown"
     });
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/action") {
+    const declaredLength = Number(req.headers["content-length"] ?? "0");
+    if (!Number.isFinite(declaredLength) || declaredLength < 0 || declaredLength > MAX_BODY) {
+      return json(res, 413, { error: "body_too_large" });
+    }
+
     let body = "";
+    let rejected = false;
+    req.setTimeout(5000, () => req.destroy());
     req.on("data", (chunk) => {
       body += chunk.toString();
-      if (body.length > MAX_BODY) req.destroy();
+      if (Buffer.byteLength(body) > MAX_BODY) {
+        rejected = true;
+        req.destroy();
+      }
+    });
+    req.on("error", () => {
+      if (!res.headersSent) json(res, 400, { error: "request_aborted" });
     });
     req.on("end", async () => {
+      if (rejected) return;
       try {
         const parsed = JSON.parse(body || "{}");
         const action = parsed.action;
         if (typeof action !== "string" || !Object.hasOwn(ACTIONS, action)) {
           return json(res, 400, { error: "unsupported_action" });
         }
-        const result = await runAction(action);
+        const result = await runGuardedAction(action);
         return json(res, result.ok ? 200 : 500, result);
       } catch {
         return json(res, 400, { error: "invalid_json" });
@@ -137,6 +196,8 @@ const server = http.createServer(async (req, res) => {
   return json(res, 404, { error: "not_found" });
 });
 
+server.requestTimeout = 10_000;
+server.headersTimeout = 5_000;
 server.listen(PORT, HOST, () => {
   console.log(`MERCORA Admin Control API listening on http://${HOST}:${PORT}`);
 });
