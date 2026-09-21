@@ -61,3 +61,40 @@ test('listing status changes are limited to owner and safe states',async()=>{
   assert.ok(calls.some(c=>c.args.at(-1).includes('seller_account_id')));
   await assert.rejects(()=>api.setListingStatus(ACCOUNT,{listing_id:'44444444-4444-4444-8444-444444444444',status:'blocked'}),/unsupported seller listing status/);
 });
+
+test("seller registration switch is enforced before store creation",async()=>{
+  let enabled=false;
+  const {calls}=fakeRunner();
+  const runner=async(file,args,options)=>{
+    const sql=args.at(-1);
+    calls.push({file,args,options});
+    if(sql.includes("FROM site_settings"))return{ok:true,stdout:JSON.stringify({value:enabled?'true':'false'}),stderr:''};
+    return{ok:true,stdout:'[]',stderr:''};
+  };
+  const api=createSellerApi({databaseUrl:'postgresql://mercora:secret@postgres:5432/mercora',run:runner});
+  await assert.rejects(()=>api.createStore(ACCOUNT,{name:'Store',slug:'store-one',display_name:'Seller'}),/seller registration is disabled/);
+  assert.ok(!calls.some(c=>c.args.at(-1).includes('INSERT INTO mercora_stores')));
+});
+
+test("new listings switch is enforced before listing creation",async()=>{
+  let enabled=false;
+  const {calls}=fakeRunner();
+  const runner=async(file,args,options)=>{
+    const sql=args.at(-1);
+    calls.push({file,args,options});
+    if(sql.includes("FROM site_settings"))return{ok:true,stdout:JSON.stringify({value:enabled?'true':'false'}),stderr:''};
+    return{ok:true,stdout:'[]',stderr:''};
+  };
+  const api=createSellerApi({databaseUrl:'postgresql://mercora:secret@postgres:5432/mercora',run:runner});
+  await assert.rejects(()=>api.createListing(ACCOUNT,{
+    store_id:'22222222-2222-4222-8222-222222222222',
+    category_slug:'cameras',
+    title:'Camera',
+    description:'Test',
+    condition:'used',
+    price_atomic:'100000',
+    price_asset:'BTC',
+    publish:true
+  }),/new listings are disabled/);
+  assert.ok(!calls.some(c=>c.args.at(-1).includes('INSERT INTO listings')));
+});
