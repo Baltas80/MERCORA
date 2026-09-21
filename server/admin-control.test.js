@@ -16,6 +16,8 @@ function fakeProbe(log, result = { ok: true, code: 0, stdout: '', stderr: '' }) 
   };
 }
 
+const okBackend = () => ({ ok: true, code: 200, stdout: 'backend 200', stderr: '' });
+
 test('exposes only the six allowlisted operations', () => {
   assert.deepEqual(ACTIONS, ['START', 'STOP', 'RESTART', 'STATUS', 'HEALTH_CHECK', 'RECOVER']);
 });
@@ -31,7 +33,7 @@ test('never builds a shell command and allowlists service names', async () => {
 
 test('recovery targets only the affected component first and then verifies in dependency order', async () => {
   const log = [];
-  const controller = createAdminController({ runner: fakeRunner(log), probe: fakeProbe(log) });
+  const controller = createAdminController({ runner: fakeRunner(log), probe: fakeProbe(log), backendProbe: okBackend });
   const result = await controller.run('RECOVER', 'postgres');
   assert.equal(result.target, 'postgres');
   assert.equal(log[0].at(-1), 'postgres');
@@ -56,7 +58,7 @@ test('failed restart falls back to start for the same component', async () => {
     if (calls === 1) return { ok: false, code: 1, stdout: '', stderr: 'failure' };
     return { ok: true, code: 0, stdout: '', stderr: '' };
   };
-  const controller = createAdminController({ runner, probe: fakeProbe(log) });
+  const controller = createAdminController({ runner, probe: fakeProbe(log), backendProbe: okBackend });
   const result = await controller.run('RECOVER', 'app');
   assert.equal(result.steps[1].step, 'start:app');
   assert.equal(log[1][4], 'up');
@@ -68,7 +70,7 @@ test('failed restart and failed start abort recovery without broad restart', asy
     log.push([file, ...args]);
     return { ok: false, code: 1, stdout: '', stderr: 'failure' };
   };
-  const controller = createAdminController({ runner, probe: fakeProbe(log) });
+  const controller = createAdminController({ runner, probe: fakeProbe(log), backendProbe: okBackend });
   const result = await controller.run('RECOVER', 'tor');
   assert.equal(result.ok, false);
   assert.equal(result.recoveryAborted, true);
