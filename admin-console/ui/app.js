@@ -289,7 +289,7 @@ async function loadEscrowCases(){
       release.onclick=async()=>{const reason=prompt('Motivo de la liberación final:','Pedido completado');if(reason===null)return;try{await escrowApi('AUTHORIZE_RELEASE',{order_id:e.order_id,reason,confirm:true});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
       actions.push(release);
       if(e.order_status==='cancelled'||e.order_status==='disputed'){
-        const refund=document.createElement('button');refund.className='small danger';refund.textContent='REEMBOLSAR';
+        const refund=document.createElement('button');refund.className='small danger';refund.textContent='REEMBOLSAR';refund.disabled=Boolean(e.has_pending_authorization);
         refund.onclick=async()=>{const reason=prompt('Motivo del reembolso:','Resolución administrativa');if(reason===null)return;try{await escrowApi('AUTHORIZE_REFUND',{order_id:e.order_id,reason});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
         actions.push(refund);
       }
