@@ -12,6 +12,7 @@ function fake(){
     if(sql.includes("FROM orders o CROSS JOIN")) return {ok:true,code:0,stdout:'{"id":"11111111-1111-4111-8111-111111111111","status":"shipped","total_atomic":"100000","total_asset":"BTC","updated_at":"2026-09-20T12:00:00Z","escrow_enabled":true,"dispute_window_hours":48,"auto_release_hours":72}',stderr:''};
     if(sql.includes("SELECT order_id FROM order_escrows")) return {ok:true,code:0,stdout:'',stderr:''};
     if(sql.includes("FROM order_escrows e JOIN orders")) return {ok:true,code:0,stdout:'{"order_id":"11111111-1111-4111-8111-111111111111","asset_code":"BTC","escrowed_atomic":"100000","released_atomic":"0","refunded_atomic":"0","state":"held","order_status":"shipped","order_updated_at":"2026-09-20T12:00:00Z"}',stderr:''};
+    if(sql.includes("INSERT INTO order_escrows")) return {ok:true,code:0,stdout:'{"order_id":"11111111-1111-4111-8111-111111111111","asset_code":"BTC","escrowed_atomic":"100000","released_atomic":"0","refunded_atomic":"0","state":"held","opened_at":"2026-09-21T18:00:00Z","release_available_at":"2026-09-23T12:00:00Z","dispute_until":"2026-09-22T12:00:00Z"}',stderr:''};
     if(sql.includes("INSERT INTO escrow_authorizations")) return {ok:true,code:0,stdout:'{"id":"22222222-2222-4222-8222-222222222222","order_id":"11111111-1111-4111-8111-111111111111","action":"early_pay","amount_atomic":"80000","actor":"admin","reason":"test","state":"authorized","created_at":"2026-09-21T18:00:00Z"}',stderr:''};
     return {ok:true,code:0,stdout:'{"ok":true}',stderr:''};
   };
