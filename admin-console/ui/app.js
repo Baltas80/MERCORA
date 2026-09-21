@@ -9,12 +9,13 @@ const grid = document.querySelector('#status-grid');
 const overall = document.querySelector('#overall');
 
 const services = ['MERCORA', 'TOR', 'BACKEND', 'POSTGRESQL', 'ONION SERVICE', 'STORAGE', 'HEALTH CHECKS'];
-const healthyStates = new Set(['ONLINE', 'OK', 'RUNNING']);
-const badStates = new Set(['OFFLINE', 'ERROR']);
+const healthyStates = new Set(['ONLINE', 'OK', 'RUNNING', 'CONFIGURED']);
+const badStates = new Set(['OFFLINE', 'ERROR', 'STOPPED']);
 const SESSION_IDLE_MS = 15 * 60 * 1000;
 let authenticated = false;
 let lastActivity = 0;
 let refreshTimer = null;
+let actionInProgress = false;
 
 function markActivity() {
   lastActivity = Date.now();
@@ -43,8 +44,6 @@ function render(status) {
     'HEALTH CHECKS': status.health ?? 'unknown'
   };
 
-  // Build the dashboard through DOM APIs rather than innerHTML so that a malformed
-  // or compromised status response cannot become executable markup in the console.
   grid.replaceChildren();
   for (const name of services) {
     const state = String(values[name]).toUpperCase();
@@ -134,16 +133,22 @@ document.querySelector('#logout').addEventListener('click', logout);
 
 document.querySelectorAll('[data-action]').forEach(button => {
   button.addEventListener('click', async () => {
-    if (!authenticated) return;
+    if (!authenticated || actionInProgress) return;
+    actionInProgress = true;
+    for (const candidate of document.querySelectorAll('[data-action]')) candidate.disabled = true;
     markActivity();
     const action = button.dataset.action;
     output.textContent = `Executing ${action}...`;
+
     try {
       const result = await request('POST', '/api/admin/action', { action });
       output.textContent = JSON.stringify(result, null, 2);
       await refresh();
     } catch (error) {
       output.textContent = String(error.message || error);
+    } finally {
+      actionInProgress = false;
+      for (const candidate of document.querySelectorAll('[data-action]')) candidate.disabled = false;
     }
   });
 });
