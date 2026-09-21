@@ -61,6 +61,8 @@ The health sequence checks:
 6. Onion Service hostname file inside the Tor data volume;
 7. PostgreSQL Docker volume presence.
 
+The backend probe is dependency-injected for tests while production uses the real local `/api/healthz` endpoint.
+
 The sequence is used after recovery to verify dependencies and affected services without performing an unnecessary full-system restart.
 
 Diagnostics are truncated and filter common secret-bearing lines before they are returned to the console.
@@ -70,6 +72,12 @@ Diagnostics are truncated and filter common secret-bearing lines before they are
 The control implementation invokes `docker` with `execFile` and `shell: false`. Arguments are generated exclusively from fixed allowlists. No user-supplied command string is passed to a shell.
 
 The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its port through Tor, or place it behind the public MERCORA web server.
+
+## CI and preview
+
+The last CI run on the previous commit caught two test defects rather than a production security failure: the recovery test was accidentally probing the real backend, and the oversized-request test declared a `Content-Length` that did not match its body. Both tests have now been corrected.
+
+The visual preview workflow no longer attempts to enable GitHub Pages automatically. The repository connection cannot create a Pages site, so the workflow now produces a downloadable static preview artifact instead of failing during `configure-pages`.
 
 ## Verification status
 
@@ -81,10 +89,11 @@ The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its
 - **IMPLEMENTED:** secret-filtered diagnostics.
 - **IMPLEMENTED:** constant-time-compatible token verification and IPv4-mapped loopback handling.
 - **IMPLEMENTED:** 4 KiB request-size enforcement.
+- **IMPLEMENTED:** dependency-injected backend probe for deterministic controller tests.
+- **IMPLEMENTED:** corrected oversized-request test.
 - **IMPLEMENTED:** Tauri bridge/API endpoint alignment.
 - **IMPLEMENTED:** UI action-to-operation mapping.
-- **TESTED:** admin controller unit coverage includes allowlists, shell-injection rejection, targeted recovery, fallback recovery success, diagnostics filtering, and structured status mapping.
-- **TESTED:** admin API coverage includes authentication, allowlisted validation, valid forwarding, and request-size rejection.
-- **TESTED:** admin UI JavaScript syntax check was previously verified locally.
+- **IMPLEMENTED:** visual preview artifact workflow independent of GitHub Pages site provisioning.
+- **TESTED BY PRIOR CI:** secret scan, forbidden artifact checks, syntax checks, compose security verification, dependency audit, CodeQL.
+- **PENDING:** CI execution for the corrective commits above.
 - **PENDING:** live Docker/PostgreSQL/Tor health checks require the actual MERCORA runtime environment with Docker available.
-- **PENDING:** this execution cannot truthfully claim the new tests have run locally; GitHub Actions must execute the new commit before CI verification is marked passed.
