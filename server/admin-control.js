@@ -53,6 +53,10 @@ function composeArgs(action, service) {
   }
 }
 
+function state(ok, positive = 'ONLINE') {
+  return ok ? positive : 'OFFLINE';
+}
+
 export function createAdminController({
   cwd = path.resolve(process.cwd()),
   runner = defaultRunner,
@@ -60,9 +64,27 @@ export function createAdminController({
 } = {}) {
   async function run(action, service) {
     const args = composeArgs(action, service);
+    if (action === 'STATUS') return status();
     if (args) return sanitizeResult(await runner('docker', args, { cwd }));
     if (action === 'RECOVER') return recover(service);
     throw new Error('Unsupported admin action');
+  }
+
+  async function status() {
+    const health = await healthCheck();
+    const checks = health.checks;
+    return {
+      ok: health.ok,
+      mercora: state(checks[2]?.ok && checks[4]?.ok && checks[3]?.ok && checks[5]?.ok),
+      node: state(checks[0]?.ok),
+      postgresql: state(checks[3]?.ok),
+      backend: state(checks[4]?.ok),
+      tor: state(checks[2]?.ok),
+      onionService: state(checks[5]?.ok, 'CONFIGURED'),
+      storage: state(checks[6]?.ok, 'OK'),
+      health: state(health.ok, 'OK'),
+      platform: health.platform
+    };
   }
 
   async function recover(service) {
@@ -98,7 +120,7 @@ export function createAdminController({
     };
   }
 
-  return Object.freeze({ run, healthCheck });
+  return Object.freeze({ run, healthCheck, status });
 }
 
 async function backendProbe() {
