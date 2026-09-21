@@ -41,7 +41,11 @@ function parseRow(stdout){
 function cleanError(text){
   return String(text||'').split(/\r?\n/).filter(line=>!/(password|secret|token|private.?key|mnemonic|authorization|database_url)/i.test(line)).join(' ').slice(0,1200);
 }
-export function createAuthApi({databaseUrl=process.env.DATABASE_URL,runner:exec=runner}={}){
+export function createAuthApi({
+  databaseUrl=process.env.DATABASE_URL,
+  runner:exec=runner,
+  cookieSecure=process.env.MERCORA_COOKIE_SECURE!=='false'
+}={){
   async function query(statement,variables={}){
     const c=connection(databaseUrl),args=[...c.args];
     for(const [key,value] of Object.entries(variables))args.push('-v',key+'='+String(value));
@@ -56,7 +60,7 @@ export function createAuthApi({databaseUrl=process.env.DATABASE_URL,runner:exec=
       "INSERT INTO sessions(account_id,token_hash,expires_at) VALUES (:'account_id'::uuid,:'token_hash',now()+interval '7 days') RETURNING id,expires_at",
       {account_id:accountId,token_hash:tokenHash}
     ));
-    return {token,cookie:sessionCookie(token,SESSION_MAX_AGE),expiresAt:row?.expires_at||null};
+    return {token,cookie:sessionCookie(token,SESSION_MAX_AGE,cookieSecure),expiresAt:row?.expires_at||null};
   }
   async function register({username,password}={}){
     const user=assertUsername(username),pass=assertPassword(password),passwordHash=await hashPassword(pass);
