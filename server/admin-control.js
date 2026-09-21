@@ -113,7 +113,30 @@ async function checkHttp(pathname) {
 
 function checkPostgres() {
   return new Promise((resolve) => {
-    const child = spawn("pg_isready", [], { stdio: ["ignore", "ignore", "ignore"] });
+    let host = process.env.PGHOST ?? "";
+    let port = process.env.PGPORT ?? "";
+    let user = process.env.PGUSER ?? "";
+    let database = process.env.PGDATABASE ?? "";
+
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = new URL(process.env.DATABASE_URL);
+        host = db.hostname || host;
+        port = db.port || port;
+        user = decodeURIComponent(db.username || user);
+        database = db.pathname.replace(/^\\//, "") || database;
+      } catch {
+        // Fall back to explicit PG* variables without exposing the URL.
+      }
+    }
+
+    const args = [];
+    if (host) args.push("-h", host);
+    if (port) args.push("-p", port);
+    if (user) args.push("-U", user);
+    if (database) args.push("-d", database);
+
+    const child = spawn("pg_isready", args, { stdio: ["ignore", "ignore", "ignore"] });
     child.on("close", (code) => resolve(code === 0));
     child.on("error", () => resolve(false));
   });
