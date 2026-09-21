@@ -54,3 +54,28 @@ test('unsupported escrow actions are rejected before the database',async()=>{
   await assert.rejects(()=>service.run('EXECUTE_ARBITRARY_SQL',{sql:'DROP TABLE ledger_entries'}),/unsupported escrow action/);
   assert.equal(calls.length,0);
 });
+
+
+test('policy rejects unknown keys',async()=>{
+  const {runner,calls}=fake(); const service=createAdminEscrow({runner});
+  await assert.rejects(()=>service.run('SET_POLICY',{drop_table:true}),/unsupported escrow policy key/);
+  assert.equal(calls.length,0);
+});
+
+test('authorization amounts are returned as strings',async()=>{
+  const {runner}=fake(); const service=createAdminEscrow({runner});
+  const result=await service.run('AUTHORIZE_EARLY_PAY',{
+    order_id:'11111111-1111-4111-8111-111111111111',
+    idempotency_key:'22222222-2222-4222-8222-222222222222',
+    reason:'precision'
+  });
+  assert.equal(typeof result.amount_atomic,'string');
+  assert.equal(result.amount_atomic,'80000');
+});
+
+test('custody state can be switched only between normal and frozen',async()=>{
+  const {runner}=fake(); const service=createAdminEscrow({runner});
+  const result=await service.run('SET_CUSTODY_STATE',{value:'frozen',reason:'test'});
+  assert.equal(result.value,'normal');
+  assert.equal(result.key,'custody_mode');
+});
