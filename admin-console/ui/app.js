@@ -207,8 +207,9 @@ async function loadCategories(){
   });
 }
 async function loadWebsite(){
-  const settings=await management('SITE_GET');const form=document.querySelector('#site-settings');
-  Object.keys(settings).forEach(k=>{const el=form.elements[k];if(el)el.value=settings[k]});
+  const [settings,content]=await Promise.all([management('SITE_GET'),contentApi('CURRENT')]);
+  const form=document.querySelector('#site-settings');
+  Object.keys({...settings,...content}).forEach(k=>{const el=form.elements[k];if(el)el.value=settings[k]??content[k]??''});
   const [featured,listings]=await Promise.all([
     management('LIST_FEATURED'),
     management('LIST_LISTINGS',{status:'active',limit:100})
