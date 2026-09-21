@@ -45,6 +45,10 @@ async function management(action,payload={}){
   const result=await api('/v1/management',{action,payload});
   return result.result;
 }
+async function contentApi(action,payload={}){
+  const result=await api('/v1/content',{action,payload});
+  return result.result;
+}
 async function control(action,service){
   const r=await api('/v1/control',{action,service});
   return r;
@@ -509,7 +513,16 @@ document.querySelector('#escrow-auth-refresh').addEventListener('click',()=>load
 
 document.querySelector('#site-settings').addEventListener('submit',async e=>{
   e.preventDefault();const f=e.currentTarget;
-  try{for(const key of ['site_name','site_mode','announcement','maintenance_message','new_listings_enabled','seller_registration_enabled','footer_notice'])await management('SITE_SET',{key,value:f.elements[key].value});alert('Configuración guardada.');}catch(err){alert(err.message||String(err))}
+  try{
+    for(const key of ['site_mode','new_listings_enabled','seller_registration_enabled']){
+      await management('SITE_SET',{key,value:f.elements[key].value});
+    }
+    for(const key of ['site_name','announcement','maintenance_message','footer_notice','hero_title','hero_copy','buy_cta','sell_cta']){
+      await contentApi('UPDATE',{site_key:key,value:f.elements[key].value});
+    }
+    await loadWebsite();
+    alert('Configuración y textos guardados con historial.');
+  }catch(err){alert(err.message||String(err))}
 });
 document.querySelector('#featured-save').addEventListener('click',async()=>{
   const picker=document.querySelector('#featured-picker');
