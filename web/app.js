@@ -5,6 +5,10 @@ async function applySiteConfig(){
     const config=await response.json();
     document.title=(config.site_name||'MERCORA')+' — Marketplace';
     const brand=document.querySelector('.brand');if(brand)brand.textContent=config.site_name||'MERCORA';
+    const heroTitle=document.querySelector('#heroTitle');if(heroTitle&&config.hero_title)heroTitle.textContent=config.hero_title;
+    const heroCopy=document.querySelector('#heroCopy');if(heroCopy&&config.hero_copy)heroCopy.textContent=config.hero_copy;
+    const buyCta=document.querySelector('#buyCta');if(buyCta&&config.buy_cta)buyCta.textContent=config.buy_cta;
+    const sellCta=document.querySelector('#sellCta');if(sellCta&&config.sell_cta)sellCta.textContent=config.sell_cta;
     const announcement=document.querySelector('#siteAnnouncement');
     if(announcement&&config.announcement){announcement.textContent=config.announcement;announcement.hidden=false;}
     const maintenance=document.querySelector('#maintenanceNotice');
