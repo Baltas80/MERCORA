@@ -60,6 +60,7 @@ export function createAdminContent({cwd=path.resolve(process.cwd()),runner=defau
     const result=json(await db(
       'BEGIN;'+
       `INSERT INTO site_settings(key,value,updated_at,updated_by) VALUES (${sql(key)},${sql(value)},now(),${sql(actor)}) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=now(),updated_by=EXCLUDED.updated_by;`+
+      `UPDATE site_content_versions SET published=false WHERE site_key=${sql(key)} AND published=true;`+
       `INSERT INTO site_content_versions(site_key,value,published,actor) VALUES (${sql(key)},${sql(value)},true,${sql(actor)}) RETURNING json_build_object('id',id,'site_key',site_key,'value',value,'published',published,'actor',actor,'created_at',created_at)::text;`+
       'COMMIT;'
     ));
