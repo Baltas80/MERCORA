@@ -1,9 +1,20 @@
+import crypto from 'node:crypto';
 import http from 'node:http';
 import { createAdminController } from './admin-control.js';
 
 const ACTIONS = new Set(['START', 'STOP', 'RESTART', 'STATUS', 'HEALTH_CHECK', 'RECOVER']);
 const SERVICES = new Set(['app', 'postgres', 'tor']);
 const MAX_BODY = 4096;
+
+function sameToken(provided, expected) {
+  const providedBytes = Buffer.from(String(provided ?? ''));
+  const expectedBytes = Buffer.from(String(expected ?? ''));
+  return providedBytes.length === expectedBytes.length && crypto.timingSafeEqual(providedBytes, expectedBytes);
+}
+
+function isLoopback(address) {
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
 
 export function createAdminApi({ controller, token, host = '127.0.0.1', port = 8787 } = {}) {
   if (!token || token.length < 32) throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
@@ -15,14 +26,19 @@ export function createAdminApi({ controller, token, host = '127.0.0.1', port = 8
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
 
-    if (req.socket.remoteAddress !== '127.0.0.1' && req.socket.remoteAddress !== '::1') {
+    if (!isLoopback(req.socket.remoteAddress)) {
       res.writeHead(403); return res.end(JSON.stringify({ error: 'local access only' }));
     }
-    if (req.headers.authorization !== `Bearer ${token}`) {
+    if (!sameToken(req.headers.authorization?.replace(/^Bearer\s+/i, ''), token)) {
       res.writeHead(401); return res.end(JSON.stringify({ error: 'unauthorized' }));
     }
     if (req.method !== 'POST' || req.url !== '/v1/control') {
       res.writeHead(404); return res.end(JSON.stringify({ error: 'not found' }));
+    }
+
+    const contentLength = Number(req.headers['content-length']);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY) {
+      res.writeHead(413); return res.end(JSON.stringify({ error: 'request too large' }));
     }
 
     let body = '';
