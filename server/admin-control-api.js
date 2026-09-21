@@ -2,10 +2,12 @@ import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { createAdminController } from './admin-control.js';
 import { createAdminManagement } from './admin-management.js';
+import { createAdminSystem } from './admin-system.js';
 
 const ACTIONS = new Set(['START','STOP','RESTART','STATUS','HEALTH_CHECK','RECOVER']);
 const SERVICES = new Set(['app','postgres','tor']);
 const MAX_BODY = 32 * 1024;
+const SYSTEM_ACTIONS = new Set(['LOGS','METRICS','MIGRATE_DB','BACKUP_DB','LIST_BACKUPS','VERIFY_BACKUP','RESTORE_BACKUP']);
 
 function localAddress(address){
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
@@ -20,6 +22,7 @@ export function createAdminApi({ controller, management, token, host='127.0.0.1'
   if(!token || token.length < 32) throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
   const control = controller ?? createAdminController();
   const manage = management ?? createAdminManagement();
+  const system = createAdminSystem();
 
   const server = http.createServer(async (req,res)=>{
     res.setHeader('Content-Type','application/json; charset=utf-8');
@@ -78,6 +81,25 @@ export function createAdminApi({ controller, management, token, host='127.0.0.1'
       if(req.method === 'POST' && url.pathname === '/v1/management'){
         const action = String(input.action || '').toUpperCase();
         const result = await manage.run(action,input.payload || {});
+        res.writeHead(200);
+        return res.end(JSON.stringify({ok:true,action,result}));
+      }
+
+      if(req.method === 'POST' && url.pathname === '/v1/system'){
+        const action = String(input.action || '').toUpperCase();
+        const payload = input.payload || {};
+        if(!SYSTEM_ACTIONS.has(action)) throw new Error('unsupported system action');
+        let result;
+        switch(action){
+          case 'LOGS': result=await system.logs(payload.service,payload.lines); break;
+          case 'METRICS': result=await system.metrics(); break;
+          case 'MIGRATE_DB': result=await system.migrateDb(); break;
+          case 'BACKUP_DB': result=await system.backupDb(); break;
+          case 'LIST_BACKUPS': result=await system.listBackups(); break;
+          case 'VERIFY_BACKUP': result=await system.verifyBackup(payload.backup_id); break;
+          case 'RESTORE_BACKUP': result=await system.restoreBackup(payload.backup_id,payload.confirm); break;
+          default: throw new Error('unsupported system action');
+        }
         res.writeHead(200);
         return res.end(JSON.stringify({ok:true,action,result}));
       }
