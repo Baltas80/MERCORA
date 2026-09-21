@@ -36,6 +36,8 @@ This ordering keeps diagnosis deterministic and avoids broad restarts as a recov
 
 The API binds to `127.0.0.1` only and requires `MERCORA_ADMIN_TOKEN` with at least 32 characters. The implementation now rejects non-local bind addresses at construction time as an additional fail-closed boundary. The token must be supplied through the process environment and must never be committed to the repository.
 
+POST requests are bounded to 32 KiB and must contain a JSON object. Malformed JSON and non-object JSON payloads are rejected as client errors before any administrative operation is invoked.
+
 Start it from the repository root:
 
 ```text
@@ -74,6 +76,8 @@ The control API is fail-closed to localhost binding and must remain local-only. 
 - **IMPLEMENTED:** failed repair aborts without unrelated restarts.
 - **IMPLEMENTED:** secret-filtered diagnostics.
 - **IMPLEMENTED:** fail-closed localhost-only API binding.
+- **IMPLEMENTED:** malformed/non-object request rejection.
 - **TEST ADDED:** non-local bind attempts are rejected.
 - **TEST ADDED:** recovery ordering and failed-repair abort path.
+- **TEST ADDED:** malformed JSON and array payloads are rejected before operation dispatch.
 - **PENDING:** full repository `npm test` and live Docker/Tor health checks require the actual MERCORA runtime environment with Docker available.
