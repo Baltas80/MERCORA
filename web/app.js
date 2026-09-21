@@ -253,6 +253,7 @@ function renderCart() {
   }
   cartCount.textContent = String(state.cart.reduce((sum, item) => sum + item.quantity, 0));
   saveCart();
+  saveCart();
 }
 
 grid.addEventListener("click", (event) => {
