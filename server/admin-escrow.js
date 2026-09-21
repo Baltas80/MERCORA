@@ -99,10 +99,9 @@ export function createAdminEscrow({
   }
   async function authorized(orderId,action,amount,reason){
     const existing=await row(
-      "SELECT id FROM escrow_authorizations WHERE order_id="+sqlString(orderId)+"::uuid AND action="+sqlString(action)+
-      " AND state='authorized' LIMIT 1"
+      "SELECT id FROM escrow_authorizations WHERE order_id="+sqlString(orderId)+"::uuid AND state='authorized' LIMIT 1"
     );
-    if(existing) throw new Error('an authorization of this type is already pending');
+    if(existing) throw new Error('an escrow authorization is already pending');
     const rowResult=await row(
       "INSERT INTO escrow_authorizations(order_id,action,amount_atomic,actor,reason) VALUES("+
       sqlString(orderId)+"::uuid,"+sqlString(action)+","+
@@ -267,6 +266,7 @@ export function createAdminEscrow({
   async function freezeCase(payload){
     const id=uuid(payload.order_id,'order_id');
     await caseRow(id);
+    await db("UPDATE escrow_authorizations SET state='expired' WHERE order_id="+sqlString(id)+"::uuid AND state='authorized'");
     await db("UPDATE order_escrows SET state='frozen',updated_at=now() WHERE order_id="+sqlString(id)+"::uuid");
     await audit(id,'FREEZE_CASE',{reason:payload.reason||'Administrative freeze'});
     return caseRow(id);
