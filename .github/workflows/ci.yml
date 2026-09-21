@@ -55,6 +55,8 @@ jobs:
           node --check server/admin-management.test.js
           node --check server/admin-escrow.test.js
           node --check server/admin-system.test.js
+          node --check server/admin-reputation.js
+          node --check server/admin-reputation.test.js
           node --check admin-console/ui/app.js
 
       - name: Verify container network isolation
