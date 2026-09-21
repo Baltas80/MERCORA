@@ -29,6 +29,7 @@
       <button class="nav-item" data-view="stores">Tiendas</button>
       <button class="nav-item" data-view="listings">Anuncios</button>
       <button class="nav-item" data-view="orders">Pedidos</button>
+      <button class="nav-item" data-view="escrow">Escrow / Pagos</button>
       <button class="nav-item" data-view="reports">Reportes</button>
       <button class="nav-item" data-view="promos">Promociones</button>
       <button class="nav-item" data-view="discounts">Descuentos</button>
@@ -96,6 +97,37 @@
 
     <section id="view-orders" class="view hidden">
       <section class="card"><div class="section-head"><h3>Pedidos</h3><button data-reload="orders" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Pedido</th><th>Comprador</th><th>Total</th><th>Items</th><th>Estado</th><th>Acción</th></tr></thead><tbody id="orders-table"></tbody></table></div></section>
+    </section>
+
+    <section id="view-escrow" class="view hidden">
+      <section class="card">
+        <div class="section-head"><div><div class="eyebrow">PAGOS Y LIQUIDACIÓN</div><h3>Política de Escrow</h3><p class="muted">La consola configura y autoriza. La liquidación monetaria final la ejecuta el servicio de custodia.</p></div><div><span id="custody-badge" class="badge unknown">CUSTODY UNKNOWN</span></div></div>
+        <form id="escrow-policy" class="form-grid wide">
+          <label>Escrow general<select name="escrow_enabled"><option value="true">ACTIVADO</option><option value="false">DESACTIVADO</option></select></label>
+          <label>Mid-Escrow<select name="mid_escrow_enabled"><option value="true">ACTIVADO</option><option value="false">DESACTIVADO</option></select></label>
+          <label>Mid-Escrow (% del total)<input name="mid_release_percent" type="number" min="1" max="99" step="0.01" value="50"></label>
+          <label>Early Pay<select name="early_pay_enabled"><option value="true">ACTIVADO</option><option value="false">DESACTIVADO</option></select></label>
+          <label>Early Pay espera (horas)<input name="early_pay_delay_hours" type="number" min="0" max="8760" value="24"></label>
+          <label>Early Pay máximo (% total)<input name="early_pay_max_percent" type="number" min="1" max="99" step="0.01" value="80"></label>
+          <label>Ventana de disputa (horas)<input name="dispute_window_hours" type="number" min="0" max="8760" value="48"></label>
+          <label>Auto-release (horas)<input name="auto_release_hours" type="number" min="0" max="8760" value="72"></label>
+          <label>Escrow obligatorio para vendedores nuevos<select name="new_seller_escrow_required"><option value="true">SÍ</option><option value="false">NO</option></select></label>
+          <label>Retención nuevos vendedores (horas)<input name="new_seller_hold_hours" type="number" min="0" max="8760" value="168"></label>
+          <label>Revisión por importe alto<select name="high_value_review_enabled"><option value="true">SÍ</option><option value="false">NO</option></select></label>
+          <label>Umbral importe alto (atomic)<input name="high_value_threshold_atomic" inputmode="numeric" value="0"></label>
+          <label>Requiere release manual<select name="manual_release_required"><option value="true">SÍ</option><option value="false">NO</option></select></label>
+          <button type="submit">GUARDAR POLÍTICA</button>
+        </form>
+        <pre id="escrow-policy-output" class="console-output">Cargando…</pre>
+      </section>
+      <section class="card">
+        <div class="section-head"><div><h3>Escrows</h3><p class="muted">Cada caso muestra fondos retenidos, liberados, reembolsados y autorizaciones pendientes.</p></div><button id="escrow-refresh" class="secondary">ACTUALIZAR</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Pedido</th><th>Comprador</th><th>Importe retenido</th><th>Liberado</th><th>Reembolsado</th><th>Estado</th><th>Estado pedido</th><th>Gestión</th></tr></thead><tbody id="escrow-table"></tbody></table></div>
+      </section>
+      <section class="card">
+        <div class="section-head"><h3>Autorizaciones</h3><button id="escrow-auth-refresh" class="secondary">ACTUALIZAR</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Pedido</th><th>Acción</th><th>Importe</th><th>Actor</th><th>Estado</th><th>Motivo</th></tr></thead><tbody id="escrow-auth-table"></tbody></table></div>
+      </section>
     </section>
 
     <section id="view-reports" class="view hidden">
