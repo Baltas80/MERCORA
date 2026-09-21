@@ -55,11 +55,13 @@ The health sequence checks:
 
 1. Node.js availability;
 2. Docker daemon availability;
-3. Docker Compose service state for the base and Onion configurations;
+3. that all required Compose services (`app`, `postgres`, `tor`) are actually **running**;
 4. PostgreSQL readiness;
 5. backend `GET /api/healthz` on the local application binding;
 6. Onion Service hostname file inside the Tor data volume;
 7. PostgreSQL Docker volume presence.
+
+The Compose service check uses `docker compose ps --status running --services`, so a successful Docker/Compose command is no longer treated as proof that MERCORA is running. Missing required services make the overall health check fail and are reflected in the structured status.
 
 The backend probe is dependency-injected for tests while production uses the real local `/api/healthz` endpoint.
 
@@ -75,9 +77,9 @@ The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its
 
 ## CI and preview
 
-The last CI run on the previous commit caught two test defects rather than a production security failure: the recovery test was accidentally probing the real backend, and the oversized-request test declared a `Content-Length` that did not match its body. Both tests have now been corrected.
+The previous CI run completed successfully for CodeQL and the static-security job, including the existing unit-test suite. The visual preview workflow also completed successfully after being changed to package the frontend independently of GitHub Pages provisioning.
 
-The visual preview workflow no longer attempts to enable GitHub Pages automatically. The repository connection cannot create a Pages site, so the workflow now produces a downloadable static preview artifact instead of failing during `configure-pages`.
+The latest controller change makes runtime service state explicit and adds a regression test for a missing required service. The latest API and controller tests are now waiting for CI on the new commit.
 
 ## Verification status
 
@@ -90,10 +92,12 @@ The visual preview workflow no longer attempts to enable GitHub Pages automatica
 - **IMPLEMENTED:** constant-time-compatible token verification and IPv4-mapped loopback handling.
 - **IMPLEMENTED:** 4 KiB request-size enforcement.
 - **IMPLEMENTED:** dependency-injected backend probe for deterministic controller tests.
+- **IMPLEMENTED:** explicit running-state verification for `app`, `postgres`, and `tor`.
+- **IMPLEMENTED:** regression test for a missing required Compose service.
 - **IMPLEMENTED:** corrected oversized-request test.
 - **IMPLEMENTED:** Tauri bridge/API endpoint alignment.
 - **IMPLEMENTED:** UI action-to-operation mapping.
 - **IMPLEMENTED:** visual preview artifact workflow independent of GitHub Pages site provisioning.
-- **TESTED BY PRIOR CI:** secret scan, forbidden artifact checks, syntax checks, compose security verification, dependency audit, CodeQL.
-- **PENDING:** CI execution for the corrective commits above.
+- **TESTED BY PRIOR CI:** secret scan, forbidden artifact checks, syntax checks, Compose security verification, dependency audit, CodeQL, and the previous unit-test suite.
+- **PENDING:** CI execution for the latest controller/test/documentation commits.
 - **PENDING:** live Docker/PostgreSQL/Tor health checks require the actual MERCORA runtime environment with Docker available.
