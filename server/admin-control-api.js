@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { createAdminController } from './admin-control.js';
 import { createAdminManagement } from './admin-management.js';
 import { createAdminSystem } from './admin-system.js';
+import { createAdminEscrow } from './admin-escrow.js';
 
 const ACTIONS = new Set(['START','STOP','RESTART','STATUS','HEALTH_CHECK','RECOVER']);
 const SERVICES = new Set(['app','postgres','tor']);
@@ -23,6 +24,7 @@ export function createAdminApi({ controller, management, system: systemOverride,
   const control = controller ?? createAdminController();
   const manage = management ?? createAdminManagement();
   const system = systemOverride ?? createAdminSystem();
+  const escrow = createAdminEscrow();
 
   const server = http.createServer(async (req,res)=>{
     res.setHeader('Content-Type','application/json; charset=utf-8');
@@ -81,6 +83,13 @@ export function createAdminApi({ controller, management, system: systemOverride,
       if(req.method === 'POST' && url.pathname === '/v1/management'){
         const action = String(input.action || '').toUpperCase();
         const result = await manage.run(action,input.payload || {});
+        res.writeHead(200);
+        return res.end(JSON.stringify({ok:true,action,result}));
+      }
+
+      if(req.method === 'POST' && url.pathname === '/v1/escrow'){
+        const action = String(input.action || '').toUpperCase();
+        const result = await escrow.run(action,input.payload || {});
         res.writeHead(200);
         return res.end(JSON.stringify({ok:true,action,result}));
       }
