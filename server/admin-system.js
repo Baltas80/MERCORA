@@ -52,7 +52,25 @@ async function defaultRunner(file,args,options={}){
   });
 }
 
-export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaultRunner,backupDir=path.resolve(cwd,'backups'),audit=null,actor=process.env.MERCORA_ADMIN_ACTOR || 'admin'}={}){
+async function defaultInputRunner({file,args,source,cwd}){
+  return new Promise((resolve,reject)=>{
+    const child=spawn(file,args,{cwd,shell:false,windowsHide:true,stdio:['pipe','pipe','pipe']});
+    const out=[];const err=[];let outBytes=0;let errBytes=0;
+    child.stdout.on('data',chunk=>{if(outBytes<524288){out.push(chunk);outBytes+=chunk.length}});
+    child.stderr.on('data',chunk=>{if(errBytes<1048576){err.push(chunk);errBytes+=chunk.length}});
+    const input=createReadStream(source,{flags:'r',mode:0o400});
+    input.on('error',reject);
+    child.on('error',reject);
+    input.pipe(child.stdin);
+    child.on('close',code=>resolve({
+      ok:code===0,code,
+      stdout:clean(Buffer.concat(out).toString()),
+      stderr:clean(Buffer.concat(err).toString())
+    }));
+  });
+}
+
+export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaultRunner,streamRunner=defaultInputRunner,backupDir=path.resolve(cwd,'backups'),audit=null,actor=process.env.MERCORA_ADMIN_ACTOR || 'admin'}={}){
   async function recordAudit(action,resourceType,resourceId,metadata){
     if(audit) await audit(action,resourceType,resourceId,metadata);
     else await runCommand(COMPOSE.concat(['exec','-T','postgres','psql','-U','mercora','-d','mercora','-v','ON_ERROR_STOP=1','-q','-c',
@@ -132,17 +150,7 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     const safe=validateBackupId(id);
     const full=path.join(backupDir,safe);
     await fs.stat(full);
-    return new Promise((resolve,reject)=>{
-      const child=spawn('docker',args,{cwd,shell:false,windowsHide:true,stdio:['pipe','pipe','pipe']});
-      const out=[];const err=[];let bytes=0;
-      child.stdout.on('data',chunk=>{if(bytes<524288){out.push(chunk);bytes+=chunk.length}});
-      child.stderr.on('data',chunk=>{if(bytes<1048576){err.push(chunk);bytes+=chunk.length}});
-      const input=createReadStream(full,{flags:'r',mode:0o400});
-      input.on('error',reject);
-      input.pipe(child.stdin);
-      child.on('error',reject);
-      child.on('close',code=>resolve({ok:code===0,code,stdout:clean(Buffer.concat(out).toString()),stderr:clean(Buffer.concat(err).toString())}));
-    });
+    return streamRunner({file:'docker',args,source:full,cwd});
   }
   async function verifyBackup(id){
     const result=await withBackupInput(id,COMPOSE.concat(['exec','-T','postgres','pg_restore','--list','-U','mercora']));
