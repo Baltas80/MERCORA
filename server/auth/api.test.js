@@ -42,3 +42,15 @@ test('auth cookie uses hardened browser attributes',async()=>{
   assert.match(result.session.cookie,/Secure/);
   assert.match(result.session.cookie,/SameSite=Strict/);
 });
+
+test("auth API can disable Secure only when explicitly configured",async()=>{
+  const {runner}=fakeRunner();
+  const api=createAuthApi({
+    databaseUrl:'postgresql://mercora:secret@postgres:5432/mercora',
+    runner,
+    cookieSecure:false
+  });
+  const result=await api.register({username:'fran',password:'this-is-a-valid-password'});
+  assert.match(result.session.cookie,/HttpOnly/);
+  assert.doesNotMatch(result.session.cookie,/Secure/);
+});
