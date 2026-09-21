@@ -1,43 +1,269 @@
-async function applySiteConfig(){
-  try{
-    const response=await fetch('./api/site-config',{cache:'no-store'});
-    if(!response.ok)return;
-    const config=await response.json();
-    document.title=(config.site_name||'MERCORA')+' — Marketplace';
-    const brand=document.querySelector('.brand');if(brand)brand.textContent=config.site_name||'MERCORA';
-    const heroTitle=document.querySelector('#heroTitle');if(heroTitle&&config.hero_title)heroTitle.textContent=config.hero_title;
-    const heroCopy=document.querySelector('#heroCopy');if(heroCopy&&config.hero_copy)heroCopy.textContent=config.hero_copy;
-    const buyCta=document.querySelector('#buyCta');if(buyCta&&config.buy_cta)buyCta.textContent=config.buy_cta;
-    const sellCta=document.querySelector('#sellCta');if(sellCta&&config.sell_cta)sellCta.textContent=config.sell_cta;
-    const announcement=document.querySelector('#siteAnnouncement');
-    if(announcement&&config.announcement){announcement.textContent=config.announcement;announcement.hidden=false;}
-    const maintenance=document.querySelector('#maintenanceNotice');
-    if(maintenance&&config.site_mode==='maintenance'){
-      maintenance.textContent=config.maintenance_message||'El marketplace está temporalmente en mantenimiento.';
-      maintenance.hidden=false;
-      document.querySelectorAll('.add,.hero-actions .button-primary,#checkoutButton').forEach(el=>{el.setAttribute('aria-disabled','true');el.classList.add('disabled')});
-    }
-    if(config.site_mode==='restricted'){
-      const heroCopy=document.querySelector('.hero-copy');
-      if(heroCopy)heroCopy.textContent='Acceso restringido. Algunas funciones del marketplace no están disponibles.';
-    }
-    const sellButton=document.querySelector('#sell .button-primary');
-    if(sellButton&&config.seller_registration_enabled==='false'){sellButton.textContent='Registro de vendedores cerrado';sellButton.classList.add('disabled');sellButton.removeAttribute('href')}
-    const footerName=document.querySelector('#footerSiteName');if(footerName)footerName.textContent=config.site_name||'MERCORA';
-    const footerNotice=document.querySelector('#footerNotice');if(footerNotice&&config.footer_notice)footerNotice.textContent=config.footer_notice;
-  }catch{}
+import { applyTranslations, getLocale, t } from "./i18n.js";
+
+const ASSET_SCALE = Object.freeze({ BTC: 8, LTC: 8, XMR: 12 });
+const state = {
+  items: [],
+  categories: [],
+  cart: [],
+  locale: getLocale(),
+  query: "",
+  category: ""
+};
+
+const grid = document.querySelector("#productGrid");
+const count = document.querySelector("#resultCount");
+const message = document.querySelector("#catalogMessage");
+const catalogStatus = document.querySelector("#catalogStatus");
+const cartCount = document.querySelector("#cartCount");
+const dialog = document.querySelector("#cartDialog");
+const cartItems = document.querySelector("#cartItems");
+const cartTotal = document.querySelector("#cartTotal");
+const checkoutMessage = document.querySelector("#checkoutMessage");
+const searchInput = document.querySelector("#searchInput");
+const categoryGrid = document.querySelector("#categoryGrid");
+
+function text(value, fallback = "—") {
+  return value === null || value === undefined || value === "" ? fallback : String(value);
 }
 
-import {applyTranslations,getLocale,t} from "./i18n.js";
-const SAMPLE_ITEMS=[{id:"preview-1",title:"ThinkPad X1 Carbon Gen 9",seller_id:"northstar",currency:"EUR",price_minor:48900,category:"Computing"},{id:"preview-2",title:"Fujifilm X-T4 Body",seller_id:"grainlab",currency:"EUR",price_minor:92500,category:"Cameras"},{id:"preview-3",title:"Mechanical Keyboard — Brass Edition",seller_id:"keystatic",currency:"EUR",price_minor:17900,category:"Computing"},{id:"preview-4",title:"Vintage Desk Lamp",seller_id:"atelier7",currency:"EUR",price_minor:7400,category:"Home"},{id:"preview-5",title:"Sony WH-1000XM5",seller_id:"signalroom",currency:"EUR",price_minor:24900,category:"Electronics"},{id:"preview-6",title:"Leica M6 Strap",seller_id:"analogworks",currency:"EUR",price_minor:6200,category:"Collectibles"},{id:"preview-7",title:"Arc Utility Jacket",seller_id:"northline",currency:"EUR",price_minor:11800,category:"Clothing"},{id:"preview-8",title:"Precision Hand Tool Set",seller_id:"benchmarks",currency:"EUR",price_minor:15600,category:"Tools"}];
-const state={items:[...SAMPLE_ITEMS],cart:[],locale:getLocale()};
-const grid=document.querySelector("#productGrid"),count=document.querySelector("#resultCount"),cartCount=document.querySelector("#cartCount"),dialog=document.querySelector("#cartDialog"),cartItems=document.querySelector("#cartItems"),cartTotal=document.querySelector("#cartTotal"),searchInput=document.querySelector("#searchInput");
-function money(minor,currency){return new Intl.NumberFormat(state.locale,{style:"currency",currency}).format(Number(minor)/100)}
-function render(){applyTranslations(state.locale);if(count)count.textContent=state.items.length+" "+t("listings",state.locale);if(grid){grid.replaceChildren();for(const p of state.items){const card=document.createElement("article");card.className="product";const art=document.createElement("div");art.className="product-art";art.textContent=p.category.slice(0,3).toUpperCase();const body=document.createElement("div");body.className="product-body";const title=document.createElement("h3");title.className="product-title";title.textContent=p.title;const meta=document.createElement("div");meta.className="product-meta";meta.textContent=p.seller_id+" · "+p.currency+" · "+p.category;const foot=document.createElement("div");foot.className="product-footer";const price=document.createElement("span");price.className="price";price.textContent=money(p.price_minor,p.currency);const add=document.createElement("button");add.className="add";add.type="button";add.dataset.id=p.id;add.textContent="ADD";foot.append(price,add);body.append(title,meta,foot);card.append(art,body);grid.append(card)}}if(cartItems){cartItems.replaceChildren();let total=0;for(const item of state.cart){total+=item.price_minor*item.quantity;const row=document.createElement("div");row.className="cart-line";row.textContent=item.title+" × "+item.quantity+" — "+money(item.price_minor*item.quantity,item.currency);cartItems.append(row)}if(!state.cart.length){const e=document.createElement("p");e.className="muted";e.textContent="Your preview cart is empty.";cartItems.append(e)}cartTotal.textContent=state.cart[0]?money(total,state.cart[0].currency):"€0"}if(cartCount)cartCount.textContent=String(state.cart.reduce((n,x)=>n+x.quantity,0))}
-grid?.addEventListener("click",e=>{const b=e.target.closest("[data-id]");if(!b)return;const item=SAMPLE_ITEMS.find(x=>x.id===b.dataset.id);const existing=state.cart.find(x=>x.id===item.id);if(existing)existing.quantity+=1;else state.cart.push({...item,quantity:1});render()});
-document.querySelector("#searchForm")?.addEventListener("submit",e=>{e.preventDefault();const q=(searchInput?.value||"").trim().toLowerCase();state.items=q?SAMPLE_ITEMS.filter(p=>(p.title+" "+p.category+" "+p.seller_id).toLowerCase().includes(q)):[...SAMPLE_ITEMS];render()});
-document.querySelectorAll(".category").forEach(b=>b.addEventListener("click",()=>{state.items=SAMPLE_ITEMS.filter(p=>p.category===b.dataset.category);render()}));
-document.querySelector("#cartButton")?.addEventListener("click",()=>{render();dialog?.showModal()});document.querySelector("#closeCart")?.addEventListener("click",()=>dialog?.close());document.querySelector("#checkoutButton")?.addEventListener("click",()=>{if(state.cart.length)alert("PREVIEW: checkout simulada. No se crea ningún pedido ni pago real.")});render();
+function atomicMoney(amount, asset) {
+  const raw = String(amount ?? "0");
+  const scale = ASSET_SCALE[asset] ?? 0;
+  const negative = raw.startsWith("-");
+  const digits = negative ? raw.slice(1) : raw;
+  const padded = digits.padStart(scale + 1, "0");
+  const whole = padded.slice(0, -scale || padded.length);
+  const fraction = scale ? "." + padded.slice(-scale).replace(/0+$/, "") : "";
+  return (negative ? "-" : "") + whole + fraction + " " + text(asset);
+}
 
+function itemKey(item) {
+  return String(item.id);
+}
 
-applySiteConfig();
+async function api(path) {
+  const response = await fetch(path, { cache: "no-store", headers: { Accept: "application/json" } });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function applySiteConfig() {
+  try {
+    const config = await api("./api/site-config");
+    document.title = (config.site_name || "MERCORA") + " — Marketplace";
+    const brand = document.querySelector(".brand");
+    if (brand) brand.textContent = config.site_name || "MERCORA";
+    for (const [selector, key] of [
+      ["#heroTitle", "hero_title"], ["#heroCopy", "hero_copy"],
+      ["#buyCta", "buy_cta"], ["#sellCta", "sell_cta"]
+    ]) {
+      const node = document.querySelector(selector);
+      if (node && config[key]) node.textContent = config[key];
+    }
+
+    const announcement = document.querySelector("#siteAnnouncement");
+    if (announcement) {
+      announcement.textContent = config.announcement || "";
+      announcement.hidden = !config.announcement;
+    }
+
+    const maintenance = document.querySelector("#maintenanceNotice");
+    if (maintenance && config.site_mode === "maintenance") {
+      maintenance.textContent = config.maintenance_message || "El marketplace está temporalmente en mantenimiento.";
+      maintenance.hidden = false;
+    }
+
+    if (config.site_mode === "restricted") {
+      const copy = document.querySelector(".hero-copy");
+      if (copy) copy.textContent = "Acceso restringido. Algunas funciones del marketplace no están disponibles.";
+    }
+
+    const sellerButton = document.querySelector("#sellCta");
+    if (sellerButton && config.seller_registration_enabled === "false") {
+      sellerButton.textContent = "Registro de vendedores cerrado";
+      sellerButton.classList.add("disabled");
+      sellerButton.removeAttribute("href");
+    }
+
+    const footerName = document.querySelector("#footerSiteName");
+    const footerNotice = document.querySelector("#footerNotice");
+    if (footerName) footerName.textContent = config.site_name || "MERCORA";
+    if (footerNotice) footerNotice.textContent = config.footer_notice || "Marketplace privado";
+
+    if (config.site_mode === "maintenance") {
+      document.querySelectorAll(".add, #checkoutButton").forEach((node) => {
+        node.classList.add("disabled");
+        node.setAttribute("aria-disabled", "true");
+      });
+    }
+  } catch {
+    // The catalog continues to load independently; defaults remain visible.
+  }
+}
+
+function sellerLabel(item) {
+  const sales = text(item.verified_sales_count, "0");
+  const reviews = text(item.verified_rating_count, "0");
+  const rating = item.rating_average === null || item.rating_average === undefined
+    ? ""
+    : " · ★ " + String(item.rating_average);
+  return text(item.seller, "Vendedor") + " · ✓ " + sales + " ventas verificadas" + rating + " · " + reviews + " valoraciones";
+}
+
+function render() {
+  applyTranslations(state.locale);
+  count.textContent = state.items.length + " " + t("listings", state.locale);
+  grid.replaceChildren();
+
+  for (const item of state.items) {
+    const card = document.createElement("article");
+    card.className = "product";
+    const art = document.createElement("div");
+    art.className = "product-art";
+    art.textContent = text(item.category, "MERCORA").slice(0, 3).toUpperCase();
+
+    const body = document.createElement("div");
+    body.className = "product-body";
+
+    const title = document.createElement("h3");
+    title.className = "product-title";
+    title.textContent = text(item.title);
+
+    const meta = document.createElement("div");
+    meta.className = "product-meta";
+    const seller = document.createElement("div");
+    seller.className = "seller-reputation";
+    seller.textContent = sellerLabel(item);
+    const category = document.createElement("div");
+    category.textContent = text(item.category);
+    meta.append(seller, category);
+
+    const foot = document.createElement("div");
+    foot.className = "product-footer";
+    const price = document.createElement("span");
+    price.className = "price";
+    price.textContent = atomicMoney(item.price_atomic, item.price_asset);
+
+    const add = document.createElement("button");
+    add.className = "add";
+    add.type = "button";
+    add.dataset.id = itemKey(item);
+    add.textContent = "AÑADIR";
+    foot.append(price, add);
+
+    body.append(title, meta, foot);
+    card.append(art, body);
+    grid.append(card);
+  }
+
+  message.hidden = state.items.length !== 0;
+  if (!state.items.length) message.textContent = "No hay anuncios publicados con estos criterios.";
+  renderCart();
+}
+
+function renderCategories() {
+  categoryGrid.replaceChildren();
+  for (const category of state.categories) {
+    const button = document.createElement("button");
+    button.className = "category";
+    button.dataset.category = category.slug;
+    button.textContent = category.name;
+    button.addEventListener("click", () => loadListings({ category: category.slug }));
+    categoryGrid.append(button);
+  }
+}
+
+async function loadListings({ query = state.query, category = state.category } = {}) {
+  state.query = query;
+  state.category = category;
+  catalogStatus.textContent = "CARGANDO";
+  message.hidden = true;
+  try {
+    const params = new URLSearchParams({ limit: "48" });
+    if (query) params.set("q", query);
+    if (category) params.set("category", category);
+    const response = await api("./api/listings?" + params.toString());
+    state.items = Array.isArray(response.listings) ? response.listings : [];
+    catalogStatus.textContent = "CONECTADO";
+    render();
+  } catch (error) {
+    state.items = [];
+    catalogStatus.textContent = "NO DISPONIBLE";
+    count.textContent = "—";
+    message.hidden = false;
+    message.textContent = "El catálogo no está disponible en este momento.";
+    grid.replaceChildren();
+    console.error(error);
+  }
+}
+
+async function loadCategories() {
+  try {
+    const response = await api("./api/categories");
+    state.categories = Array.isArray(response.categories) ? response.categories : [];
+    renderCategories();
+  } catch (error) {
+    categoryGrid.replaceChildren();
+    console.error(error);
+  }
+}
+
+function renderCart() {
+  cartItems.replaceChildren();
+  if (!state.cart.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "El carrito está vacío.";
+    cartItems.append(empty);
+    cartTotal.textContent = "—";
+  } else {
+    const assets = new Set();
+    let total = null;
+    for (const item of state.cart) {
+      assets.add(item.price_asset);
+      const row = document.createElement("div");
+      row.className = "cart-line";
+      row.textContent = text(item.title) + " × " + item.quantity + " — " + atomicMoney(BigInt(item.price_atomic) * BigInt(item.quantity), item.price_asset);
+      cartItems.append(row);
+      if (total === null) total = BigInt(item.price_atomic) * BigInt(item.quantity);
+      else if (assets.size === 1) total += BigInt(item.price_atomic) * BigInt(item.quantity);
+    }
+    cartTotal.textContent = assets.size === 1
+      ? atomicMoney(String(total), [...assets][0])
+      : "Varios activos";
+  }
+  cartCount.textContent = String(state.cart.reduce((sum, item) => sum + item.quantity, 0));
+}
+
+grid.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-id]");
+  if (!button) return;
+  const item = state.items.find((candidate) => itemKey(candidate) === button.dataset.id);
+  if (!item) return;
+  const existing = state.cart.find((candidate) => candidate.id === item.id);
+  if (existing) existing.quantity += 1;
+  else state.cart.push({ ...item, quantity: 1 });
+  renderCart();
+});
+
+document.querySelector("#searchForm")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  loadListings({ query: searchInput?.value.trim() || "", category: "" });
+});
+
+document.querySelector("#clearCategory")?.addEventListener("click", () => loadListings({ category: "" }));
+document.querySelector("#cartButton")?.addEventListener("click", () => {
+  renderCart();
+  dialog?.showModal();
+});
+document.querySelector("#closeCart")?.addEventListener("click", () => dialog?.close());
+document.querySelector("#checkoutButton")?.addEventListener("click", () => {
+  checkoutMessage.textContent = state.cart.length
+    ? "El pedido requiere una cuenta y el flujo transaccional del backend."
+    : "Añade al menos un anuncio al carrito.";
+});
+
+Promise.all([applySiteConfig(), loadCategories(), loadListings()]);
