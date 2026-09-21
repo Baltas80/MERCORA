@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { createWriteStream, createReadStream } from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { Transform } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 
 const COMPOSE = ['compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.onion.yml'];
@@ -79,7 +80,7 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
       '-v','ON_ERROR_STOP=1','-f','/docker-entrypoint-initdb.d/004_admin_management.sql'
     ]));
   }
-  async function ensureBackupDir(){ await fs.mkdir(backupDir,{recursive:true}); }
+  async function ensureBackupDir(){ await fs.mkdir(backupDir,{recursive:true,mode:0o700}); }
   async function listBackups(){
     await ensureBackupDir();
     const names=await fs.readdir(backupDir);
@@ -101,18 +102,24 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     const output=createWriteStream(destination,{flags:'wx',mode:0o600});
     let bytes=0; const errors=[];
     child.stderr.on('data',chunk=>{if(Buffer.byteLength(errors.join(''))<65536)errors.push(chunk.toString())});
+    const limiter=new Transform({
+      transform(chunk,encoding,callback){
+        bytes+=chunk.length;
+        if(bytes>MAX_BACKUP_BYTES) return callback(new Error('backup size limit exceeded'));
+        callback(null,chunk);
+      }
+    });
     const streamDone=new Promise((resolve,reject)=>{
       output.on('error',reject);
+      limiter.on('error',reject);
       child.on('error',reject);
       child.on('close',code=>resolve(code));
     });
-    child.stdout.on('data',chunk=>{
-      bytes+=chunk.length;
-      if(bytes>MAX_BACKUP_BYTES){child.kill('SIGTERM');return;}
-      output.write(chunk);
-    });
-    const code=await streamDone;
-    await new Promise(resolve=>output.end(resolve));
+    child.stdout.pipe(limiter).pipe(output);
+    let code;
+    try { code=await streamDone; }
+    catch(error){ child.kill('SIGTERM'); await new Promise(resolve=>output.end(resolve)); await fs.rm(destination,{force:true}); throw new Error(clean(error.message)); }
+    await new Promise((resolve,reject)=>output.on('close',resolve).on('error',reject));
     if(code!==0 || bytes>MAX_BACKUP_BYTES){
       await fs.rm(destination,{force:true});
       throw new Error(clean(errors.join(' ')||'database backup failed'));
