@@ -163,12 +163,27 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     if(confirm!=='RESTORE_MERCORA') throw new Error('restore confirmation required');
     const safe=validateBackupId(id);
     await fs.stat(path.join(backupDir,safe));
-    const safety=await backupDb();
-    const result=await withBackupInput(safe,COMPOSE.concat([
-      'exec','-T','postgres','pg_restore','--clean','--if-exists','--no-owner','-U','mercora','-d','mercora'
-    ]));
-    await recordAudit('RESTORE_DB','backup',safe,{pre_restore_backup:safety.id,ok:result.ok});
-    return {ok:result.ok,backup_id:safe,pre_restore_backup:safety.id,diagnostic:commandResult(result)};
+    const stop=await runCommand(COMPOSE.concat(['stop','app']));
+    if(!stop.ok) throw new Error(clean(stop.stderr || stop.stdout || 'unable to stop backend safely'));
+    let safety;
+    let result;
+    let start;
+    try {
+      safety=await backupDb();
+      result=await withBackupInput(safe,COMPOSE.concat([
+        'exec','-T','postgres','pg_restore','--clean','--if-exists','--no-owner','-U','mercora','-d','mercora'
+      ]));
+    } finally {
+      start=await runCommand(COMPOSE.concat(['start','app']));
+    }
+    await recordAudit('RESTORE_DB','backup',safe,{pre_restore_backup:safety?.id || null,ok:Boolean(result?.ok),backend_restarted:Boolean(start?.ok)});
+    return {
+      ok:Boolean(result?.ok && start?.ok),
+      backup_id:safe,
+      pre_restore_backup:safety?.id || null,
+      backend_restart:commandResult(start || {ok:false,code:null,stdout:'',stderr:'not attempted'}),
+      diagnostic:commandResult(result || {ok:false,code:null,stdout:'',stderr:'restore not attempted'})
+    };
   }
 
   return Object.freeze({logs,metrics,migrateDb,backupDb,listBackups,verifyBackup,restoreBackup});
