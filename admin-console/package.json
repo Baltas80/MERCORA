@@ -1,0 +1,14 @@
+{
+  "name": "mercora-admin-console",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MERCORA desktop administration console",
+  "scripts": {
+    "tauri": "tauri",
+    "build": "tauri build",
+    "dev": "tauri dev"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.6.2"
+  }
+}
