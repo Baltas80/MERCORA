@@ -12,6 +12,7 @@ export const ACTIONS = Object.freeze([
 const COMPOSE_BASE = Object.freeze(['compose', '-f', 'docker-compose.yml']);
 const ONION_COMPOSE = 'docker-compose.onion.yml';
 const ALLOWED_SERVICES = new Set(['app', 'postgres', 'tor']);
+const REQUIRED_SERVICES = Object.freeze(['app', 'postgres', 'tor']);
 const SENSITIVE = /(password|secret|token|seed|private.?key|mnemonic|authorization)/i;
 
 function cleanDiagnostic(text = '') {
@@ -57,6 +58,11 @@ function state(ok, positive = 'ONLINE') {
   return ok ? positive : 'OFFLINE';
 }
 
+function runningServices(stdout = '') {
+  const actual = new Set(String(stdout).split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+  return REQUIRED_SERVICES.every((service) => actual.has(service));
+}
+
 export function createAdminController({
   cwd = path.resolve(process.cwd()),
   runner = defaultRunner,
@@ -80,7 +86,7 @@ export function createAdminController({
       node: state(checks[0]?.ok),
       postgresql: state(checks[3]?.ok),
       backend: state(checks[4]?.ok),
-      tor: state(checks[2]?.ok),
+      tor: state(checks[2]?.ok && checks[5]?.ok),
       onionService: state(checks[5]?.ok, 'CONFIGURED'),
       storage: state(checks[6]?.ok, 'OK'),
       health: state(health.ok, 'OK'),
@@ -111,7 +117,18 @@ export function createAdminController({
     const checks = [];
     checks.push(await probe('node', ['--version'], { cwd }));
     checks.push(await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd }));
-    checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps'], { cwd }).then(sanitizeResult));
+
+    const composeServices = await runner(
+      'docker',
+      [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps', '--status', 'running', '--services'],
+      { cwd }
+    );
+    const composeCheck = sanitizeResult({
+      ...composeServices,
+      ok: Boolean(composeServices?.ok) && runningServices(composeServices?.stdout)
+    });
+    checks.push(composeCheck);
+
     checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'], { cwd }).then(sanitizeResult));
     checks.push(await backendProbeFn());
     checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd }).then(sanitizeResult));
