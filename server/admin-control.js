@@ -43,7 +43,7 @@ function isLoopback(address) {
 
 function redactDiagnostics(value) {
   return String(value ?? "")
-    .replace(/(MERCORA_ADMIN_CONTROL_TOKEN|POSTGRES_PASSWORD|DATABASE_URL)=\\S+/gi, "$1=[REDACTED]")
+    .replace(/(MERCORA_ADMIN_CONTROL_TOKEN|POSTGRES_PASSWORD|DATABASE_URL)=\S+/gi, "$1=[REDACTED]")
     .replace(/Bearer\\s+\\S+/gi, "Bearer [REDACTED]");
 }
 
@@ -95,7 +95,7 @@ function runAction(action) {
 
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
-      finish({ ok: false, code: null, stdout: redactDiagnostics(stdout.slice(-4000)), stderr: `${stderr.slice(-3500)}\noperation_timeout` });
+      finish({ ok: false, code: null, stdout: redactDiagnostics(stdout.slice(-4000)), stderr: redactDiagnostics(`${stderr.slice(-3500)}\noperation_timeout`) });
     }, ACTION_TIMEOUT_MS);
   });
 }
