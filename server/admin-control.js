@@ -44,7 +44,7 @@ function isLoopback(address) {
 function redactDiagnostics(value) {
   return String(value ?? "")
     .replace(/(MERCORA_ADMIN_CONTROL_TOKEN|POSTGRES_PASSWORD|DATABASE_URL)=\S+/gi, "$1=[REDACTED]")
-    .replace(/Bearer\\s+\\S+/gi, "Bearer [REDACTED]");
+    .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]");
 }
 
 function authorized(req) {
