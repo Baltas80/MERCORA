@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::Mutex;
@@ -6,6 +6,8 @@ use tauri::State;
 
 struct AdminToken(Mutex<Option<String>>);
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
+const CONTROL_HOST: &str = "127.0.0.1";
+const CONTROL_PORT: &str = "8787";
 
 fn valid_token(token: &str) -> bool {
     !token.trim().is_empty() && token.len() <= 512 && !token.bytes().any(|b| b == b'\r' || b == b'\n')
@@ -13,6 +15,30 @@ fn valid_token(token: &str) -> bool {
 
 fn allowed_endpoint(method: &str, path: &str) -> bool {
     matches!((method, path), ("GET", "/api/admin/status") | ("POST", "/api/admin/action"))
+}
+
+fn action_payload(method: &str, path: &str, body: &str) -> Result<String, String> {
+    if method == "GET" && path == "/api/admin/status" {
+        return Ok(json!({ "action": "STATUS" }).to_string());
+    }
+
+    let input: Value = serde_json::from_str(body).map_err(|_| "Invalid administrative request JSON".to_string())?;
+    let action = input.get("action")
+        .and_then(Value::as_str)
+        .map(|value| value.to_uppercase())
+        .ok_or_else(|| "Administrative action is required".to_string())?;
+    if !matches!(action.as_str(), "START" | "STOP" | "RESTART" | "STATUS" | "HEALTH_CHECK" | "RECOVER") {
+        return Err("Unsupported administrative action".into());
+    }
+
+    let service = input.get("service").and_then(Value::as_str);
+    if let Some(service) = service {
+        if !matches!(service, "app" | "postgres" | "tor") {
+            return Err("Unsupported administrative service".into());
+        }
+        return Ok(json!({ "action": action, "service": service }).to_string());
+    }
+    Ok(json!({ "action": action }).to_string())
 }
 
 #[tauri::command]
@@ -31,21 +57,17 @@ fn clear_token(state: State<'_, AdminToken>) -> Result<(), String> {
 #[tauri::command]
 fn admin_request(state: State<'_, AdminToken>, method: String, path: String, body: Option<String>) -> Result<String, String> {
     if !allowed_endpoint(&method, &path) { return Err("Administrative endpoint is not allow-listed".into()); }
-    let payload = body.unwrap_or_default();
-    if payload.len() > 8 * 1024 { return Err("Administrative request body is too large".into()); }
+    let payload = action_payload(&method, &path, body.as_deref().unwrap_or("{}"))?;
     let token = state.0.lock().map_err(|_| "Token state unavailable")?.clone().ok_or_else(|| "Not authenticated".to_string())?;
     if !valid_token(&token) { return Err("Invalid stored admin token".into()); }
 
-    let mut stream = TcpStream::connect_timeout(&"127.0.0.1:8090".parse().map_err(|_| "Invalid control endpoint")?, std::time::Duration::from_secs(3))
+    let address = format!("{CONTROL_HOST}:{CONTROL_PORT}");
+    let mut stream = TcpStream::connect_timeout(&address.parse().map_err(|_| "Invalid control endpoint")?, std::time::Duration::from_secs(3))
         .map_err(|e| format!("Admin Control API unavailable: {e}"))?;
     stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).map_err(|e| format!("Unable to configure read timeout: {e}"))?;
     stream.set_write_timeout(Some(std::time::Duration::from_secs(5))).map_err(|e| format!("Unable to configure write timeout: {e}"))?;
 
-    let request = if method == "POST" {
-        format!("POST {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}", payload.as_bytes().len())
-    } else {
-        format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n")
-    };
+    let request = format!("POST /v1/control HTTP/1.1\r\nHost: {CONTROL_HOST}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}", payload.as_bytes().len());
     stream.write_all(request.as_bytes()).map_err(|e| format!("Request failed: {e}"))?;
 
     let mut response = Vec::with_capacity(4096);
@@ -59,7 +81,9 @@ fn admin_request(state: State<'_, AdminToken>, method: String, path: String, bod
     let response = String::from_utf8(response).map_err(|_| "Admin API response is not valid UTF-8".to_string())?;
     let body_start = response.find("\r\n\r\n").ok_or_else(|| "Malformed Admin API response".to_string())? + 4;
     let status_line = response.lines().next().unwrap_or("");
-    if !status_line.starts_with("HTTP/1.1 200 ") { return Err(format!("Admin API error: {status_line}")); }
+    if !status_line.starts_with("HTTP/1.1 200 ") && !status_line.starts_with("HTTP/1.1 503 ") {
+        return Err(format!("Admin API error: {status_line}"));
+    }
     let response_body = &response[body_start..];
     let _: Value = serde_json::from_str(response_body).map_err(|_| "Invalid Admin API JSON".to_string())?;
     Ok(response_body.to_string())
