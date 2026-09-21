@@ -21,208 +21,29 @@
 
 <section id="app-shell" class="hidden">
   <aside class="sidebar">
-    <div class="sidebar-brand">MERCORA</div>
-    <div class="sidebar-sub">ADMIN</div>
+    <div class="sidebar-brand">MERCORA</div><div class="sidebar-sub">ADMIN</div>
     <nav id="nav">
-      <button class="nav-item active" data-view="dashboard">Dashboard</button>
-      <button class="nav-item" data-view="users">Usuarios</button>
-      <button class="nav-item" data-view="stores">Tiendas</button>
-      <button class="nav-item" data-view="listings">Anuncios</button>
-      <button class="nav-item" data-view="orders">Pedidos</button>
-      <button class="nav-item" data-view="escrow">Escrow / Pagos</button>
-      <button class="nav-item" data-view="reports">Reportes</button>
-      <button class="nav-item" data-view="promos">Promociones</button>
-      <button class="nav-item" data-view="discounts">Descuentos</button>
-      <button class="nav-item" data-view="categories">Categorías</button>
-      <button class="nav-item" data-view="website">Web</button>
-      <button class="nav-item" data-view="audit">Auditoría</button>
-      <button class="nav-item" data-view="system">Sistema</button>
+      <button class="nav-item active" data-view="dashboard">Dashboard</button><button class="nav-item" data-view="users">Usuarios</button><button class="nav-item" data-view="stores">Tiendas</button><button class="nav-item" data-view="listings">Anuncios</button><button class="nav-item" data-view="orders">Pedidos</button><button class="nav-item" data-view="escrow">Escrow / Pagos</button><button class="nav-item" data-view="reports">Reportes</button><button class="nav-item" data-view="promos">Promociones</button><button class="nav-item" data-view="discounts">Descuentos</button><button class="nav-item" data-view="categories">Categorías</button><button class="nav-item" data-view="website">Web</button><button class="nav-item" data-view="audit">Auditoría</button><button class="nav-item" data-view="system">Sistema</button>
     </nav>
-    <div class="sidebar-footer">
-      <button id="refresh-all" class="secondary full">ACTUALIZAR</button>
-      <button id="logout" class="secondary full">BLOQUEAR</button>
-    </div>
+    <div class="sidebar-footer"><button id="refresh-all" class="secondary full">ACTUALIZAR</button><button id="logout" class="secondary full">BLOQUEAR</button></div>
   </aside>
-
   <main class="main">
-    <header class="topbar">
-      <div>
-        <div id="page-eyebrow" class="eyebrow">MERCORA / ADMIN</div>
-        <h2 id="page-title">Dashboard</h2>
-      </div>
-      <span id="system-badge" class="badge unknown">UNKNOWN</span>
-    </header>
-
-    <section id="view-dashboard" class="view">
-      <div id="metric-grid" class="metric-grid"></div>
-      <section class="card">
-        <div class="section-head"><div><div class="eyebrow">INFRAESTRUCTURA</div><h3>Estado del sistema</h3></div><button id="dashboard-health" class="secondary">HEALTH CHECK</button></div>
-        <div id="system-grid" class="system-grid"></div>
-        <pre id="system-output" class="console-output">Listo.</pre>
-      </section>
-    </section>
-
-    <section id="view-users" class="view hidden">
-      <section class="card">
-        <div class="section-head"><div><div class="eyebrow">CUENTAS</div><h3>Usuarios</h3></div><button data-reload="users" class="secondary">ACTUALIZAR</button></div>
-        <div class="toolbar"><input id="users-q" placeholder="Buscar usuario…" maxlength="80"><button id="users-search">BUSCAR</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Estado</th><th>Baneado</th><th>Creado</th><th>Acciones</th></tr></thead><tbody id="users-table"></tbody></table></div>
-      </section>
-    </section>
-
-    <section id="view-stores" class="view hidden">
-      <div class="two-col">
-        <section class="card"><div class="eyebrow">NUEVA TIENDA</div><h3>Crear tienda</h3><form id="store-create" class="form-grid">
-          <label>Nombre<input name="name" maxlength="120" required></label>
-          <label>Slug<input name="slug" maxlength="63" pattern="[a-z0-9-]+" required></label>
-          <label>Propietario (usuario)<input name="owner_username" maxlength="80"></label>
-          <label>Estado<select name="status"><option value="draft">draft</option><option value="active">active</option></select></label>
-          <button type="submit">CREAR TIENDA</button>
-        </form></section>
-        <section class="card"><div class="eyebrow">ADJUDICACIÓN</div><h3>Asignar tienda</h3><form id="store-assign" class="form-grid">
-          <label>ID de tienda<input name="store_id" maxlength="36" required></label>
-          <label>Usuario propietario<input name="owner_username" maxlength="80" required></label>
-          <button type="submit">ASIGNAR Y ACTIVAR</button>
-        </form></section>
-      </div>
-      <section class="card"><div class="section-head"><h3>Tiendas</h3><button data-reload="stores" class="secondary">ACTUALIZAR</button></div><div class="toolbar"><input id="stores-q" placeholder="Buscar tienda…" maxlength="80"><button id="stores-search">BUSCAR</button></div><div class="table-wrap"><table><thead><tr><th>Tienda</th><th>Propietario</th><th>Estado</th><th>Actualizada</th><th>Acciones</th></tr></thead><tbody id="stores-table"></tbody></table></div></section>
-    </section>
-
-    <section id="view-listings" class="view hidden">
-      <section class="card"><div class="section-head"><h3>Anuncios</h3><button data-reload="listings" class="secondary">ACTUALIZAR</button></div>
-        <div class="toolbar"><input id="listings-q" placeholder="Buscar anuncio o vendedor…" maxlength="80"><select id="listings-status"><option value="">Todos</option><option>active</option><option>blocked</option><option>archived</option><option>draft</option></select><button id="listings-search">BUSCAR</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Anuncio</th><th>Vendedor</th><th>Tienda</th><th>Categoría</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="listings-table"></tbody></table></div>
-      </section>
-    </section>
-
-    <section id="view-orders" class="view hidden">
-      <section class="card"><div class="section-head"><h3>Pedidos</h3><button data-reload="orders" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Pedido</th><th>Comprador</th><th>Total</th><th>Items</th><th>Estado</th><th>Acción</th></tr></thead><tbody id="orders-table"></tbody></table></div></section>
-    </section>
-
-    <section id="view-escrow" class="view hidden">
-      <section class="card">
-        <div class="section-head"><div><div class="eyebrow">PAGOS Y LIQUIDACIÓN</div><h3>Política de Escrow</h3><p class="muted">La consola configura y autoriza. La liquidación monetaria final la ejecuta el servicio de custodia.</p></div><div class="buttons"><span id="custody-badge" class="badge unknown">CUSTODY UNKNOWN</span><button id="custody-freeze" class="danger">CONGELAR CUSTODIA</button><button id="custody-unfreeze" class="secondary">REANUDAR CUSTODIA</button></div></div>
-        <form id="escrow-policy" class="form-grid wide">
-          <label>Escrow general<select name="escrow_enabled"><option value="true">ACTIVADO</option><option value="false">DESACTIVADO</option></select></label>
-          <label>Mid-Escrow<select name="mid_escrow_enabled"><option value="true">ACTIVADO</option><option value="false">DESACTIVADO</option></select></label>
-          <label>Mid-Escrow (% del total)<input name="mid_release_percent" type="number" min="1" max="99" step="0.01" value="50"></label>
-          <label>Early Pay<select name="early_pay_enabled"><option value="true">ACTIVADO</option><option value="false">DESACTIVADO</option></select></label>
-          <label>Early Pay espera (horas)<input name="early_pay_delay_hours" type="number" min="0" max="8760" value="24"></label>
-          <label>Early Pay máximo (% total)<input name="early_pay_max_percent" type="number" min="1" max="99" step="0.01" value="80"></label>
-          <label>Ventana de disputa (horas)<input name="dispute_window_hours" type="number" min="0" max="8760" value="48"></label>
-          <label>Auto-release (horas)<input name="auto_release_hours" type="number" min="0" max="8760" value="72"></label>
-          <label>Escrow obligatorio para vendedores nuevos<select name="new_seller_escrow_required"><option value="true">SÍ</option><option value="false">NO</option></select></label>
-          <label>Retención nuevos vendedores (horas)<input name="new_seller_hold_hours" type="number" min="0" max="8760" value="168"></label>
-          <label>Revisión por importe alto<select name="high_value_review_enabled"><option value="true">SÍ</option><option value="false">NO</option></select></label>
-          <label>Umbral importe alto (atomic)<input name="high_value_threshold_atomic" inputmode="numeric" value="0"></label>
-          <label>Requiere release manual<select name="manual_release_required"><option value="true">SÍ</option><option value="false">NO</option></select></label>
-          <button type="submit">GUARDAR POLÍTICA</button>
-        </form>
-        <pre id="escrow-policy-output" class="console-output">Cargando…</pre>
-      </section>
-      <section class="card">
-        <div class="section-head"><div><h3>Escrows</h3><p class="muted">Cada caso muestra fondos retenidos, liberados, reembolsados y autorizaciones pendientes.</p></div><button id="escrow-refresh" class="secondary">ACTUALIZAR</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Pedido</th><th>Comprador</th><th>Importe retenido</th><th>Liberado</th><th>Reembolsado</th><th>Estado</th><th>Estado pedido</th><th>Gestión</th></tr></thead><tbody id="escrow-table"></tbody></table></div>
-      </section>
-      <section class="card">
-        <div class="section-head"><h3>Autorizaciones</h3><button id="escrow-auth-refresh" class="secondary">ACTUALIZAR</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Pedido</th><th>Acción</th><th>Importe</th><th>Actor</th><th>Estado</th><th>Motivo</th></tr></thead><tbody id="escrow-auth-table"></tbody></table></div>
-      </section>
-    </section>
-
-    <section id="view-reports" class="view hidden">
-      <section class="card"><div class="section-head"><h3>Reportes y moderación</h3><button data-reload="reports" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Reporte</th><th>Anuncio</th><th>Motivo</th><th>Reportero</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="reports-table"></tbody></table></div></section>
-    </section>
-
-    <section id="view-promos" class="view hidden">
-      <div class="two-col">
-        <section class="card"><div class="eyebrow">CÓDIGOS</div><h3>Crear promoción</h3><form id="promo-create" class="form-grid">
-          <label>Código (vacío = generar)<input name="code" maxlength="64"></label>
-          <label>Tipo<select name="discount_type"><option value="percent">Porcentaje</option><option value="fixed">Cantidad fija</option></select></label>
-          <label>Porcentaje (basis points)<input name="discount_bps" type="number" min="1" max="10000"></label>
-          <label>Cantidad fija (atomic units)<input name="discount_atomic" inputmode="numeric"></label>
-          <label>Activo/currency<input name="discount_asset" maxlength="12" placeholder="BTC/XMR/LTC"></label>
-          <label>Máx. usos<input name="max_redemptions" type="number" min="1"></label>
-          <label>Mínimo de pedido (atomic)<input name="min_order_atomic" inputmode="numeric" value="0"></label>
-          <label>Comienza<input name="starts_at" type="datetime-local"></label>
-          <label>Termina<input name="ends_at" type="datetime-local"></label>
-          <button type="submit">CREAR CÓDIGO</button>
-        </form><div id="promo-once" class="one-time hidden"></div></section>
-        <section class="card"><div class="eyebrow">REGLAS DE DESCUENTO</div><h3>Crear descuento</h3><form id="discount-create" class="form-grid">
-          <label>Objetivo<select name="target_type"><option value="global">Global</option><option value="store">Tienda</option><option value="listing">Anuncio</option><option value="category">Categoría</option></select></label>
-          <label>ID objetivo<input name="target_id" maxlength="36"></label>
-          <label>Tipo<select name="discount_type"><option value="percent">Porcentaje</option><option value="fixed">Cantidad fija</option></select></label>
-          <label>Porcentaje (basis points)<input name="discount_bps" type="number" min="1" max="10000"></label>
-          <label>Cantidad fija (atomic)<input name="discount_atomic" inputmode="numeric"></label>
-          <label>Activo/currency<input name="discount_asset" maxlength="12" placeholder="BTC/XMR/LTC"></label>
-          <label>Comienza<input name="starts_at" type="datetime-local"></label>
-          <label>Termina<input name="ends_at" type="datetime-local"></label>
-          <button type="submit">CREAR DESCUENTO</button>
-        </form></section>
-      </div>
-      <section class="card"><div class="section-head"><h3>Códigos activos</h3><button data-reload="promos" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Prefijo</th><th>Tipo</th><th>Descuento</th><th>Usos</th><th>Vigencia</th><th>Estado</th><th></th></tr></thead><tbody id="promos-table"></tbody></table></div></section>
-      <section class="card"><div class="section-head"><h3>Descuentos directos</h3><button data-reload="discounts" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Objetivo</th><th>Tipo</th><th>Descuento</th><th>Vigencia</th><th>Estado</th><th></th></tr></thead><tbody id="discounts-table"></tbody></table></div></section>
-    </section>
-
-    <section id="view-discounts" class="view hidden"><div class="card"><h3>Descuentos</h3><p class="muted">La gestión se encuentra en el módulo Promociones.</p><button data-view-jump="promos">ABRIR PROMOCIONES</button></div></section>
-
-    <section id="view-categories" class="view hidden">
-      <div class="two-col"><section class="card"><div class="eyebrow">CATÁLOGO</div><h3>Nueva categoría</h3><form id="category-create" class="form-grid">
-        <label>Nombre<input name="name" maxlength="120" required></label><label>Slug<input name="slug" maxlength="63" pattern="[a-z0-9-]+" required></label><button type="submit">CREAR</button>
-      </form></section><section class="card"><div class="eyebrow">ESTADO</div><h3>Control rápido</h3><p class="muted">Activa o desactiva categorías sin tocar código.</p></section></div>
-      <section class="card"><div class="section-head"><h3>Categorías</h3><button data-reload="categories" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Slug</th><th>Activa</th><th>Acción</th></tr></thead><tbody id="categories-table"></tbody></table></div></section>
-    </section>
-
-    <section id="view-website" class="view hidden">
-      <section class="card"><div class="eyebrow">GESTIÓN DE WEB</div><h3>Configuración pública</h3><form id="site-settings" class="form-grid wide">
-        <label>Nombre del sitio<input name="site_name" maxlength="120"></label>
-        <label>Modo<select name="site_mode"><option value="public">public</option><option value="maintenance">maintenance</option><option value="restricted">restricted</option></select></label>
-        <label class="span2">Aviso<input name="announcement" maxlength="4000"></label>
-        <label class="span2">Mensaje de mantenimiento<input name="maintenance_message" maxlength="4000"></label>
-        <label>Nuevos anuncios<select name="new_listings_enabled"><option>true</option><option>false</option></select></label>
-        <label>Registro de vendedores<select name="seller_registration_enabled"><option>true</option><option>false</option></select></label>
-        <label class="span2">Aviso de pie<input name="footer_notice" maxlength="4000"></label>
-        <label class="span2">Título de portada<input name="hero_title" maxlength="180"></label>
-        <label class="span2">Descripción de portada<textarea name="hero_copy" rows="3" maxlength="600"></textarea></label>
-        <label>CTA comprar<input name="buy_cta" maxlength="80"></label>
-        <label>CTA vender<input name="sell_cta" maxlength="80"></label>
-        <button type="submit">GUARDAR WEB</button>
-      </form></section>
-      <section class="card"><div class="section-head"><div><h3>Destacados de portada</h3><p class="muted">Selecciona los anuncios que quieres mostrar en portada (máximo 48).</p></div><button data-reload="featured" class="secondary">ACTUALIZAR</button></div><select id="featured-picker" class="featured-picker" multiple size="12" aria-label="Anuncios destacados"></select><button id="featured-save">GUARDAR DESTACADOS</button><div id="featured-list" class="mini-list"></div></section>
-    </section>
-
-    <section id="view-audit" class="view hidden">
-      <section class="card"><div class="section-head"><h3>Auditoría administrativa</h3><button data-reload="audit" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Actor</th><th>Acción</th><th>Recurso</th><th>Metadatos</th></tr></thead><tbody id="audit-table"></tbody></table></div></section>
-    </section>
-
-    <section id="view-system" class="view hidden">
-      <section class="card"><div class="section-head"><div><div class="eyebrow">CONTROL OPERATIVO</div><h3>MERCORA</h3></div><span id="system-overall" class="badge unknown">UNKNOWN</span></div>
-        <div class="buttons"><button data-control="START" data-service="app">START MERCORA</button><button data-control="RESTART" data-service="app">RESTART MERCORA</button><button data-control="STOP" data-service="app" class="danger">STOP MERCORA</button><button data-control="START" data-service="tor">START TOR</button><button data-control="RESTART" data-service="tor">RESTART TOR</button><button data-control="RECOVER" class="secondary">RECOVER</button><button data-control="HEALTH_CHECK" class="secondary">HEALTH CHECK</button></div>
-        <pre id="system-control-output" class="console-output">Listo.</pre>
-      </section>
-      <div class="two-col">
-        <section class="card">
-          <div class="section-head"><div><div class="eyebrow">OBSERVABILIDAD</div><h3>Logs y métricas</h3></div></div>
-          <div class="toolbar"><select id="logs-service"><option value="app">Backend</option><option value="postgres">PostgreSQL</option><option value="tor">Tor</option></select><input id="logs-lines" type="number" min="1" max="500" value="100"><button id="logs-load">VER LOGS</button></div>
-          <pre id="logs-output" class="console-output">Selecciona un servicio.</pre>
-          <button id="metrics-load" class="secondary">ACTUALIZAR MÉTRICAS</button>
-          <pre id="metrics-output" class="console-output">Sin datos.</pre>
-        </section>
-        <section class="card">
-          <div class="section-head"><div><div class="eyebrow">MANTENIMIENTO</div><h3>Base de datos</h3></div></div>
-          <div class="buttons">
-            <button id="migrate-db">MIGRAR BD</button>
-            <button id="backup-db">CREAR BACKUP</button>
-            <button id="list-backups" class="secondary">LISTAR BACKUPS</button>
-          </div>
-          <div class="toolbar"><select id="backup-select"><option value="">Selecciona backup…</option></select><button id="verify-backup" class="secondary">VERIFICAR</button><button id="restore-backup" class="danger">RESTAURAR</button></div>
-          <pre id="backup-output" class="console-output">No se ha ejecutado ninguna operación.</pre>
-        </section>
-      </div>
-    </section>
+    <header class="topbar"><div><div id="page-eyebrow" class="eyebrow">MERCORA / ADMIN</div><h2 id="page-title">Dashboard</h2></div><span id="system-badge" class="badge unknown">UNKNOWN</span></header>
+    <section id="view-dashboard" class="view"><div id="metric-grid" class="metric-grid"></div><section class="card"><div class="section-head"><div><div class="eyebrow">INFRAESTRUCTURA</div><h3>Estado del sistema</h3></div><button id="dashboard-health" class="secondary">HEALTH CHECK</button></div><div id="system-grid" class="system-grid"></div><pre id="system-output" class="console-output">Listo.</pre></section></section>
+    <section id="view-users" class="view hidden"><section class="card"><div class="section-head"><div><div class="eyebrow">CUENTAS</div><h3>Usuarios</h3></div><button data-reload="users" class="secondary">ACTUALIZAR</button></div><div class="toolbar"><input id="users-q" placeholder="Buscar usuario…" maxlength="80"><button id="users-search">BUSCAR</button></div><div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Estado</th><th>Baneado</th><th>Creado</th><th>Acciones</th></tr></thead><tbody id="users-table"></tbody></table></div></section></section>
+    <section id="view-stores" class="view hidden"><div class="two-col"><section class="card"><div class="eyebrow">NUEVA TIENDA</div><h3>Crear tienda</h3><form id="store-create" class="form-grid"><label>Nombre<input name="name" maxlength="120" required></label><label>Slug<input name="slug" maxlength="63" pattern="[a-z0-9-]+" required></label><label>Propietario (usuario)<input name="owner_username" maxlength="80"></label><label>Estado<select name="status"><option value="draft">draft</option><option value="active">active</option></select></label><button type="submit">CREAR TIENDA</button></form></section><section class="card"><div class="eyebrow">ADJUDICACIÓN</div><h3>Asignar tienda</h3><form id="store-assign" class="form-grid"><label>ID de tienda<input name="store_id" maxlength="36" required></label><label>Usuario propietario<input name="owner_username" maxlength="80" required></label><button type="submit">ASIGNAR Y ACTIVAR</button></form></section></div><section class="card"><div class="section-head"><h3>Tiendas</h3><button data-reload="stores" class="secondary">ACTUALIZAR</button></div><div class="toolbar"><input id="stores-q" placeholder="Buscar tienda…" maxlength="80"><button id="stores-search">BUSCAR</button></div><div class="table-wrap"><table><thead><tr><th>Tienda</th><th>Propietario</th><th>Estado</th><th>Actualizada</th><th>Acciones</th></tr></thead><tbody id="stores-table"></tbody></table></div></section></section>
+    <section id="view-listings" class="view hidden"><section class="card"><div class="section-head"><h3>Anuncios</h3><button data-reload="listings" class="secondary">ACTUALIZAR</button></div><div class="toolbar"><input id="listings-q" placeholder="Buscar anuncio o vendedor…" maxlength="80"><select id="listings-status"><option value="">Todos</option><option>active</option><option>blocked</option><option>archived</option><option>draft</option></select><button id="listings-search">BUSCAR</button></div><div class="table-wrap"><table><thead><tr><th>Anuncio</th><th>Vendedor</th><th>Tienda</th><th>Categoría</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="listings-table"></tbody></table></div></section></section>
+    <section id="view-orders" class="view hidden"><section class="card"><div class="section-head"><h3>Pedidos</h3><button data-reload="orders" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Pedido</th><th>Comprador</th><th>Total</th><th>Items</th><th>Estado</th><th>Acción</th></tr></thead><tbody id="orders-table"></tbody></table></div></section></section>
+    <section id="view-escrow" class="view hidden"><section class="card"><h3>Política de Escrow</h3><p class="muted">La consola configura y autoriza. La liquidación monetaria final la ejecuta el servicio de custodia.</p><form id="escrow-policy" class="form-grid wide"><label>Escrow general<select name="escrow_enabled"><option value="true">ACTIVADO</option><option value="false">DESACTIVADO</option></select></label><label>Mid-Escrow<select name="mid_escrow_enabled"><option value="true">ACTIVADO</option><option value="false">DESACTIVADO</option></select></label><label>Mid-Escrow (%)<input name="mid_release_percent" type="number" min="1" max="99" step="0.01"></label><label>Early Pay<select name="early_pay_enabled"><option value="true">ACTIVADO</option><option value="false">DESACTIVADO</option></select></label><label>Early Pay espera<input name="early_pay_delay_hours" type="number" min="0" max="8760"></label><label>Early Pay máximo<input name="early_pay_max_percent" type="number" min="1" max="99"></label><label>Ventana disputa<input name="dispute_window_hours" type="number" min="0" max="8760"></label><label>Auto-release<input name="auto_release_hours" type="number" min="0" max="8760"></label><button type="submit">GUARDAR POLÍTICA</button></form><pre id="escrow-policy-output" class="console-output">Cargando…</pre></section><section class="card"><div class="section-head"><h3>Escrows</h3><button id="escrow-refresh" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Pedido</th><th>Comprador</th><th>Importe</th><th>Liberado</th><th>Reembolsado</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="escrow-table"></tbody></table></div></section><section class="card"><h3>Autorizaciones</h3><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Pedido</th><th>Acción</th><th>Importe</th><th>Actor</th><th>Estado</th></tr></thead><tbody id="escrow-auth-table"></tbody></table></div></section></section>
+    <section id="view-reports" class="view hidden"><section class="card"><div class="section-head"><h3>Reportes y moderación</h3><button data-reload="reports" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Reporte</th><th>Anuncio</th><th>Motivo</th><th>Reportero</th><th>Estado</th><th>Gestión</th></tr></thead><tbody id="reports-table"></tbody></table></div></section></section>
+    <section id="view-promos" class="view hidden"><section class="card"><h3>Promociones y descuentos</h3><p class="muted">Gestión de códigos y reglas de descuento.</p><button data-view-jump="promos">ABRIR</button></section><section class="card"><div class="section-head"><h3>Códigos activos</h3><button data-reload="promos" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Prefijo</th><th>Tipo</th><th>Descuento</th><th>Usos</th><th>Estado</th><th></th></tr></thead><tbody id="promos-table"></tbody></table></div></section></section>
+    <section id="view-discounts" class="view hidden"><div class="card"><h3>Descuentos</h3><p class="muted">La gestión se encuentra en el módulo Promociones.</p></div></section>
+    <section id="view-categories" class="view hidden"><section class="card"><h3>Categorías</h3><form id="category-create" class="form-grid"><label>Nombre<input name="name" maxlength="120" required></label><label>Slug<input name="slug" maxlength="63" required></label><button type="submit">CREAR</button></form></section><section class="card"><div class="section-head"><h3>Categorías</h3><button data-reload="categories" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Slug</th><th>Activa</th><th>Acción</th></tr></thead><tbody id="categories-table"></tbody></table></div></section></section>
+    <section id="view-website" class="view hidden"><section class="card"><div class="eyebrow">GESTIÓN DE WEB</div><h3>Configuración pública</h3><form id="site-settings" class="form-grid wide"><label>Nombre del sitio<input name="site_name" maxlength="120"></label><label>Modo<select name="site_mode"><option value="public">public</option><option value="maintenance">maintenance</option><option value="restricted">restricted</option></select></label><label class="span2">Aviso<input name="announcement" maxlength="4000"></label><label class="span2">Mensaje de mantenimiento<input name="maintenance_message" maxlength="4000"></label><label>Nuevos anuncios<select name="new_listings_enabled"><option>true</option><option>false</option></select></label><label>Registro de vendedores<select name="seller_registration_enabled"><option>true</option><option>false</option></select></label><label class="span2">Aviso de pie<input name="footer_notice" maxlength="4000"></label><label class="span2">Título de portada<input name="hero_title" maxlength="180"></label><label class="span2">Descripción de portada<textarea name="hero_copy" rows="3" maxlength="600"></textarea></label><label>CTA comprar<input name="buy_cta" maxlength="80"></label><label>CTA vender<input name="sell_cta" maxlength="80"></label><button type="submit">GUARDAR WEB</button></form></section><section class="card"><div class="section-head"><div><h3>Destacados de portada</h3><p class="muted">Máximo 48.</p></div><button data-reload="featured" class="secondary">ACTUALIZAR</button></div><select id="featured-picker" class="featured-picker" multiple size="12"></select><button id="featured-save">GUARDAR DESTACADOS</button><div id="featured-list" class="mini-list"></div></section></section>
+    <section id="view-audit" class="view hidden"><section class="card"><div class="section-head"><h3>Auditoría administrativa</h3><button data-reload="audit" class="secondary">ACTUALIZAR</button></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Actor</th><th>Acción</th><th>Recurso</th><th>Metadatos</th></tr></thead><tbody id="audit-table"></tbody></table></div></section></section>
+    <section id="view-system" class="view hidden"><section class="card"><div class="section-head"><div><div class="eyebrow">CONTROL OPERATIVO</div><h3>MERCORA</h3></div><span id="system-overall" class="badge unknown">UNKNOWN</span></div><div class="buttons"><button data-control="START" data-service="app">START MERCORA</button><button data-control="RESTART" data-service="app">RESTART MERCORA</button><button data-control="STOP" data-service="app" class="danger">STOP MERCORA</button><button data-control="START" data-service="tor">START TOR</button><button data-control="RESTART" data-service="tor">RESTART TOR</button><button data-control="RECOVER" class="secondary">RECOVER</button><button data-control="HEALTH_CHECK" class="secondary">HEALTH CHECK</button></div><pre id="system-control-output" class="console-output">Listo.</pre></section><div class="two-col"><section class="card"><h3>Logs y métricas</h3><div class="toolbar"><select id="logs-service"><option value="app">Backend</option><option value="postgres">PostgreSQL</option><option value="tor">Tor</option></select><input id="logs-lines" type="number" min="1" max="500" value="100"><button id="logs-load">VER LOGS</button></div><pre id="logs-output" class="console-output">Selecciona un servicio.</pre><button id="metrics-load" class="secondary">ACTUALIZAR MÉTRICAS</button><pre id="metrics-output" class="console-output">Sin datos.</pre></section><section class="card"><h3>Base de datos</h3><div class="buttons"><button id="migrate-db">MIGRAR BD</button><button id="backup-db">CREAR BACKUP</button><button id="list-backups" class="secondary">LISTAR BACKUPS</button></div><div class="toolbar"><select id="backup-select"><option value="">Selecciona backup…</option></select><button id="verify-backup" class="secondary">VERIFICAR</button><button id="restore-backup" class="danger">RESTAURAR</button></div><pre id="backup-output" class="console-output">No se ha ejecutado ninguna operación.</pre></section></div></section>
   </main>
 </section>
-<script src="app.js"></script>
-<script src="reputation.js"></script>
+<script src="app.js"></script><script src="reputation.js"></script><script src="content-editor.js"></script>
 </body>
 </html>
