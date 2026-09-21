@@ -120,3 +120,46 @@ El código administrativo queda integrado y preparado para la infraestructura re
 La consola administra una configuración pública controlada (runtime/site-config.json) que el servidor expone mediante el endpoint de solo lectura /api/site-config. La misma pantalla permite editar título, descripción y textos de llamada a la acción de la portada, además de avisos y modo de mantenimiento. La aplicación pública puede aplicar nombre, avisos, modo de mantenimiento y restricciones de registro sin ejecutar contenido administrativo arbitrario.
 
 El directorio runtime se monta en el contenedor de aplicación como solo lectura. La configuración generada se excluye de Git. La preview de GitHub Pages continúa siendo una superficie estática aislada y no se considera una instalación de producción.
+
+## Escrow / Mid-Escrow / Early Pay
+
+La consola dispone de un módulo dedicado de pagos y liquidación.
+
+- Escrow: activa o desactiva la retención para pedidos elegibles y permite abrir casos asociados a pedidos ya pagados.
+- Mid-Escrow: permite autorizar una liberación parcial tras el estado shipped. El porcentaje se configura en la política.
+- Early Pay: permite autorizar una liberación anticipada después de un retraso configurable y con un máximo porcentual.
+- Release final: autoriza la parte restante al completar el pedido o al finalizar la ventana de disputa configurada.
+- Refund: permite autorizar un reembolso cuando el pedido está cancelado o disputado.
+- Freeze: congela un caso concreto y expira las autorizaciones pendientes.
+- Custody Freeze: congela el plano de custodia global desde la consola; las operaciones de liquidación deben respetar este estado.
+
+Las autorizaciones financieras son deliberadamente distintas de la ejecución. escrow_authorizations funciona como cola auditable para que el servicio aislado de settlement/custody ejecute el movimiento mediante el ledger de doble entrada. La consola no modifica ledger_entries ni saldos.
+
+### Parámetros que conviene controlar desde la consola
+
+Escrow activo, Mid-Escrow activo, porcentaje de Mid-Escrow, Early Pay activo, espera de Early Pay, porcentaje máximo de Early Pay, ventana de disputa, auto-release, obligación de escrow para vendedores nuevos, retención de vendedores nuevos, revisión por importe alto, umbral de importe alto y liberación final manual.
+
+### Política operativa inicial propuesta
+
+Para una primera puesta en producción usaría Escrow activado, Mid-Escrow al 50%, ventana de disputa de 48 horas y Early Pay desactivado hasta validar el flujo real. Después puede activarse únicamente para vendedores con historial suficiente, con un límite de Early Pay conservador y revisión manual de operaciones de importe alto.
+
+Estos valores son política operativa configurable; no forman parte de una garantía de seguridad o de liquidez.
+
+## Control integral recomendado
+
+La consola debería quedar organizada en doce áreas:
+
+1. Dashboard: salud, ventas, pedidos, escrow, retiros, reportes y alertas.
+2. Usuarios: cuentas, sesiones, baneos, historial y actividad.
+3. Vendedores/Tiendas: adjudicación, estado, límites y rendimiento.
+4. Catálogo: anuncios, categorías, destacados y moderación.
+5. Pedidos: estados, disputas y trazabilidad.
+6. Pagos/Escrow: políticas, casos, autorizaciones, Mid-Escrow, Early Pay y reembolsos.
+7. Tesorería/Custodia: depósitos, retiros, reconciliación y exposición por activo, siempre como control separado del ledger.
+8. Riesgo: límites, operaciones de importe alto, velocidad, cuentas nuevas y señales de abuso.
+9. Promociones: códigos, descuentos, campañas y vigencias.
+10. Web/CMS: portada, avisos, mantenimiento y contenido controlado.
+11. Operaciones: Docker, Tor, logs, métricas, backups y recuperación.
+12. Seguridad/Auditoría: cambios administrativos, alertas, eventos de seguridad y revisiones.
+
+Para las funciones financieras y destructivas recomiendo además RBAC + MFA, con al menos perfiles Owner, Finance, Moderator, Support, Operations y Read-only; y doble aprobación para retiros, releases o reembolsos importantes, cambio de custodia y restauraciones. Esto evita que la comodidad de tener todo en una sola consola se convierta en un único punto de fallo.
