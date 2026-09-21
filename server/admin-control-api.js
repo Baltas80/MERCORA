@@ -6,7 +6,6 @@ import { createAdminReputation } from './admin-reputation.js';
 import { createAdminSystem } from './admin-system.js';
 import { createAdminEscrow } from './admin-escrow.js';
 import { createAdminContent } from './admin-content.js';
-import { createAdminContent } from './admin-content.js';
 
 const ACTIONS = new Set(['START','STOP','RESTART','STATUS','HEALTH_CHECK','RECOVER']);
 const SERVICES = new Set(['app','postgres','tor']);
