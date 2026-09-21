@@ -186,9 +186,9 @@ export function createAdminEscrow({
     const rowResult=await row(
       "INSERT INTO order_escrows(order_id,asset_code,escrowed_atomic,state,release_available_at,dispute_until) VALUES("+
       sqlString(orderId)+"::uuid,"+sqlString(order.total_asset)+","+sqlString(String(order.total_atomic))+",'held',"+
-      "(order.updated_at+make_interval(hours=>"+String(order.auto_release_hours)+")),"+
-      "(order.updated_at+make_interval(hours=>"+String(order.dispute_window_hours)+"))"+
-      ") RETURNING order_id,asset_code,escrowed_atomic,released_atomic,refunded_atomic,state,opened_at,release_available_at,dispute_until"
+      "("+sqlString(order.updated_at)+"::timestamptz+make_interval(hours=>"+String(order.auto_release_hours)+")),"+
+      "("+sqlString(order.updated_at)+"::timestamptz+make_interval(hours=>"+String(order.dispute_window_hours)+"))"+
+      ") RETURNING order_id,asset_code,escrowed_atomic::text AS escrowed_atomic,released_atomic::text AS released_atomic,refunded_atomic::text AS refunded_atomic,state,opened_at,release_available_at,dispute_until"
     );
     await audit(orderId,'OPEN_ESCROW',{amount_atomic:String(order.total_atomic),asset:order.total_asset});
     return rowResult;
