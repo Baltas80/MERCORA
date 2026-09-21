@@ -6,3 +6,4 @@
 
 .product-title a:hover{color:var(--gold)}
 .listing-page{max-width:1000px;margin:0 auto}.listing-detail{display:grid;grid-template-columns:1fr 1fr;gap:30px}.listing-art{min-height:420px;display:grid;place-items:center;background:var(--panel-2);border:1px solid var(--line);color:var(--gold);font-size:4rem}.listing-copy h1{font-size:clamp(2.4rem,5vw,4.5rem)}.listing-description{white-space:pre-wrap;color:var(--muted);line-height:1.8}.listing-price{font-size:1.5rem;font-weight:800;color:var(--gold);margin:24px 0}.seller-card{border-top:1px solid var(--line);padding-top:20px;margin-top:20px}.seller-card strong{color:var(--text)}@media(max-width:760px){.listing-detail{grid-template-columns:1fr}}
+.seller-profile{margin-top:28px;max-width:900px}.seller-profile h1{margin-bottom:12px}.seller-profile .hero-copy{margin:0}
