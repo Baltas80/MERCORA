@@ -58,12 +58,21 @@ export function createPublicData({
 }={}){
   async function query(sql,variables={}){
     if(!databaseUrl) throw new Error('database is not configured');
-    const args=['--dbname',databaseUrl,'-X','-q','-At','-v','ON_ERROR_STOP=1'];
-    for(const [key,value] of Object.entries(variables)){
-      args.push('-v',key+'='+String(value));
-    }
+    let connection;
+    try { connection = new URL(databaseUrl); }
+    catch { throw new Error('database configuration is invalid'); }
+    if(!['postgres:','postgresql:'].includes(connection.protocol)) throw new Error('database configuration is invalid');
+    const database = decodeURIComponent(connection.pathname.replace(/^\\//,''));
+    if(!connection.hostname || !database) throw new Error('database configuration is invalid');
+    const args=['-X','-q','-At','-v','ON_ERROR_STOP=1','--host',connection.hostname,'--port',connection.port||'5432','--username',decodeURIComponent(connection.username),'--dbname',database];
+    for(const [key,value] of Object.entries(variables)) args.push('-v',key+'='+String(value));
     args.push('-c',sql);
-    const result=await runner('psql',args,{});
+    const env={
+      ...process.env,
+      PGAPPNAME:'mercora-public',
+      PGPASSWORD:decodeURIComponent(connection.password||'')
+    };
+    const result=await runner('psql',args,{env});
     if(!result.ok) throw new Error(cleanDiagnostic(result.stderr||result.stdout||'database query failed'));
     return String(result.stdout||'').trim();
   }
