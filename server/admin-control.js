@@ -124,7 +124,7 @@ function checkPostgres() {
         host = db.hostname || host;
         port = db.port || port;
         user = decodeURIComponent(db.username || user);
-        database = db.pathname.replace(/^\\//, "") || database;
+        database = db.pathname.replace(/^\//, "") || database;
       } catch {
         // Fall back to explicit PG* variables without exposing the URL.
       }
