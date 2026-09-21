@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPublicData } from "./public-data.js";
+import { createAuthApi } from "./auth/api.js";
+import { createSellerApi } from "./seller/api.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "web");
@@ -113,11 +115,6 @@ function publicError(error, fallback) {
 const server = http.createServer(async (req, res) => {
   for (const [name, value] of Object.entries(securityHeaders())) res.setHeader(name, value);
 
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    res.writeHead(405, { Allow: "GET, HEAD" });
-    return res.end();
-  }
-
   if (!rateAllowed(req.socket)) {
     res.writeHead(429, { "Retry-After": "60" });
     return res.end("Too Many Requests");
@@ -126,6 +123,36 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
 
   try {
+    if(url.pathname==="/api/auth/register"||url.pathname==="/api/auth/login"||url.pathname==="/api/auth/logout"){
+      if(req.method!=="POST")return sendJson(res,405,{error:"method not allowed"},{Allow:"POST"});
+      if(!authRateAllowed(req.socket)){res.writeHead(429,{"Retry-After":"60"});return res.end("Too Many Authentication Attempts");}
+      const body=await readJson(req);
+      if(url.pathname==="/api/auth/register"){
+        const result=await auth.register(body);
+        return sendJson(res,201,{account:result.account},{"Set-Cookie":result.session.cookie});
+      }
+      if(url.pathname==="/api/auth/login"){
+        const result=await auth.login(body);
+        return sendJson(res,200,{account:result.account},{"Set-Cookie":result.session.cookie});
+      }
+      await auth.logout(cookieValue(req,"mercora_session"));
+      return sendJson(res,200,{ok:true},{"Set-Cookie":clearSessionCookie()});
+    }
+    if(req.method==="GET"&&url.pathname==="/api/auth/me"){
+      const account=await auth.me(cookieValue(req,"mercora_session"));
+      return sendJson(res,200,{account});
+    }
+    if(url.pathname==="/api/seller"||url.pathname==="/api/seller/store"||url.pathname==="/api/seller/listings"||url.pathname==="/api/seller/listings/status"){
+      const account=await auth.me(cookieValue(req,"mercora_session"));
+      if(!account)return sendJson(res,401,{error:"authentication required"});
+      if(account.status!=="active")return sendJson(res,403,{error:"account is not active"});
+      if(req.method==="GET"&&url.pathname==="/api/seller")return sendJson(res,200,await seller.current(account.id));
+      if(req.method!=="POST")return sendJson(res,405,{error:"method not allowed"},{Allow:"GET, POST"});
+      const body=await readJson(req);
+      if(url.pathname==="/api/seller/store")return sendJson(res,201,await seller.createStore(account.id,body));
+      if(url.pathname==="/api/seller/listings/status")return sendJson(res,200,await seller.setListingStatus(account.id,body));
+      return sendJson(res,201,await seller.createListing(account.id,body));
+    }
     if (url.pathname === "/api/healthz") return sendJson(res, 200, { status: "ok" });
     if (url.pathname === "/api/version") return sendJson(res, 200, { service: "mercora", api: "v1" });
 
@@ -160,11 +187,17 @@ const server = http.createServer(async (req, res) => {
       if (!seller) return sendJson(res, 404, { error: "seller not found" });
       return sendJson(res, 200, seller);
     }
-  } catch (error) {
-    const status = /invalid|too long|format/i.test(String(error?.message || "")) ? 400 : 503;
-    return sendJson(res, status, { error: publicError(error, "public API unavailable") });
+  } catch(error) {
+    let status=503;
+    if(error.code==="CONFLICT")status=409;
+    else if(error.code==="AUTH_FAILED")status=401;
+    else if(error.code==="ACCOUNT_BLOCKED")status=403;
+    else if(error.code==="PAYLOAD_TOO_LARGE")status=413;
+    else if(error.code==="BAD_JSON"||/must contain|invalid|unsupported|not found|too long|format|already/.test(String(error.message||"")))status=400;
+    return sendJson(res,status,{error:publicError(error,"request failed")});
   }
 
+  if(req.method!=="GET"&&req.method!=="HEAD"){res.writeHead(405,{Allow:"GET, HEAD, POST"});return res.end();}
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
 
   if (requested.includes("..") || requested.includes("\\") || requested.includes("%")) {
