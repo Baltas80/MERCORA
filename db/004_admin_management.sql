@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS mercora_stores (
 CREATE INDEX IF NOT EXISTS idx_mercora_stores_owner ON mercora_stores(owner_account_id);
 CREATE INDEX IF NOT EXISTS idx_mercora_stores_status ON mercora_stores(status);
 
+ALTER TABLE listings
+  ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES mercora_stores(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_listings_store_status
+  ON listings(store_id, status);
+
 CREATE TABLE IF NOT EXISTS store_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   store_id UUID NOT NULL REFERENCES mercora_stores(id) ON DELETE CASCADE,
