@@ -25,7 +25,9 @@ test('logs only accepts the fixed service allowlist',async()=>{
   assert.equal(result.stdout,'safe log line');
   assert.ok(calls.at(-1).args.includes('tor'));
   await assert.rejects(()=>system.logs('bash',25),/unsupported service/);
-  assert.equal(calls.length,1);
+  assert.equal(calls.length,0);
+  assert.equal(streamCalls.length,1);
+  assert.equal(streamCalls[0].file,'docker');
 });
 
 test('metrics uses compose IDs and a fixed docker stats format',async()=>{
@@ -58,10 +60,11 @@ test('verify backup accepts only managed files',async()=>{
   const id='mercora-20260921T171000Z-abcdef123456.dump';
   await fs.writeFile(path.join(dir,id),'placeholder');
   const {runner,calls}=fakeRunnerFactory();
+  const streamCalls=[];
   const system=createAdminSystem({
     runner,
     backupDir:dir,
-    streamRunner:async()=>({ok:true,code:0,stdout:'archive valid',stderr:''})
+    streamRunner:async(args)=>{streamCalls.push(args);return{ok:true,code:0,stdout:'archive valid',stderr:''}}
   });
   const result=await system.verifyBackup(id);
   assert.equal(result.id,id);
