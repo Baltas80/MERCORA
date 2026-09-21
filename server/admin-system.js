@@ -100,7 +100,8 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
       '-f','/docker-entrypoint-initdb.d/004_admin_management.sql',
       '-f','/docker-entrypoint-initdb.d/005_escrow.sql',
       '-f','/docker-entrypoint-initdb.d/006_reputation.sql',
-      '-f','/docker-entrypoint-initdb.d/007_site_content_versions.sql'
+      '-f','/docker-entrypoint-initdb.d/007_site_content_versions.sql',
+      '-f','/docker-entrypoint-initdb.d/008_site_legal_content.sql'
     ]));
   }
   async function ensureBackupDir(){ await fs.mkdir(backupDir,{recursive:true,mode:0o700}); }
