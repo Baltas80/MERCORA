@@ -22,6 +22,7 @@ function tokenMatches(received, expected){
 
 export function createAdminApi({ controller, management, reputation: reputationOverride, system: systemOverride, escrow: escrowOverride, token, host='127.0.0.1', port=8787 } = {}){
   if(!token || token.length < 32) throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
+  if(!localAddress(host)) throw new Error('Admin Control API must bind to localhost only');
   const control = controller ?? createAdminController();
   const manage = management ?? createAdminManagement();
   const reputation = reputationOverride ?? createAdminReputation();
