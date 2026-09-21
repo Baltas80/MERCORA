@@ -2,6 +2,7 @@ import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { createAdminController } from './admin-control.js';
 import { createAdminManagement } from './admin-management.js';
+import { createAdminReputation } from './admin-reputation.js';
 import { createAdminSystem } from './admin-system.js';
 import { createAdminEscrow } from './admin-escrow.js';
 
@@ -19,10 +20,11 @@ function tokenMatches(received, expected){
   return a.length === b.length && timingSafeEqual(a,b);
 }
 
-export function createAdminApi({ controller, management, system: systemOverride, escrow: escrowOverride, token, host='127.0.0.1', port=8787 } = {}){
+export function createAdminApi({ controller, management, reputation: reputationOverride, system: systemOverride, escrow: escrowOverride, token, host='127.0.0.1', port=8787 } = {}){
   if(!token || token.length < 32) throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
   const control = controller ?? createAdminController();
   const manage = management ?? createAdminManagement();
+  const reputation = reputationOverride ?? createAdminReputation();
   const system = systemOverride ?? createAdminSystem();
   const escrow = escrowOverride ?? createAdminEscrow();
 
@@ -50,8 +52,12 @@ export function createAdminApi({ controller, management, system: systemOverride,
         let managementError = null;
         try { managementState = await manage.run('OVERVIEW',{}); }
         catch(error){ managementError = String(error.message || 'database unavailable').slice(0,500); }
-        res.writeHead(managementError ? 200 : 200);
-        return res.end(JSON.stringify({system,management:managementState,managementError}));
+        let reputationState = null;
+        let reputationError = null;
+        try { reputationState = await reputation.run('OVERVIEW',{}); }
+        catch(error){ reputationError = String(error.message || 'reputation database unavailable').slice(0,500); }
+        res.writeHead(200);
+        return res.end(JSON.stringify({system,management:managementState,managementError,reputation:reputationState,reputationError}));
       }catch(error){
         res.writeHead(503); return res.end(JSON.stringify({error:String(error.message || 'overview failed')}));
       }
@@ -83,6 +89,13 @@ export function createAdminApi({ controller, management, system: systemOverride,
       if(req.method === 'POST' && url.pathname === '/v1/management'){
         const action = String(input.action || '').toUpperCase();
         const result = await manage.run(action,input.payload || {});
+        res.writeHead(200);
+        return res.end(JSON.stringify({ok:true,action,result}));
+      }
+
+      if(req.method === 'POST' && url.pathname === '/v1/reputation'){
+        const action = String(input.action || '').toUpperCase();
+        const result = await reputation.run(action,input.payload || {});
         res.writeHead(200);
         return res.end(JSON.stringify({ok:true,action,result}));
       }
