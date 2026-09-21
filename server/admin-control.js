@@ -92,13 +92,15 @@ export function createAdminController({
 
     const target = service ?? 'app';
     const steps = [];
-    steps.push({ step: `restart:${target}`, result: await run('RESTART', target) });
-    if (!steps.at(-1).result.ok) {
+    const restart = await run('RESTART', target);
+    steps.push({ step: `restart:${target}`, result: restart });
+    if (!restart.ok) {
       steps.push({ step: `start:${target}`, result: await run('START', target) });
     }
-    steps.push({ step: 'health', result: await healthCheck() });
+    const health = await healthCheck();
+    steps.push({ step: 'health', result: health });
     return {
-      ok: steps.every((entry) => entry.result.ok),
+      ok: health.ok && (restart.ok || steps[1]?.result.ok === true),
       target,
       steps
     };
