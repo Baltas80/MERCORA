@@ -112,7 +112,7 @@ export function createAdminEscrow({
   }
 
   async function getPolicy(){
-    return row("SELECT row_to_json(x) FROM (SELECT id,escrow_enabled,mid_escrow_enabled,mid_release_bps,early_pay_enabled,early_pay_delay_hours,early_pay_max_bps,dispute_window_hours,auto_release_hours,new_seller_escrow_required,new_seller_hold_hours,high_value_review_enabled,high_value_threshold_atomic,manual_release_required,updated_at,updated_by FROM escrow_policies WHERE id=1) x");
+    return row("SELECT row_to_json(x) FROM (SELECT id,escrow_enabled,mid_escrow_enabled,mid_release_bps,early_pay_enabled,early_pay_delay_hours,early_pay_max_bps,dispute_window_hours,auto_release_hours,new_seller_escrow_required,new_seller_hold_hours,high_value_review_enabled,high_value_threshold_atomic::text AS high_value_threshold_atomic,manual_release_required,updated_at,updated_by FROM escrow_policies WHERE id=1) x");
   }
   async function setPolicy(payload={}){
     const keys=Object.keys(payload).filter(k=>POLICY_KEYS.has(k));
@@ -152,8 +152,8 @@ export function createAdminEscrow({
     if(payload.state!==undefined&&payload.state!==null&&!CASE_STATES.has(payload.state)) throw new Error('unsupported escrow state filter');
     return json(
       "SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.updated_at DESC),'[]'::json)::text FROM ("+
-      "SELECT e.order_id,e.asset_code,e.escrowed_atomic,e.released_atomic,e.refunded_atomic,e.state,e.opened_at,e.release_available_at,e.dispute_until,e.updated_at,"+
-      "o.status AS order_status,o.buyer_account_id,a.username AS buyer_username,o.total_atomic,o.total_asset,"+
+      "SELECT e.order_id,e.asset_code,e.escrowed_atomic::text AS escrowed_atomic,e.released_atomic::text AS released_atomic,e.refunded_atomic::text AS refunded_atomic,e.state,e.opened_at,e.release_available_at,e.dispute_until,e.updated_at,"+
+      "o.status AS order_status,o.buyer_account_id,a.username AS buyer_username,o.total_atomic::text AS total_atomic,o.total_asset,"+
       "EXISTS(SELECT 1 FROM escrow_authorizations ea WHERE ea.order_id=e.order_id AND ea.state='authorized') AS has_pending_authorization "+
       "FROM order_escrows e JOIN orders o ON o.id=e.order_id JOIN accounts a ON a.id=o.buyer_account_id "+
       where+" ORDER BY e.updated_at DESC LIMIT "+String(limit)+" OFFSET "+String(offset)+") x"
@@ -284,7 +284,7 @@ export function createAdminEscrow({
     const offset=integer(payload.offset??0,'offset',0,100000);
     return json(
       "SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.created_at DESC),'[]'::json)::text FROM ("+
-      "SELECT ea.id,ea.order_id,ea.action,ea.amount_atomic,ea.actor,ea.reason,ea.state,ea.created_at,ea.executed_at,o.status AS order_status "+
+      "SELECT ea.id,ea.order_id,ea.action,ea.amount_atomic::text AS amount_atomic,ea.actor,ea.reason,ea.state,ea.created_at,ea.executed_at,o.status AS order_status "+
       "FROM escrow_authorizations ea JOIN orders o ON o.id=ea.order_id ORDER BY ea.created_at DESC LIMIT "+String(limit)+" OFFSET "+String(offset)+") x"
     );
   }
