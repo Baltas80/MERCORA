@@ -518,3 +518,5 @@ document.querySelector('#featured-save').addEventListener('click',async()=>{
 });
 ['pointerdown','keydown'].forEach(n=>document.addEventListener(n,()=>{if(authenticated)activity()},{passive:true}));
 if(!invoke){loginError.textContent='La consola debe ejecutarse dentro de Tauri.';loginError.hidden=false}
+
+// Admin console release surface: management modules are intentionally kept behind explicit allowlisted actions.
