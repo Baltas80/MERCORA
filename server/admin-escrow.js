@@ -98,6 +98,8 @@ export function createAdminEscrow({
     );
   }
   async function authorized(orderId,action,amount,reason){
+    const boundedReason=reason===null||reason===undefined?'':String(reason);
+    if(boundedReason.length>1000) throw new Error('authorization reason is too long');
     const existing=await row(
       "SELECT id FROM escrow_authorizations WHERE order_id="+sqlString(orderId)+"::uuid AND state='authorized' LIMIT 1"
     );
@@ -105,7 +107,7 @@ export function createAdminEscrow({
     const rowResult=await row(
       "INSERT INTO escrow_authorizations(order_id,action,amount_atomic,actor,reason) VALUES("+
       sqlString(orderId)+"::uuid,"+sqlString(action)+","+
-      (amount===null?'NULL':sqlString(amount))+","+sqlString(actor)+","+sqlNullable(reason)+
+      (amount===null?'NULL':sqlString(amount))+","+sqlString(actor)+","+sqlNullable(boundedReason)+
       ") RETURNING id,order_id,action,amount_atomic,actor,reason,state,created_at"
     );
     return rowResult;
@@ -115,7 +117,10 @@ export function createAdminEscrow({
     return row("SELECT row_to_json(x) FROM (SELECT id,escrow_enabled,mid_escrow_enabled,mid_release_bps,early_pay_enabled,early_pay_delay_hours,early_pay_max_bps,dispute_window_hours,auto_release_hours,new_seller_escrow_required,new_seller_hold_hours,high_value_review_enabled,high_value_threshold_atomic::text AS high_value_threshold_atomic,manual_release_required,updated_at,updated_by FROM escrow_policies WHERE id=1) x");
   }
   async function setPolicy(payload={}){
-    const keys=Object.keys(payload).filter(k=>POLICY_KEYS.has(k));
+    const allKeys=Object.keys(payload);
+    const unknown=allKeys.filter(k=>!POLICY_KEYS.has(k));
+    if(unknown.length) throw new Error('unsupported escrow policy key');
+    const keys=allKeys.filter(k=>POLICY_KEYS.has(k));
     if(!keys.length) throw new Error('no escrow policy changes supplied');
     const sets=[];
     const meta={};
@@ -139,10 +144,12 @@ export function createAdminEscrow({
   }
   async function setCustodyState(payload={}){
     if(payload.value!=='normal' && payload.value!=='frozen') throw new Error('unsupported custody mode');
+    const reason=String(payload.reason||'Administrative custody control');
+    if(reason.length>500) throw new Error('custody reason is too long');
     const current=await getCustodyState();
     if(current?.value===payload.value) return current;
     await db("INSERT INTO system_state(key,value,updated_at) VALUES('custody_mode',"+sqlString(payload.value)+",now()) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now()");
-    await audit(null,'SET_CUSTODY_MODE',{from:current?.value||null,to:payload.value,reason:payload.reason||'Administrative custody control'});
+    await audit(null,'SET_CUSTODY_MODE',{from:current?.value||null,to:payload.value,reason});
     return getCustodyState();
   }
   async function listCases(payload={}){
