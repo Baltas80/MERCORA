@@ -7,7 +7,7 @@ const token = 'x'.repeat(32);
 function makeApi(overrides={}){
   return createAdminApi({
     token,
-    controller:{run:async()=>({ok:true}),healthCheck:async()=>({ok:true})},
+    controller:{run:async()=>({ok:true}),healthCheck:async()=>({ok:true}),status:async()=>({ok:true,mercora:'ONLINE',node:'ONLINE',postgresql:'ONLINE',backend:'ONLINE',tor:'ONLINE',onionService:'CONFIGURED',storage:'OK',health:'OK'})},
     management:{run:async(action,payload)=>({action,payload})},
     reputation:{run:async(action,payload)=>({action,payload})},
     system:{logs:async()=>({ok:true}),metrics:async()=>({ok:true}),migrateDb:async()=>({ok:true}),backupDb:async()=>({ok:true,id:'backup'}),listBackups:async()=>[],verifyBackup:async()=>({ok:true}),restoreBackup:async()=>({ok:true})},
@@ -196,5 +196,17 @@ test('content endpoint dispatches explicit versioned actions',async()=>{
   const body=await response.json();
   assert.equal(body.result.id,7);
   assert.deepEqual(received,{action:'UPDATE',payload:{site_key:'announcement',value:'hello'}});
+  api.server.close();
+});
+
+test('overview returns structured system status for the console dashboard',async()=>{
+  const api=makeApi();
+  const address=await start(api);
+  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/overview',{headers:{authorization:'Bearer '+token}});
+  const body=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(body.system.mercora,'ONLINE');
+  assert.equal(body.system.postgresql,'ONLINE');
+  assert.equal(body.system.tor,'ONLINE');
   api.server.close();
 });
