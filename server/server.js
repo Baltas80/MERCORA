@@ -9,7 +9,11 @@ const RUNTIME_CONFIG = path.join(ROOT, "runtime", "site-config.json");
 const DEFAULT_SITE_CONFIG = Object.freeze({
   site_name: "MERCORA", site_mode: "public", announcement: "",
   maintenance_message: "", new_listings_enabled: "true",
-  seller_registration_enabled: "true", footer_notice: ""
+  seller_registration_enabled: "true", footer_notice: "",
+  hero_title: "Buy. Sell. Keep control.",
+  hero_copy: "A second-hand marketplace built around privacy, strong security boundaries and a clean buying experience.",
+  buy_cta: "Browse listings",
+  sell_cta: "List an item"
 });
 const HOST = process.env.HOST ?? "127.0.0.1";
 const PORT = Number(process.env.PORT ?? "8080");
