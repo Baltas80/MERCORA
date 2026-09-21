@@ -194,8 +194,9 @@ async function loadCategories(){
 async function loadWebsite(){
   const settings=await management('SITE_GET');const form=document.querySelector('#site-settings');
   Object.keys(settings).forEach(k=>{const el=form.elements[k];if(el)el.value=settings[k]});
-  const featured=await management('SET_FEATURED',{listing_ids:[]}); // returns current only when reset is avoided below
-  return featured;
+  const featured=await management('LIST_FEATURED');
+  document.querySelector('#featured-ids').value=featured.map(x=>x.listing_id).join('\n');
+  document.querySelector('#featured-list').textContent=featured.map(x=>x.position+'. '+x.title).join(' | ');
 }
 async function loadAudit(){
   const data=await management('LIST_AUDIT',{limit:100});const tbody=document.querySelector('#audit-table');tbody.replaceChildren();
