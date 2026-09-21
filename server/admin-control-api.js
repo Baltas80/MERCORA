@@ -42,11 +42,15 @@ export function createAdminApi({ controller, token, host = '127.0.0.1', port = 8
     }
 
     let body = '';
+    let oversized = false;
     for await (const chunk of req) {
+      if (oversized) continue;
       body += chunk;
-      if (Buffer.byteLength(body) > MAX_BODY) {
-        res.writeHead(413); return res.end(JSON.stringify({ error: 'request too large' }));
-      }
+      if (Buffer.byteLength(body) > MAX_BODY) oversized = true;
+    }
+    if (oversized) {
+      res.writeHead(413);
+      return res.end(JSON.stringify({ error: 'request too large' }));
     }
 
     try {
