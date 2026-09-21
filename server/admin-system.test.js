@@ -25,9 +25,7 @@ test('logs only accepts the fixed service allowlist',async()=>{
   assert.equal(result.stdout,'safe log line');
   assert.ok(calls.at(-1).args.includes('tor'));
   await assert.rejects(()=>system.logs('bash',25),/unsupported service/);
-  assert.equal(calls.length,0);
-  assert.equal(streamCalls.length,1);
-  assert.equal(streamCalls[0].file,'docker');
+  assert.equal(calls.length,1);
 });
 
 test('metrics uses compose IDs and a fixed docker stats format',async()=>{
@@ -69,7 +67,9 @@ test('verify backup accepts only managed files',async()=>{
   const result=await system.verifyBackup(id);
   assert.equal(result.id,id);
   assert.equal(result.ok,true);
-  assert.equal(calls.length,1);
+  assert.equal(calls.length,0);
+  assert.equal(streamCalls.length,1);
+  assert.equal(streamCalls[0].file,'docker');
   await fs.rm(dir,{recursive:true,force:true});
 });
 
