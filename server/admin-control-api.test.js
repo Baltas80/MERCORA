@@ -9,6 +9,7 @@ function makeApi(overrides={}){
     token,
     controller:{run:async()=>({ok:true}),healthCheck:async()=>({ok:true})},
     management:{run:async(action,payload)=>({action,payload})},
+    system:{logs:async()=>({ok:true}),metrics:async()=>({ok:true}),migrateDb:async()=>({ok:true}),backupDb:async()=>({ok:true,id:'backup'}),listBackups:async()=>[],verifyBackup:async()=>({ok:true}),restoreBackup:async()=>({ok:true})},
     port:0,
     ...overrides
   });
@@ -79,5 +80,36 @@ test('admin API enforces request body limit',async()=>{
     body:JSON.stringify({action:'LIST_USERS',payload:{q:huge}})
   });
   assert.equal(response.status,413);
+  api.server.close();
+});
+
+
+test('system endpoint enforces its fixed action surface',async()=>{
+  let calls=0;
+  const api=makeApi({system:{
+    logs:async(service,lines)=>{calls+=1;return{service,lines}},
+    metrics:async()=>({ok:true}),migrateDb:async()=>({ok:true}),backupDb:async()=>({ok:true}),
+    listBackups:async()=>[],verifyBackup:async()=>({ok:true}),restoreBackup:async()=>({ok:true})
+  }});
+  const address=await start(api);
+  const headers={authorization:'Bearer '+token,'content-type':'application/json'};
+  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/system',{method:'POST',headers,body:JSON.stringify({
+    action:'LOGS',payload:{service:'tor',lines:20}
+  })});
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.deepEqual(body.result,{service:'tor',lines:20});
+  assert.equal(calls,1);
+  api.server.close();
+});
+
+test('system endpoint rejects non-allowlisted actions',async()=>{
+  let calls=0;
+  const api=makeApi({system:{logs:async()=>{calls+=1},metrics:async()=>({}),migrateDb:async()=>({}),backupDb:async()=>({}),listBackups:async()=>[],verifyBackup:async()=>({}),restoreBackup:async()=>({})}});
+  const address=await start(api);
+  const headers={authorization:'Bearer '+token,'content-type':'application/json'};
+  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/system',{method:'POST',headers,body:JSON.stringify({action:'EXEC',payload:{command:'id'}})});
+  assert.equal(response.status,400);
+  assert.equal(calls,0);
   api.server.close();
 });
