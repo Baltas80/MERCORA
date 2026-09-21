@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 const SITE_KEYS = Object.freeze([
   'site_name','site_mode','announcement','maintenance_message',
   'new_listings_enabled','seller_registration_enabled','footer_notice',
-  'hero_title','hero_copy','buy_cta','sell_cta'
+  'hero_title','hero_copy','buy_cta','sell_cta','terms_of_use','privacy_notice','publication_rules'
 ]);
 const MAX_LIMIT = 48;
 const MAX_OFFSET = 100000;
