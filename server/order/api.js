@@ -101,8 +101,10 @@ export function createOrderApi({databaseUrl=process.env.DATABASE_URL,run=runner}
       reserved AS (
         UPDATE listings l
         SET status='reserved',updated_at=now()
-        WHERE l.id IN (SELECT listing_id FROM order_items WHERE order_id=(SELECT id FROM inserted))
-        RETURNING id
+        FROM selected s
+        WHERE l.id=s.id
+          AND EXISTS (SELECT 1 FROM inserted_items)
+        RETURNING l.id
       )
       SELECT row_to_json(inserted)::text FROM inserted;
     `;
