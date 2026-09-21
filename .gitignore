@@ -41,3 +41,5 @@ Thumbs.db
 
 # Local administrator backups (never commit database dumps)
 backups/
+runtime/*.json
+!runtime/site-config.example.json
