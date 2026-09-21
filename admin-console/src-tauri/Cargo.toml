@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MERCORA administrative desktop console"
 authors = ["MERCORA"]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.80"
 
 [lib]
 name = "mercora_admin_console_lib"
