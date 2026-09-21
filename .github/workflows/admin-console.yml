@@ -33,15 +33,25 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Generate Tauri icon set
         working-directory: admin-console
-        run: npm run tauri icon ../admin-console/app-icon.svg
+        run: npx tauri icon ./app-icon.svg --output ./src-tauri/icons
 
+      - name: Verify generated Windows icon
+        shell: pwsh
+        working-directory: admin-console
+        run: |
+          if (!(Test-Path "src-tauri/icons/icon.ico")) {
+            throw "Missing generated Windows icon"
+          }
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Check Rust
         working-directory: admin-console
         run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: Check JavaScript
-        run: node --check admin-console/ui/app.js
+        run: |
+          node --check admin-console/ui/app.js
+          node --check admin-console/ui/content-editor.js
+          node --check admin-console/ui/reputation.js
       - name: Build Windows installer
         working-directory: admin-console
         run: npm run tauri build -- --bundles nsis
