@@ -133,16 +133,16 @@ test('reputation endpoint receives only explicit action and payload objects',asy
   api.server.close();
 });
 
-test('reputation endpoint rejects unknown actions before manager execution',async()=>{
+test('reputation endpoint propagates manager validation errors',async()=>{
   let calls=0;
-  const api=makeApi({reputation:{run:async()=>{calls+=1;return{}}}});
+  const api=makeApi({reputation:{run:async()=>{calls+=1;throw new Error('unsupported reputation action')}}});
   const address=await start(api);
   const response=await fetch('http://127.0.0.1:'+address.port+'/v1/reputation',{
     method:'POST',
     headers:{authorization:'Bearer '+token,'content-type':'application/json'},
     body:JSON.stringify({action:'EXEC',payload:{sql:'DROP TABLE seller_ratings'}})
   });
-  assert.equal(response.status,503);
+  assert.equal(response.status,400);
   assert.equal(calls,1);
   api.server.close();
 });
