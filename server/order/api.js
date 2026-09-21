@@ -55,8 +55,15 @@ export function createOrderApi({databaseUrl=process.env.DATABASE_URL,run=runner}
   }
   async function json(statement,vars={}){return parse(await query(statement,vars));}
 
+  async function siteMode(){
+    const row=await json("SELECT row_to_json(x)::text FROM (SELECT value FROM site_settings WHERE key='site_mode' LIMIT 1) x");
+    return row?.value||"public";
+  }
+
   async function createOrder(accountId,payload={}){
     uuid(accountId,"account_id");
+    const mode=await siteMode();
+    if(mode!=="public")throw new Error("orders are disabled while the marketplace is not public");
     if(!Array.isArray(payload.items)||payload.items.length<1||payload.items.length>MAX_ITEMS)throw new Error("items must contain 1-48 listings");
     const items=payload.items.map((item,index)=>({
       index,
