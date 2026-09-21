@@ -11,11 +11,9 @@
   });
 
   function decorate(){
-    document.querySelectorAll('#productGrid .product').forEach((card,index)=>{
-      const itemSeller = [
-        'northstar','grainlab','keystatic','atelier7',
-        'signalroom','analogworks','northline','benchmarks'
-      ][index];
+    document.querySelectorAll('#productGrid .product').forEach(card=>{
+      const meta=card.querySelector('.product-meta');
+      const itemSeller=(meta?.textContent||'').split(' · ')[0].trim();
       const value=stats[itemSeller];
       if(!value || card.querySelector('.seller-reputation')) return;
       const meta=card.querySelector('.product-meta');
