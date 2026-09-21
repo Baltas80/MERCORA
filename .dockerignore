@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+.env
+.env.*
+backups
+tor/keys
+runtime/*.json
+!runtime/site-config.example.json
+admin-console/src-tauri/target
+*.log
