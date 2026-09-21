@@ -199,10 +199,9 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
     const owner=payload.owner_username ? assertString(payload.owner_username,'owner_username',1,80) : null;
     if(owner && !await queryRow("SELECT id FROM accounts WHERE username="+sqlString(owner))) throw new Error('owner account not found');
     const row=await queryRow(
-      "SELECT id,slug,name,status,owner_account_id FROM ("+
-      "INSERT INTO mercora_stores(slug,name,owner_account_id,status) VALUES("+
+      "WITH inserted AS (INSERT INTO mercora_stores(slug,name,owner_account_id,status) VALUES("+
       sqlString(s)+","+sqlString(n)+","+(owner?"(SELECT id FROM accounts WHERE username="+sqlString(owner)+")":"NULL")+","+sqlString(status)+
-      ") RETURNING id,slug,name,status,owner_account_id) q"
+      ") RETURNING id,slug,name,status,owner_account_id) SELECT id,slug,name,status,owner_account_id FROM inserted"
     );
     await audit('CREATE_STORE','store',row.id,{slug:s,name:n,status:status});
     return row;
@@ -416,11 +415,11 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
     const ids=Array.isArray(payload.listing_ids)?payload.listing_ids:[];
     if(ids.length>48) throw new Error('listing_ids must contain 0-48 UUIDs');
     const normalized=ids.map(function(id){return uuid(id,'listing_id');});
-    await db('DELETE FROM homepage_featured_listings');
-    if(normalized.length){
-      const values=normalized.map(function(id,index){return '('+sqlString(id)+'::uuid,'+(index+1)+',now())';}).join(',');
-      await db('INSERT INTO homepage_featured_listings(listing_id,position) VALUES '+values);
-    }
+    const values=normalized.map(function(id,index){return '('+sqlString(id)+'::uuid,'+(index+1)+',now())';}).join(',');
+    const transaction = normalized.length
+      ? 'BEGIN; DELETE FROM homepage_featured_listings; INSERT INTO homepage_featured_listings(listing_id,position) VALUES '+values+'; COMMIT;'
+      : 'BEGIN; DELETE FROM homepage_featured_listings; COMMIT;';
+    await db(transaction);
     await audit('SET_FEATURED','homepage',null,{count:normalized.length});
     return queryJson("SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.position),'[]'::json)::text FROM (SELECT h.position,h.listing_id,l.title,l.status FROM homepage_featured_listings h JOIN listings l ON l.id=h.listing_id ORDER BY h.position) x");
   }
