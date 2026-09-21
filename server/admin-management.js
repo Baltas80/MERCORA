@@ -177,16 +177,17 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
     const id=uuid(payload.account_id,'account_id');
     const reason=assertString(payload.reason,'reason',3,2000);
     const expiry=(payload.expires_at===undefined || payload.expires_at===null) ? null : assertString(payload.expires_at,'expires_at',10,40);
-    const exists=await queryRow("SELECT id,username FROM accounts WHERE id="+sqlString(id)+"::uuid");
-    if(!exists) throw new Error('account not found');
-    await db(
-      "INSERT INTO account_bans(account_id,reason,expires_at,active,actor) VALUES ("+
-      sqlString(id)+"::uuid,"+sqlString(reason)+","+sqlNullable(expiry)+"::timestamptz,true,"+sqlString(actor)+")"
+    const row=await queryRow(
+      "WITH target AS (SELECT id,username FROM accounts WHERE id="+sqlString(id)+"::uuid),"+
+      "ban AS (INSERT INTO account_bans(account_id,reason,expires_at,active,actor) "+
+      "SELECT id,"+sqlString(reason)+","+sqlNullable(expiry)+"::timestamptz,true,"+sqlString(actor)+" FROM target RETURNING account_id),"+
+      "disable AS (UPDATE accounts SET status='disabled' WHERE id IN (SELECT account_id FROM ban) RETURNING id,username,status),"+
+      "revoke AS (UPDATE sessions SET revoked_at=now() WHERE account_id IN (SELECT account_id FROM ban) AND revoked_at IS NULL RETURNING account_id) "+
+      "SELECT id,username,status FROM disable"
     );
-    await db("UPDATE accounts SET status='disabled' WHERE id="+sqlString(id)+"::uuid");
-    await db("UPDATE sessions SET revoked_at=now() WHERE account_id="+sqlString(id)+"::uuid AND revoked_at IS NULL");
+    if(!row) throw new Error('account not found');
     await audit('BAN_ACCOUNT','account',id,{reason:reason,expires_at:expiry});
-    return {id:id,username:exists.username,status:'disabled'};
+    return row;
   }
   async function unbanAccount(payload){
     const id=uuid(payload.account_id,'account_id');
