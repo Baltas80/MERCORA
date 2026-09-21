@@ -18,10 +18,19 @@
       if(!value || card.querySelector('.seller-reputation')) return;
       const meta=card.querySelector('.product-meta');
       if(!meta) return;
+      const parts=(meta.textContent||'').split(' · ');
+      const seller=parts.shift()?.trim();
+      const details=parts.join(' · ');
+      meta.replaceChildren();
       const sellerLine=document.createElement('div');
       sellerLine.className='seller-reputation';
-      sellerLine.textContent='✓ '+value.sales+' ventas verificadas · ★ '+value.rating+' · '+value.reviews+' valoraciones';
+      sellerLine.textContent=(seller||'Vendedor')+' · ✓ '+value.sales+' ventas verificadas · ★ '+value.rating+' · '+value.reviews+' valoraciones';
       meta.append(sellerLine);
+      if(details){
+        const detailsLine=document.createElement('div');
+        detailsLine.textContent=details;
+        meta.append(detailsLine);
+      }
     });
   }
 
