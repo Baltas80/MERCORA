@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 
 const COMPOSE = ['compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.onion.yml'];
@@ -101,7 +102,7 @@ async function defaultRunner(file,args,options){
   });
 }
 
-export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=defaultRunner,actor=process.env.MERCORA_ADMIN_ACTOR || 'admin'}={}){
+export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=defaultRunner,actor=process.env.MERCORA_ADMIN_ACTOR || 'admin',runtimeConfig=path.resolve(cwd,'runtime','site-config.json')}={}){
   async function db(sql){
     const result = await runner('docker',COMPOSE.concat([
       'exec','-T','postgres','psql','-U','mercora','-d','mercora',
@@ -412,6 +413,15 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
     await audit('UPDATE_CATEGORY','category',id,{name:payload.name,active:payload.active});
     return row;
   }
+  async function syncRuntimeConfig(){
+    const settings=await queryJson("SELECT COALESCE(json_object_agg(key,value),'{}'::json)::text FROM site_settings");
+    const directory=path.dirname(runtimeConfig);
+    await fs.mkdir(directory,{recursive:true,mode:0o700});
+    const temp=runtimeConfig+'.tmp-'+process.pid;
+    await fs.writeFile(temp,JSON.stringify(settings,null,2)+'\n',{encoding:'utf8',mode:0o640});
+    await fs.rename(temp,runtimeConfig);
+    return settings;
+  }
   async function siteGet(){ return queryJson("SELECT COALESCE(json_object_agg(key,value),'{}'::json)::text FROM site_settings"); }
   async function listFeatured(){ return queryJson("SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.position),'[]'::json)::text FROM (SELECT h.position,h.listing_id,l.title,l.status FROM homepage_featured_listings h JOIN listings l ON l.id=h.listing_id ORDER BY h.position) x"); }
   async function siteSet(payload){
@@ -423,6 +433,7 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
       "INSERT INTO site_settings(key,value,updated_at,updated_by) VALUES("+sqlString(key)+","+sqlString(value)+",now(),"+sqlString(actor)+") "+
       "ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now(),updated_by=excluded.updated_by RETURNING key,value,updated_at,updated_by"
     );
+    await syncRuntimeConfig();
     await audit('SITE_SET','site_setting',key,{});
     return row;
   }
