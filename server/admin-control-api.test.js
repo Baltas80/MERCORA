@@ -10,6 +10,7 @@ function makeApi(overrides={}){
     controller:{run:async()=>({ok:true}),healthCheck:async()=>({ok:true})},
     management:{run:async(action,payload)=>({action,payload})},
     system:{logs:async()=>({ok:true}),metrics:async()=>({ok:true}),migrateDb:async()=>({ok:true}),backupDb:async()=>({ok:true,id:'backup'}),listBackups:async()=>[],verifyBackup:async()=>({ok:true}),restoreBackup:async()=>({ok:true})},
+    escrow:{run:async(action,payload)=>({action,payload})},
     port:0,
     ...overrides
   });
@@ -109,6 +110,37 @@ test('system endpoint rejects non-allowlisted actions',async()=>{
   const address=await start(api);
   const headers={authorization:'Bearer '+token,'content-type':'application/json'};
   const response=await fetch('http://127.0.0.1:'+address.port+'/v1/system',{method:'POST',headers,body:JSON.stringify({action:'EXEC',payload:{command:'id'}})});
+  assert.equal(response.status,400);
+  assert.equal(calls,0);
+  api.server.close();
+});
+
+
+test('escrow endpoint receives only explicit action and payload objects',async()=>{
+  let received=null;
+  const api=makeApi({escrow:{run:async(action,payload)=>{received={action,payload};return{authorized:true}}}});
+  const address=await start(api);
+  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/escrow',{
+    method:'POST',
+    headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+    body:JSON.stringify({action:'AUTHORIZE_EARLY_PAY',payload:{order_id:'11111111-1111-4111-8111-111111111111'}})
+  });
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.equal(body.result.authorized,true);
+  assert.deepEqual(received,{action:'AUTHORIZE_EARLY_PAY',payload:{order_id:'11111111-1111-4111-8111-111111111111'}});
+  api.server.close();
+});
+
+test('escrow endpoint rejects unknown actions',async()=>{
+  let calls=0;
+  const api=makeApi({escrow:{run:async()=>{calls+=1;return{}}}});
+  const address=await start(api);
+  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/escrow',{
+    method:'POST',
+    headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+    body:JSON.stringify({action:'EXEC',payload:{sql:'DROP TABLE ledger_entries'}})
+  });
   assert.equal(response.status,400);
   assert.equal(calls,0);
   api.server.close();
