@@ -23,6 +23,8 @@ The admin surface does **not** expose a shell or arbitrary command execution.
 
 The API binds to `127.0.0.1:8787` by default and requires `MERCORA_ADMIN_TOKEN` with at least 32 characters. The token must be supplied through the process environment and must never be committed to the repository.
 
+Authentication uses a length-checked constant-time token comparison. The API also accepts IPv4-mapped loopback addresses while continuing to reject non-loopback clients. Requests larger than 4 KiB are rejected before they reach privileged operations.
+
 Start it from the repository root:
 
 ```text
@@ -77,8 +79,12 @@ The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its
 - **IMPLEMENTED:** successful fallback is reflected in recovery result state.
 - **IMPLEMENTED:** structured infrastructure status.
 - **IMPLEMENTED:** secret-filtered diagnostics.
+- **IMPLEMENTED:** constant-time-compatible token verification and IPv4-mapped loopback handling.
+- **IMPLEMENTED:** 4 KiB request-size enforcement.
 - **IMPLEMENTED:** Tauri bridge/API endpoint alignment.
 - **IMPLEMENTED:** UI action-to-operation mapping.
 - **TESTED:** admin controller unit coverage includes allowlists, shell-injection rejection, targeted recovery, fallback recovery success, diagnostics filtering, and structured status mapping.
+- **TESTED:** admin API coverage includes authentication, allowlisted validation, valid forwarding, and request-size rejection.
 - **TESTED:** admin UI JavaScript syntax check was previously verified locally.
 - **PENDING:** live Docker/PostgreSQL/Tor health checks require the actual MERCORA runtime environment with Docker available.
+- **PENDING:** this execution cannot truthfully claim the new tests have run locally; GitHub Actions must execute the new commit before CI verification is marked passed.
