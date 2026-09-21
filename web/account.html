@@ -1,1 +1,36 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MERCORA — Account Preview</title><link rel="stylesheet" href="./styles.css"></head><body><div class="site-shell"><header class="topbar"><a class="brand" href="./">MERCORA</a><span class="muted">ACCOUNT PREVIEW</span></header><main class="section"><div class="split"><section class="system-panel"><div class="panel-title">DEMO ACCOUNT</div><form id="accountForm"><label>Pseudonym<input name="pseudonym" minlength="3" maxlength="32" required></label><label>Password<input name="password" type="password" minlength="12" required></label><button class="button button-primary" type="submit">Enter demo</button><p id="message" class="muted"></p></form></section><aside class="system-panel"><div class="panel-title">PRIVACY BOUNDARY</div><p class="muted">This is a static visual preview. No real account, password or recovery code is stored.</p></aside></div></main></div><script>document.querySelector('#accountForm').addEventListener('submit',e=>{e.preventDefault();document.querySelector('#message').textContent='PREVIEW — no real account was created.'})</script></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="MERCORA — cuenta privada">
+<title>MERCORA — Cuenta</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="site-shell">
+<header class="topbar"><a class="brand" href="./">MERCORA</a><nav class="nav"><a href="./">Marketplace</a><a href="./sell.html">Vender</a></nav></header>
+<main class="section">
+<div id="authPanel" class="split">
+<section class="system-panel"><div class="panel-title">INICIAR SESIÓN</div><form id="loginForm">
+<label>Usuario<input name="username" minlength="3" maxlength="32" autocomplete="username" required></label>
+<label>Contraseña<input name="password" type="password" minlength="12" maxlength="256" autocomplete="current-password" required></label>
+<button class="button button-primary" type="submit">ENTRAR</button>
+</form></section>
+<section class="system-panel"><div class="panel-title">CREAR CUENTA</div><form id="registerForm">
+<label>Usuario<input name="username" minlength="3" maxlength="32" autocomplete="username" required></label>
+<label>Contraseña<input name="password" type="password" minlength="12" maxlength="256" autocomplete="new-password" required></label>
+<button class="button button-primary" type="submit">CREAR CUENTA</button>
+</form><p class="muted">Cuenta pseudónima: no se solicita correo ni teléfono en este flujo.</p></section>
+</div>
+<section id="accountPanel" class="system-panel" hidden>
+<div class="panel-title">CUENTA ACTIVA</div>
+<h1 id="accountName">—</h1><p>Estado: <strong id="accountStatus">—</strong></p>
+<div class="buttons"><a id="sellerLink" class="button button-primary" href="./sell.html" hidden>ÁREA DE VENDEDOR</a><button id="logout" class="button button-ghost" type="button">CERRAR SESIÓN</button></div>
+</section>
+<p id="message" class="muted" aria-live="polite"></p>
+</main>
+<footer><span>MERCORA</span><span>Cuenta privada</span></footer>
+</div>
+<script type="module" src="./account.js"></script>
+</body>
+</html>
