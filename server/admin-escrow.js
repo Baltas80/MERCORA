@@ -173,8 +173,8 @@ export function createAdminEscrow({
     const rowResult=await row(
       "INSERT INTO order_escrows(order_id,asset_code,escrowed_atomic,state,release_available_at,dispute_until) VALUES("+
       sqlString(orderId)+"::uuid,"+sqlString(order.total_asset)+","+sqlString(String(order.total_atomic))+",'held',"+
-      "(now()+make_interval(hours=>"+String(order.auto_release_hours)+")),"+
-      "(now()+make_interval(hours=>"+String(order.dispute_window_hours)+"))"+
+      "(order.updated_at+make_interval(hours=>"+String(order.auto_release_hours)+")),"+
+      "(order.updated_at+make_interval(hours=>"+String(order.dispute_window_hours)+"))"+
       ") RETURNING order_id,asset_code,escrowed_atomic,released_atomic,refunded_atomic,state,opened_at,release_available_at,dispute_until"
     );
     await audit(orderId,'OPEN_ESCROW',{amount_atomic:String(order.total_atomic),asset:order.total_asset});
@@ -237,8 +237,10 @@ export function createAdminEscrow({
     const custody=await getCustodyState();
     if(custody?.value!=='normal') throw new Error('custody is frozen');
     if(item.state==='frozen') throw new Error('escrow is frozen');
+    const releaseAt=item.release_available_at?new Date(item.release_available_at).getTime():0;
     const disputeUntil=item.dispute_until?new Date(item.dispute_until).getTime():0;
-    const eligible=item.order_status==='completed' || (disputeUntil>0 && Date.now()>=disputeUntil && item.order_status!=='disputed');
+    const eligible=item.order_status==='completed' ||
+      (item.order_status!=='disputed' && releaseAt>0 && disputeUntil>0 && Date.now()>=releaseAt && Date.now()>=disputeUntil);
     if(policy.manual_release_required && !payload.confirm) throw new Error('manual release confirmation required');
     if(!eligible) throw new Error('escrow is not yet eligible for final release');
     const amount=(await available(item)).toString();
