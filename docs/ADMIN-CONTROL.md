@@ -25,6 +25,8 @@ The API binds to `127.0.0.1:8787` by default and requires `MERCORA_ADMIN_TOKEN` 
 
 Authentication uses a length-checked constant-time token comparison. The API also accepts IPv4-mapped loopback addresses while continuing to reject non-loopback clients. Requests larger than 4 KiB are rejected before they reach privileged operations.
 
+The HTTP API regression suite verifies authentication rejection, operation/service allowlisting, dedicated `HEALTH_CHECK` routing, the 4 KiB boundary, and defensive response headers.
+
 Start it from the repository root:
 
 ```text
@@ -79,7 +81,7 @@ The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its
 
 The previous CI run completed successfully for CodeQL and the static-security job, including the existing unit-test suite. The visual preview workflow also completed successfully after being changed to package the frontend independently of GitHub Pages provisioning.
 
-The latest controller change makes runtime service state explicit and adds a regression test for a missing required service. The latest API and controller tests are now waiting for CI on the new commit.
+The latest controller change makes runtime service state explicit. The current test file now also exercises the HTTP control API boundary so the security properties are checked through the actual local server path rather than only through controller unit tests.
 
 ## Verification status
 
@@ -95,6 +97,7 @@ The latest controller change makes runtime service state explicit and adds a reg
 - **IMPLEMENTED:** explicit running-state verification for `app`, `postgres`, and `tor`.
 - **IMPLEMENTED:** regression test for a missing required Compose service.
 - **IMPLEMENTED:** corrected oversized-request test.
+- **IMPLEMENTED:** HTTP API regression coverage for authentication, allowlisting, health-check routing, request limits, and response headers.
 - **IMPLEMENTED:** Tauri bridge/API endpoint alignment.
 - **IMPLEMENTED:** UI action-to-operation mapping.
 - **IMPLEMENTED:** visual preview artifact workflow independent of GitHub Pages site provisioning.
