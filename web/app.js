@@ -130,7 +130,10 @@ function render() {
 
     const title = document.createElement("h3");
     title.className = "product-title";
-    title.textContent = text(item.title);
+    const link = document.createElement("a");
+    link.href = "./listing.html?id=" + encodeURIComponent(item.id);
+    link.textContent = text(item.title);
+    title.append(link);
 
     const meta = document.createElement("div");
     meta.className = "product-meta";
