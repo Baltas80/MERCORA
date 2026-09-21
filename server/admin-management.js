@@ -314,6 +314,9 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
     if(!current) throw new Error('order not found');
     if(!ORDER_TRANSITIONS[current.status] || !ORDER_TRANSITIONS[current.status].has(target)) throw new Error('order transition is not allowed');
     await db("UPDATE orders SET status="+sqlString(target)+",updated_at=now() WHERE id="+sqlString(id)+"::uuid");
+    if(target==='cancelled'){
+      await db("UPDATE listings l SET status='active',updated_at=now() FROM order_items oi WHERE oi.order_id="+sqlString(id)+"::uuid AND l.id=oi.listing_id AND l.status='reserved'");
+    }
     await audit('UPDATE_ORDER_STATUS','order',id,{from:current.status,to:target});
     return {id:id,status:target};
   }
