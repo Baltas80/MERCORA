@@ -45,6 +45,7 @@ test('database migration is fixed to the committed management migration',async()
   assert.equal(result.ok,true);
   const args=calls.at(-1).args;
   assert.ok(args.includes('/docker-entrypoint-initdb.d/004_admin_management.sql'));
+  assert.ok(args.includes('/docker-entrypoint-initdb.d/005_escrow.sql'));
 });
 
 test('backup identifiers cannot escape the managed backup directory',async()=>{
