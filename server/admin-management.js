@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 
 const COMPOSE = ['compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.onion.yml'];
 const ACTIONS = new Set([
-  'OVERVIEW','LIST_FEATURED','LIST_USERS','SET_ACCOUNT_STATUS','BAN_ACCOUNT','UNBAN_ACCOUNT',
+  'OVERVIEW','LIST_FEATURED','LIST_USERS','LIST_ACCOUNT_SESSIONS','REVOKE_ACCOUNT_SESSIONS','SET_ACCOUNT_STATUS','BAN_ACCOUNT','UNBAN_ACCOUNT',
   'LIST_STORES','CREATE_STORE','ASSIGN_STORE','UNASSIGN_STORE','UPDATE_STORE',
   'LIST_LISTINGS','UPDATE_LISTING_STATUS','ASSIGN_LISTING_STORE','LIST_ORDERS','UPDATE_ORDER_STATUS',
   'LIST_REPORTS','UPDATE_REPORT','LIST_PROMOS','CREATE_PROMO','DISABLE_PROMO',
@@ -148,6 +148,22 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
       "FROM accounts "+where+" ORDER BY created_at DESC LIMIT "+limit(payload.limit)+" OFFSET "+offset(payload.offset)+") x"
     );
   }
+  async function listAccountSessions(payload){
+    const id=uuid(payload.account_id,'account_id');
+    return queryJson(
+      "SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.last_seen_at DESC),'[]'::json)::text FROM ("+
+      "SELECT id,created_at,expires_at,last_seen_at,revoked_at FROM sessions "+
+      "WHERE account_id="+sqlString(id)+"::uuid ORDER BY last_seen_at DESC LIMIT "+limit(payload.limit)+" OFFSET "+offset(payload.offset)+") x"
+    );
+  }
+  async function revokeAccountSessions(payload){
+    const id=uuid(payload.account_id,'account_id');
+    const row=await queryRow("SELECT id,username FROM accounts WHERE id="+sqlString(id)+"::uuid");
+    if(!row) throw new Error('account not found');
+    const result=await db("UPDATE sessions SET revoked_at=now() WHERE account_id="+sqlString(id)+"::uuid AND revoked_at IS NULL");
+    await audit('REVOKE_ACCOUNT_SESSIONS','account',id,{revoked:result.ok});
+    return {account_id:id,revoked:true};
+  }
   async function setAccountStatus(payload){
     const id=uuid(payload.account_id,'account_id');
     if(!ACCOUNT_STATUSES.has(payload.status)) throw new Error('unsupported account status');
@@ -168,6 +184,7 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
       sqlString(id)+"::uuid,"+sqlString(reason)+","+sqlNullable(expiry)+"::timestamptz,true,"+sqlString(actor)+")"
     );
     await db("UPDATE accounts SET status='disabled' WHERE id="+sqlString(id)+"::uuid");
+    await db("UPDATE sessions SET revoked_at=now() WHERE account_id="+sqlString(id)+"::uuid AND revoked_at IS NULL");
     await audit('BAN_ACCOUNT','account',id,{reason:reason,expires_at:expiry});
     return {id:id,username:exists.username,status:'disabled'};
   }
@@ -470,7 +487,7 @@ export function createAdminManagement({cwd=path.resolve(process.cwd()),runner=de
   async function run(action,payload){ 
     switch(assertAction(action)){
       case 'OVERVIEW': return overview(); case 'LIST_FEATURED': return listFeatured();
-      case 'LIST_USERS': return listUsers(payload); case 'SET_ACCOUNT_STATUS': return setAccountStatus(payload);
+      case 'LIST_USERS': return listUsers(payload); case 'LIST_ACCOUNT_SESSIONS': return listAccountSessions(payload); case 'REVOKE_ACCOUNT_SESSIONS': return revokeAccountSessions(payload); case 'SET_ACCOUNT_STATUS': return setAccountStatus(payload);
       case 'BAN_ACCOUNT': return banAccount(payload); case 'UNBAN_ACCOUNT': return unbanAccount(payload);
       case 'LIST_STORES': return listStores(payload); case 'CREATE_STORE': return createStore(payload);
       case 'ASSIGN_STORE': return assignStore(payload); case 'UNASSIGN_STORE': return unassignStore(payload); case 'UPDATE_STORE': return updateStore(payload);
