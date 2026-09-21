@@ -96,7 +96,9 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
   async function migrateDb(){
     return runCommand(COMPOSE.concat([
       'exec','-T','postgres','psql','-U','mercora','-d','mercora',
-      '-v','ON_ERROR_STOP=1','-f','/docker-entrypoint-initdb.d/004_admin_management.sql'
+      '-v','ON_ERROR_STOP=1',
+      '-f','/docker-entrypoint-initdb.d/004_admin_management.sql',
+      '-f','/docker-entrypoint-initdb.d/005_escrow.sql'
     ]));
   }
   async function ensureBackupDir(){ await fs.mkdir(backupDir,{recursive:true,mode:0o700}); }
