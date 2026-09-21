@@ -146,6 +146,10 @@
         <label>Nuevos anuncios<select name="new_listings_enabled"><option>true</option><option>false</option></select></label>
         <label>Registro de vendedores<select name="seller_registration_enabled"><option>true</option><option>false</option></select></label>
         <label class="span2">Aviso de pie<input name="footer_notice" maxlength="4000"></label>
+        <label class="span2">Título de portada<input name="hero_title" maxlength="180"></label>
+        <label class="span2">Descripción de portada<textarea name="hero_copy" rows="3" maxlength="600"></textarea></label>
+        <label>CTA comprar<input name="buy_cta" maxlength="80"></label>
+        <label>CTA vender<input name="sell_cta" maxlength="80"></label>
         <button type="submit">GUARDAR WEB</button>
       </form></section>
       <section class="card"><div class="section-head"><div><h3>Destacados de portada</h3><p class="muted">Selecciona los anuncios que quieres mostrar en portada (máximo 48).</p></div><button data-reload="featured" class="secondary">ACTUALIZAR</button></div><select id="featured-picker" class="featured-picker" multiple size="12" aria-label="Anuncios destacados"></select><button id="featured-save">GUARDAR DESTACADOS</button><div id="featured-list" class="mini-list"></div></section>
