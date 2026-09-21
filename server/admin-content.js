@@ -4,6 +4,19 @@ import { spawn } from 'node:child_process';
 const COMPOSE = ['compose','-f','docker-compose.yml','-f','docker-compose.onion.yml'];
 const KEYS = new Set(['site_name','announcement','maintenance_message','footer_notice','hero_title','hero_copy','buy_cta','sell_cta','terms_of_use','privacy_notice','publication_rules']);
 const MAX_VALUE = 6000;
+const KEY_LIMITS = Object.freeze({
+  site_name: 120,
+  announcement: 4000,
+  maintenance_message: 4000,
+  footer_notice: 4000,
+  hero_title: 180,
+  hero_copy: 600,
+  buy_cta: 80,
+  sell_cta: 80,
+  terms_of_use: 6000,
+  privacy_notice: 6000,
+  publication_rules: 6000
+});
 const OPTIONAL_NOTICE_KEYS = new Set(['announcement','maintenance_message','footer_notice']);
 
 function assertKey(value){
@@ -12,7 +25,9 @@ function assertKey(value){
   return key;
 }
 function assertText(value,name='value'){
-  if(typeof value!=='string' || value.length>MAX_VALUE) throw new Error(name+' must be text up to 6000 characters');
+  if(typeof value!=='string') throw new Error(name+' must be text');
+  const keyLimit=KEY_LIMITS[name]??MAX_VALUE;
+  if(value.length>keyLimit) throw new Error(name+' must not exceed '+keyLimit+' characters');
   if(value.includes('\0')) throw new Error(name+' contains an invalid character');
   if(/<\/?[a-z][^>]*>/i.test(value) || /javascript\s*:/i.test(value)) throw new Error(name+' must not contain HTML or javascript');
   return value;
@@ -56,23 +71,38 @@ export function createAdminContent({cwd=path.resolve(process.cwd()),runner=defau
   }
   async function update(payload={}){
     const key=assertKey(payload.site_key);
-    const value=assertText(payload.value);
+    const value=assertText(payload.value,key);
+    if(!value.trim() && !OPTIONAL_NOTICE_KEYS.has(key)) throw new Error(key+' cannot be empty');
     const result=json(await db(
       'BEGIN;'+
       `INSERT INTO site_settings(key,value,updated_at,updated_by) VALUES (${sql(key)},${sql(value)},now(),${sql(actor)}) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=now(),updated_by=EXCLUDED.updated_by;`+
-      `UPDATE site_content_versions SET published=false WHERE site_key=${sql(key)} AND published=true;`+
-      `INSERT INTO site_content_versions(site_key,value,published,actor) VALUES (${sql(key)},${sql(value)},true,${sql(actor)}) RETURNING json_build_object('id',id,'site_key',site_key,'value',value,'published',published,'actor',actor,'created_at',created_at)::text;`+
+      `WITH revoked AS (UPDATE site_content_versions SET published=false WHERE site_key=${sql(key)} AND published=true),
+        inserted AS (
+          INSERT INTO site_content_versions(site_key,value,published,actor)
+          VALUES (${sql(key)},${sql(value)},true,${sql(actor)})
+          RETURNING id,site_key,value,published,actor,created_at
+        ),
+        audited AS (
+          INSERT INTO admin_audit_log(actor,action,resource_type,resource_id,metadata)
+          SELECT ${sql(actor)},'UPDATE_SITE_CONTENT','site_content',id,${sql('{"site_key":"'+key+'"}')}::jsonb FROM inserted
+          RETURNING id
+        )
+        SELECT row_to_json(inserted) FROM inserted;`+
       'COMMIT;'
     ));
     const row=Array.isArray(result)?result.find(v=>v&&v.id):result;
-    await audit('UPDATE_SITE_CONTENT',String(row?.id??''),{site_key:key});
     return row;
   }
   async function unpublish(payload={}){
     const key=assertKey(payload.site_key);
     if(!OPTIONAL_NOTICE_KEYS.has(key)) throw new Error('only optional public notices can be unpublished');
-    await db('BEGIN;'+`UPDATE site_content_versions SET published=false WHERE site_key=${sql(key)} AND published=true;`+`UPDATE site_settings SET value='',updated_at=now(),updated_by=${sql(actor)} WHERE key=${sql(key)};`+'COMMIT;');
-    await audit('UNPUBLISH_SITE_CONTENT',key,{site_key:key});
+    await db('BEGIN;'+`WITH revoked AS (
+        UPDATE site_content_versions SET published=false WHERE site_key=${sql(key)} AND published=true
+      ), cleared AS (
+        UPDATE site_settings SET value='',updated_at=now(),updated_by=${sql(actor)} WHERE key=${sql(key)}
+      )
+      INSERT INTO admin_audit_log(actor,action,resource_type,resource_id,metadata)
+      VALUES (${sql(actor)},'UNPUBLISH_SITE_CONTENT','site_content',${sql(key)},${sql('{"site_key":"'+key+'"}')}::jsonb);`+'COMMIT;');
     return {site_key:key,published:false};
   }
   async function restore(payload={}){
@@ -80,14 +110,22 @@ export function createAdminContent({cwd=path.resolve(process.cwd()),runner=defau
     const row=json(await db(`SELECT json_build_object('id',id,'site_key',site_key,'value',value,'published',published,'actor',actor,'created_at',created_at)::text FROM site_content_versions WHERE id=${version}`));
     if(!row) throw new Error('content version not found');
     const value=assertText(row.value);
+    const key=assertKey(row.site_key);
     await db('BEGIN;'+
-      `UPDATE site_settings SET value=${sql(value)},updated_at=now(),updated_by=${sql(actor)} WHERE key=${sql(row.site_key)};`+
-      `UPDATE site_content_versions SET published=false WHERE site_key=${sql(row.site_key)} AND published=true;`+
-      `INSERT INTO site_content_versions(site_key,value,published,actor) VALUES (${sql(row.site_key)},${sql(value)},true,${sql(actor)});`+
+      `UPDATE site_settings SET value=${sql(value)},updated_at=now(),updated_by=${sql(actor)} WHERE key=${sql(key)};`+
+      `WITH revoked AS (
+        UPDATE site_content_versions SET published=false WHERE site_key=${sql(key)} AND published=true
+      ), inserted AS (
+        INSERT INTO site_content_versions(site_key,value,published,actor)
+        VALUES (${sql(key)},${sql(value)},true,${sql(actor)})
+        RETURNING id,site_key,value,published,actor,created_at
+      )
+      INSERT INTO admin_audit_log(actor,action,resource_type,resource_id,metadata)
+      SELECT ${sql(actor)},'RESTORE_SITE_CONTENT','site_content',id,${sql('{"site_key":"'+key+'","source_version_id":'+String(version)+'}')}::jsonb
+      FROM inserted;`+
       'COMMIT;'
     );
-    await audit('RESTORE_SITE_CONTENT',String(version),{site_key:row.site_key,source_version_id:version});
-    return {site_key:row.site_key,value,published:true,restored_from:version};
+    return {site_key:key,value,published:true,restored_from:version};
   }
   async function run(action,payload={}){
     const a=String(action||'').toUpperCase();
