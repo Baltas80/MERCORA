@@ -32,7 +32,7 @@ test('recovery targets only the affected component first', async () => {
   assert.equal(log[1].at(-1), 'ps');
 });
 
-test('failed restart falls back to start for the same component', async () => {
+test('failed restart falls back to start for the same component and can still recover successfully', async () => {
   const log = [];
   let calls = 0;
   const runner = async (file, args) => {
@@ -41,10 +41,34 @@ test('failed restart falls back to start for the same component', async () => {
     if (calls === 1) return { ok: false, code: 1, stdout: '', stderr: 'failure' };
     return { ok: true, code: 0, stdout: '', stderr: '' };
   };
-  const controller = createAdminController({ runner });
+  const probe = async () => ({ ok: true, code: 0, stdout: '', stderr: '' });
+  const controller = createAdminController({ runner, probe });
   const result = await controller.run('RECOVER', 'app');
   assert.equal(result.steps[1].step, 'start:app');
   assert.equal(log[1][4], 'up');
+  assert.equal(result.ok, true);
+});
+
+test('status exposes structured infrastructure state without exposing raw diagnostics', async () => {
+  const runner = async () => ({ ok: true, code: 0, stdout: '', stderr: '' });
+  const probe = async () => ({ ok: true, code: 0, stdout: '', stderr: '' });
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({ ok: true, status: 200 });
+  try {
+    const controller = createAdminController({ runner, probe });
+    const result = await controller.run('STATUS');
+    assert.equal(result.ok, true);
+    assert.equal(result.mercora, 'ONLINE');
+    assert.equal(result.node, 'ONLINE');
+    assert.equal(result.postgresql, 'ONLINE');
+    assert.equal(result.backend, 'ONLINE');
+    assert.equal(result.tor, 'ONLINE');
+    assert.equal(result.onionService, 'CONFIGURED');
+    assert.equal(result.storage, 'OK');
+    assert.equal(result.health, 'OK');
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test('diagnostics remove secret-bearing lines', () => {
