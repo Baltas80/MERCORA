@@ -56,6 +56,7 @@ jobs:
           node --check web/seller.js
           node --check web/listing.js
           node --check web/legal.js
+          node --check web/seller-profile.js
 
       - name: Check admin syntax
         run: |
