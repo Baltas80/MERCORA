@@ -4,7 +4,14 @@ const ASSET_SCALE = Object.freeze({ BTC: 8, LTC: 8, XMR: 12 });
 const state = {
   items: [],
   categories: [],
-  cart: [],
+  cart: (() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("mercora_cart") || "[]");
+      return Array.isArray(stored) ? stored.filter(item => item && item.id).map(item => ({ ...item, quantity: 1 })) : [];
+    } catch {
+      return [];
+    }
+  })(),
   locale: getLocale(),
   query: "",
   category: ""
@@ -214,6 +221,12 @@ async function loadCategories() {
   }
 }
 
+function saveCart() {
+  try {
+    localStorage.setItem("mercora_cart", JSON.stringify(state.cart));
+  } catch {}
+}
+
 function renderCart() {
   cartItems.replaceChildren();
   if (!state.cart.length) {
@@ -239,6 +252,7 @@ function renderCart() {
       : "Varios activos";
   }
   cartCount.textContent = String(state.cart.reduce((sum, item) => sum + item.quantity, 0));
+  saveCart();
 }
 
 grid.addEventListener("click", (event) => {
@@ -247,8 +261,11 @@ grid.addEventListener("click", (event) => {
   const item = state.items.find((candidate) => itemKey(candidate) === button.dataset.id);
   if (!item) return;
   const existing = state.cart.find((candidate) => candidate.id === item.id);
-  if (existing) existing.quantity += 1;
-  else state.cart.push({ ...item, quantity: 1 });
+  if (existing) {
+    existing.quantity = 1;
+  } else {
+    state.cart.push({ ...item, quantity: 1 });
+  }
   renderCart();
 });
 
@@ -263,10 +280,33 @@ document.querySelector("#cartButton")?.addEventListener("click", () => {
   dialog?.showModal();
 });
 document.querySelector("#closeCart")?.addEventListener("click", () => dialog?.close());
-document.querySelector("#checkoutButton")?.addEventListener("click", () => {
-  checkoutMessage.textContent = state.cart.length
-    ? "El pedido requiere una cuenta y el flujo transaccional del backend."
-    : "Añade al menos un anuncio al carrito.";
+document.querySelector("#checkoutButton")?.addEventListener("click", async () => {
+  if (!state.cart.length) {
+    checkoutMessage.textContent = "Añade al menos un anuncio al carrito.";
+    return;
+  }
+  checkoutMessage.textContent = "Comprobando cuenta…";
+  try {
+    const account = await api("./api/auth/me");
+    if (!account.account) {
+      sessionStorage.setItem("mercora_checkout_return", "1");
+      location.href = "./account.html";
+      return;
+    }
+    const order = await api("./api/orders", {
+      method: "POST",
+      headers: {"Content-Type":"application/json","Accept":"application/json"},
+      body: JSON.stringify({
+        items: state.cart.map(item => ({ listing_id: item.id, quantity: 1 }))
+      })
+    });
+    state.cart = [];
+    saveCart();
+    renderCart();
+    checkoutMessage.textContent = "Pedido " + order.order.id + " creado. Estado: " + order.order.status + ".";
+  } catch (error) {
+    checkoutMessage.textContent = error.message || "No se pudo crear el pedido.";
+  }
 });
 
 Promise.all([applySiteConfig(), loadCategories(), loadListings()]);
