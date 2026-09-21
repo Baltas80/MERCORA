@@ -17,7 +17,7 @@ const BAD = new Set(['OFFLINE','ERROR','STOPPED','DEGRADED']);
 let authenticated=false, lastActivity=0, refreshTimer=null, busy=false;
 
 const viewTitles={
-  dashboard:'Dashboard',users:'Usuarios',stores:'Tiendas',listings:'Anuncios',orders:'Pedidos',
+  dashboard:'Dashboard',users:'Usuarios',stores:'Tiendas',listings:'Anuncios',orders:'Pedidos',escrow:'Escrow / Pagos',
   reports:'Reportes',promos:'Promociones',discounts:'Descuentos',categories:'Categorías',
   website:'Web',audit:'Auditoría',system:'Sistema'
 };
@@ -223,6 +223,94 @@ async function loadFeatured(){
   const ids=document.querySelector('#featured-ids').value.split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
   if(!ids.length){document.querySelector('#featured-list').textContent='';return}
 }
+
+async function escrowApi(action,payload={}){
+  return api('/v1/escrow',{action,payload});
+}
+function policyBool(form,key){return form.elements[key].value==='true'}
+function percentToBps(value){
+  const n=Number(value);if(!Number.isFinite(n)||n<=0||n>=100)return null;
+  return Math.round(n*100);
+}
+async function loadEscrowPolicy(){
+  const [policy,custody]=await Promise.all([
+    escrowApi('GET_POLICY',{}),
+    escrowApi('GET_CUSTODY_STATE',{})
+  ]);
+  const f=document.querySelector('#escrow-policy');
+  if(policy){
+    f.elements.escrow_enabled.value=String(policy.escrow_enabled);
+    f.elements.mid_escrow_enabled.value=String(policy.mid_escrow_enabled);
+    f.elements.mid_release_percent.value=(Number(policy.mid_release_bps)/100).toFixed(2);
+    f.elements.early_pay_enabled.value=String(policy.early_pay_enabled);
+    f.elements.early_pay_delay_hours.value=policy.early_pay_delay_hours;
+    f.elements.early_pay_max_percent.value=(Number(policy.early_pay_max_bps)/100).toFixed(2);
+    f.elements.dispute_window_hours.value=policy.dispute_window_hours;
+    f.elements.auto_release_hours.value=policy.auto_release_hours;
+    f.elements.new_seller_escrow_required.value=String(policy.new_seller_escrow_required);
+    f.elements.new_seller_hold_hours.value=policy.new_seller_hold_hours;
+    f.elements.high_value_review_enabled.value=String(policy.high_value_review_enabled);
+    f.elements.high_value_threshold_atomic.value=policy.high_value_threshold_atomic;
+    f.elements.manual_release_required.value=String(policy.manual_release_required);
+  }
+  const badge=document.querySelector('#custody-badge');
+  badge.textContent='CUSTODY '+String(custody?.value||'UNKNOWN').toUpperCase();
+  badge.className='badge '+(custody?.value==='normal'?'ok':'bad');
+  document.querySelector('#escrow-policy-output').textContent='Actualizado: '+date(policy?.updated_at)+' · actor: '+text(policy?.updated_by);
+}
+async function loadEscrowCases(){
+  const r=await escrowApi('LIST_CASES',{limit:100});
+  const tbody=document.querySelector('#escrow-table');tbody.replaceChildren();
+  (r||[]).forEach(e=>{
+    const actions=[];
+    if(e.order_status==='paid'||e.order_status==='processing'||e.order_status==='shipped'||e.order_status==='disputed'){
+      if(!e.has_pending_authorization){
+        const open=document.createElement('button');open.className='small secondary';open.textContent='ABRIR';
+        open.onclick=async()=>{try{await escrowApi('OPEN_ESCROW',{order_id:e.order_id});await loadEscrowCases();await refreshDashboard()}catch(err){alert(err.message||String(err))}};
+        if(e.state==='completed')open.disabled=true; else actions.push(open);
+      }
+    }
+    if(e.state!=='completed'&&e.state!=='frozen'){
+      if(e.order_status==='shipped'){
+        const mid=document.createElement('button');mid.className='small secondary';mid.textContent='MID';
+        mid.onclick=async()=>{const reason=prompt('Motivo de la autorización mid-escrow:','Pago parcial tras envío');if(reason===null)return;try{await escrowApi('AUTHORIZE_MID_RELEASE',{order_id:e.order_id,reason});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
+        actions.push(mid);
+        const early=document.createElement('button');early.className='small secondary';early.textContent='EARLY PAY';
+        early.onclick=async()=>{const reason=prompt('Motivo de Early Pay:','Pago anticipado autorizado');if(reason===null)return;try{await escrowApi('AUTHORIZE_EARLY_PAY',{order_id:e.order_id,reason});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
+        actions.push(early);
+      }
+      const release=document.createElement('button');release.className='small';release.textContent='LIBERAR';
+      release.onclick=async()=>{const reason=prompt('Motivo de la liberación final:','Pedido completado');if(reason===null)return;try{await escrowApi('AUTHORIZE_RELEASE',{order_id:e.order_id,reason,confirm:true});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
+      actions.push(release);
+      if(e.order_status==='cancelled'||e.order_status==='disputed'){
+        const refund=document.createElement('button');refund.className='small danger';refund.textContent='REEMBOLSAR';
+        refund.onclick=async()=>{const reason=prompt('Motivo del reembolso:','Resolución administrativa');if(reason===null)return;try{await escrowApi('AUTHORIZE_REFUND',{order_id:e.order_id,reason});await loadEscrowCases();await loadEscrowAuthorizations()}catch(err){alert(err.message||String(err))}};
+        actions.push(refund);
+      }
+      const freeze=document.createElement('button');freeze.className='small danger';freeze.textContent='CONGELAR';
+      freeze.onclick=async()=>{const reason=prompt('Motivo del bloqueo:','Revisión de riesgo');if(reason===null)return;try{await escrowApi('FREEZE_CASE',{order_id:e.order_id,reason});await loadEscrowCases()}catch(err){alert(err.message||String(err))}};
+      actions.push(freeze);
+    }else if(e.state==='frozen'){
+      const unfreeze=document.createElement('button');unfreeze.className='small secondary';unfreeze.textContent='DESCONGELAR';
+      unfreeze.onclick=async()=>{try{await escrowApi('UNFREEZE_CASE',{order_id:e.order_id});await loadEscrowCases()}catch(err){alert(err.message||String(err))}};
+      actions.push(unfreeze);
+    }
+    tbody.append(rowCells(e,[
+      x=>shortId(x.order_id),x=>x.buyer_username,x=>moneyAtomic(x.escrowed_atomic,x.asset_code),
+      x=>moneyAtomic(x.released_atomic,x.asset_code),x=>moneyAtomic(x.refunded_atomic,x.asset_code),
+      x=>x.state,x=>x.order_status
+    ],actions));
+  });
+}
+async function loadEscrowAuthorizations(){
+  const r=await escrowApi('LIST_AUTHORIZATIONS',{limit:100});
+  const tbody=document.querySelector('#escrow-auth-table');tbody.replaceChildren();
+  (r||[]).forEach(a=>tbody.append(rowCells(a,[
+    x=>date(x.created_at),x=>shortId(x.order_id),x=>x.action,
+    x=>x.amount_atomic===null?'—':x.amount_atomic,x=>x.actor,x=>x.state,x=>x.reason||'—'
+  ],[])));
+}
+
 async function loadModule(name){
   switch(name){
     case 'dashboard':return refreshDashboard();
@@ -230,6 +318,7 @@ async function loadModule(name){
     case 'stores':return loadStores();
     case 'listings':return loadListings();
     case 'orders':return loadOrders();
+    case 'escrow':await loadEscrowPolicy();await loadEscrowCases();return loadEscrowAuthorizations();
     case 'reports':return loadReports();
     case 'promos':await loadPromos();return loadDiscounts();
     case 'discounts':return loadDiscounts();
@@ -370,6 +459,34 @@ document.querySelector('#discount-create').addEventListener('submit',async e=>{
     f.reset();await loadDiscounts();await refreshDashboard();
   }catch(err){alert(err.message||String(err))}
 });
+
+document.querySelector('#escrow-policy').addEventListener('submit',async e=>{
+  e.preventDefault();const f=e.currentTarget;
+  try{
+    const payload={
+      escrow_enabled:policyBool(f,'escrow_enabled'),
+      mid_escrow_enabled:policyBool(f,'mid_escrow_enabled'),
+      mid_release_bps:percentToBps(f.elements.mid_release_percent.value),
+      early_pay_enabled:policyBool(f,'early_pay_enabled'),
+      early_pay_delay_hours:Number(f.elements.early_pay_delay_hours.value),
+      early_pay_max_bps:percentToBps(f.elements.early_pay_max_percent.value),
+      dispute_window_hours:Number(f.elements.dispute_window_hours.value),
+      auto_release_hours:Number(f.elements.auto_release_hours.value),
+      new_seller_escrow_required:policyBool(f,'new_seller_escrow_required'),
+      new_seller_hold_hours:Number(f.elements.new_seller_hold_hours.value),
+      high_value_review_enabled:policyBool(f,'high_value_review_enabled'),
+      high_value_threshold_atomic:f.elements.high_value_threshold_atomic.value,
+      manual_release_required:policyBool(f,'manual_release_required')
+    };
+    if(payload.mid_release_bps===null||payload.early_pay_max_bps===null)throw new Error('Los porcentajes deben estar entre 0 y 100, sin llegar a 100.');
+    const result=await escrowApi('SET_POLICY',payload);
+    document.querySelector('#escrow-policy-output').textContent='Política guardada: '+date(result.updated_at);
+    await loadEscrowPolicy();await refreshDashboard();
+  }catch(err){alert(err.message||String(err))}
+});
+document.querySelector('#escrow-refresh').addEventListener('click',async()=>{try{await loadEscrowCases();await loadEscrowPolicy()}catch(e){alert(e.message||String(e))}});
+document.querySelector('#escrow-auth-refresh').addEventListener('click',()=>loadEscrowAuthorizations());
+
 document.querySelector('#site-settings').addEventListener('submit',async e=>{
   e.preventDefault();const f=e.currentTarget;
   try{for(const key of ['site_name','site_mode','announcement','maintenance_message','new_listings_enabled','seller_registration_enabled','footer_notice'])await management('SITE_SET',{key,value:f.elements[key].value});alert('Configuración guardada.');}catch(err){alert(err.message||String(err))}
