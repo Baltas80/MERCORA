@@ -1,0 +1,72 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import { createAdminSystem } from './admin-system.js';
+
+function fakeRunnerFactory(){
+  const calls=[];
+  const runner=async(file,args)=>{
+    calls.push({file,args:[...args]});
+    if(args.includes('psql') && args.includes('-f')) return {ok:true,code:0,stdout:'migration ok',stderr:''};
+    if(args[0]==='stats') return {ok:true,code:0,stdout:'mercora-app|1.0%|32MiB / 1GiB|3%',stderr:''};
+    if(args.includes('logs')) return {ok:true,code:0,stdout:'safe log line',stderr:''};
+    if(args.includes('ps')) return {ok:true,code:0,stdout:'abc123\\ndef456',stderr:''};
+    return {ok:true,code:0,stdout:'',stderr:''};
+  };
+  return {runner,calls};
+}
+
+test('logs only accepts the fixed service allowlist',async()=>{
+  const {runner,calls}=fakeRunnerFactory();
+  const system=createAdminSystem({runner});
+  const result=await system.logs('tor',25);
+  assert.equal(result.stdout,'safe log line');
+  assert.ok(calls.at(-1).args.includes('tor'));
+  await assert.rejects(()=>system.logs('bash',25),/unsupported service/);
+  assert.equal(calls.length,1);
+});
+
+test('metrics uses compose IDs and a fixed docker stats format',async()=>{
+  const {runner,calls}=fakeRunnerFactory();
+  const system=createAdminSystem({runner});
+  const result=await system.metrics();
+  assert.equal(result.stdout,'mercora-app|1.0%|32MiB / 1GiB|3%');
+  assert.equal(calls[0].args.at(-2),'ps');
+  assert.equal(calls[1].args[0],'stats');
+  assert.ok(calls[1].args.includes('--no-stream'));
+});
+
+test('database migration is fixed to the committed management migration',async()=>{
+  const {runner,calls}=fakeRunnerFactory();
+  const system=createAdminSystem({runner});
+  const result=await system.migrateDb();
+  assert.equal(result.ok,true);
+  const args=calls.at(-1).args;
+  assert.ok(args.includes('/docker-entrypoint-initdb.d/004_admin_management.sql'));
+});
+
+test('backup identifiers cannot escape the managed backup directory',async()=>{
+  const system=createAdminSystem({runner:async()=>({ok:true,code:0,stdout:'',stderr:''})});
+  await assert.rejects(()=>system.verifyBackup('../secrets.dump'),/invalid backup id/);
+  await assert.rejects(()=>system.verifyBackup('anything.dump'),/invalid backup id/);
+});
+
+test('verify backup accepts only managed files',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mercora-admin-'));
+  const id='mercora-20260921T171000Z-abcdef123456.dump';
+  await fs.writeFile(path.join(dir,id),'placeholder');
+  const {runner,calls}=fakeRunnerFactory();
+  const system=createAdminSystem({runner,backupDir:dir});
+  const result=await system.verifyBackup(id);
+  assert.equal(result.id,id);
+  assert.equal(result.ok,true);
+  assert.equal(calls.length,1);
+  await fs.rm(dir,{recursive:true,force:true});
+});
+
+test('restore requires an explicit confirmation phrase',async()=>{
+  const system=createAdminSystem();
+  await assert.rejects(()=>system.restoreBackup('mercora-20260921T171000Z-abcdef123456.dump','YES'),/restore confirmation required/);
+});
