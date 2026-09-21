@@ -19,7 +19,7 @@ The admin surface does **not** expose a shell or arbitrary command execution.
 
 ## Local API
 
-The API binds to `127.0.0.1` only and requires `MERCORA_ADMIN_TOKEN` with at least 32 characters. The token must be supplied through the process environment and must never be committed to the repository.
+The API binds to `127.0.0.1` only and requires `MERCORA_ADMIN_TOKEN` with at least 32 characters. The implementation now rejects non-local bind addresses at construction time as an additional fail-closed boundary. The token must be supplied through the process environment and must never be committed to the repository.
 
 Start it from the repository root:
 
@@ -55,7 +55,7 @@ Diagnostics are truncated and filter common secret-bearing lines before they are
 
 The control implementation invokes `docker` with `execFile` and `shell: false`. Arguments are generated exclusively from fixed allowlists. No user-supplied command string is passed to a shell.
 
-The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its port through Tor, or place it behind the public MERCORA web server.
+The control API is fail-closed to localhost binding and must remain local-only. Do not bind it to `0.0.0.0`, publish its port through Tor, or place it behind the public MERCORA web server.
 
 ## Verification status
 
@@ -63,5 +63,6 @@ The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its
 - **IMPLEMENTED:** local authenticated control API.
 - **IMPLEMENTED:** component-targeted recovery.
 - **IMPLEMENTED:** secret-filtered diagnostics.
-- **TESTED:** controller and API unit tests pass in an isolated Node.js test run.
+- **IMPLEMENTED:** fail-closed localhost-only API binding.
+- **TEST ADDED:** non-local bind attempts are rejected.
 - **PENDING:** full repository `npm test` and live Docker/Tor health checks require the actual MERCORA runtime environment with Docker available.
