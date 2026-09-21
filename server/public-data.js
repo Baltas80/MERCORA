@@ -156,7 +156,16 @@ export function createPublicData({
                   COALESCE(sr.verified_sales_count,0)::text AS verified_sales_count,
                   COALESCE(sr.verified_units_sold,0)::text AS verified_units_sold,
                   COALESCE(sr.verified_rating_count,0)::text AS verified_rating_count,
-                  sr.rating_average
+                  sr.rating_average,
+                  (SELECT COALESCE(json_agg(row_to_json(lx) ORDER BY lx.created_at DESC),'[]'::json)
+                     FROM (
+                       SELECT l.id,l.title,l.price_atomic::text AS price_atomic,l.price_asset,l.condition,c.name AS category
+                         FROM listings l
+                         LEFT JOIN categories c ON c.id=l.category_id
+                        WHERE l.seller_account_id=sp.account_id AND l.status='active'
+                        ORDER BY l.created_at DESC
+                        LIMIT 48
+                     ) lx) AS listings
              FROM seller_profiles sp
              LEFT JOIN seller_reputation sr ON sr.account_id=sp.account_id
             WHERE sp.display_name=:'name'
