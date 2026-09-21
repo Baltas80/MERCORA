@@ -25,7 +25,24 @@ async function loadOrders(){
     for(const order of response.orders||[]){
       const row=document.createElement('div');
       row.className='cart-line';
-      row.textContent=order.id+' · '+order.status+' · '+order.total_atomic+' '+order.total_asset+' · '+order.item_count+' artículo(s)';
+      const label=document.createElement('span');
+      label.textContent=order.id+' · '+order.status+' · '+order.total_atomic+' '+order.total_asset+' · '+order.item_count+' artículo(s)';
+      row.append(label);
+      if(['pending','awaiting_payment'].includes(order.status)){
+        const cancel=document.createElement('button');
+        cancel.className='button button-ghost';
+        cancel.type='button';
+        cancel.textContent='CANCELAR';
+        cancel.onclick=async()=>{
+          if(!confirm('¿Cancelar este pedido?'))return;
+          try{
+            await api('./api/orders/'+encodeURIComponent(order.id)+'/cancel',{method:'POST',body:'{}'});
+            showMessage('Pedido cancelado.',true);
+            await loadOrders();
+          }catch(error){showMessage(error.message);}
+        };
+        row.append(cancel);
+      }
       ordersList.append(row);
     }
     if(!(response.orders||[]).length){
