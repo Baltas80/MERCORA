@@ -97,18 +97,24 @@ export function createAdminEscrow({
       sqlString(JSON.stringify(metadata))+'::jsonb)'
     );
   }
-  async function authorized(orderId,action,amount,reason){
+  async function authorized(orderId,action,amount,reason,idempotencyKey){
     const boundedReason=reason===null||reason===undefined?'':String(reason);
     if(boundedReason.length>1000) throw new Error('authorization reason is too long');
+    const key=idempotencyKey===undefined||idempotencyKey===null?'':String(idempotencyKey);
+    if(key && !/^[0-9a-f-]{16,80}$/i.test(key)) throw new Error('invalid authorization idempotency key');
+    if(key){
+      const existingByKey=await row("SELECT id,order_id,action,amount_atomic::text AS amount_atomic,actor,reason,state,created_at FROM escrow_authorizations WHERE idempotency_key="+sqlString(key));
+      if(existingByKey) return existingByKey;
+    }
     const existing=await row(
       "SELECT id FROM escrow_authorizations WHERE order_id="+sqlString(orderId)+"::uuid AND state='authorized' LIMIT 1"
     );
     if(existing) throw new Error('an escrow authorization is already pending');
     const rowResult=await row(
-      "INSERT INTO escrow_authorizations(order_id,action,amount_atomic,actor,reason) VALUES("+
-      sqlString(orderId)+"::uuid,"+sqlString(action)+","+
+      "INSERT INTO escrow_authorizations(idempotency_key,order_id,action,amount_atomic,actor,reason) VALUES("+
+      (key?sqlString(key):"gen_random_uuid()::text")+","+sqlString(orderId)+"::uuid,"+sqlString(action)+","+
       (amount===null?'NULL':sqlString(amount))+","+sqlString(actor)+","+sqlNullable(boundedReason)+
-      ") RETURNING id,order_id,action,amount_atomic,actor,reason,state,created_at"
+      ") RETURNING id,order_id,action,amount_atomic::text AS amount_atomic,actor,reason,state,created_at"
     );
     return rowResult;
   }
@@ -213,7 +219,7 @@ export function createAdminEscrow({
     const target=(BigInt(item.escrowed_atomic)*BigInt(policy.mid_release_bps))/10000n;
     const amount=target-(BigInt(item.released_atomic)+BigInt(item.refunded_atomic));
     if(amount<=0n) throw new Error('no amount remains for mid-escrow release');
-    const auth=await authorized(id,'mid_release',amount.toString(),payload.reason||'Mid-escrow release authorized by admin');
+    const auth=await authorized(id,'mid_release',amount.toString(),payload.reason||'Mid-escrow release authorized by admin',payload.idempotency_key);
     await db("UPDATE order_escrows SET state='mid_release_authorized',updated_at=now() WHERE order_id="+sqlString(id)+"::uuid AND state<>'completed'");
     await audit(id,'AUTHORIZE_MID_RELEASE',{amount_atomic:amount.toString(),authorization_id:auth.id});
     return auth;
@@ -232,7 +238,7 @@ export function createAdminEscrow({
     const target=(BigInt(item.escrowed_atomic)*BigInt(policy.early_pay_max_bps))/10000n;
     const amount=target-(BigInt(item.released_atomic)+BigInt(item.refunded_atomic));
     if(amount<=0n) throw new Error('no amount remains for early pay');
-    const auth=await authorized(id,'early_pay',amount.toString(),payload.reason||'Early pay authorized by admin');
+    const auth=await authorized(id,'early_pay',amount.toString(),payload.reason||'Early pay authorized by admin',payload.idempotency_key);
     await db("UPDATE order_escrows SET state='early_pay_authorized',updated_at=now() WHERE order_id="+sqlString(id)+"::uuid AND state<>'completed'");
     await audit(id,'AUTHORIZE_EARLY_PAY',{amount_atomic:amount.toString(),authorization_id:auth.id});
     return auth;
@@ -252,7 +258,7 @@ export function createAdminEscrow({
     if(!eligible) throw new Error('escrow is not yet eligible for final release');
     const amount=(await available(item)).toString();
     if(amount==='0') throw new Error('no amount remains to release');
-    const auth=await authorized(id,'release',amount,payload.reason||'Final escrow release authorized by admin');
+    const auth=await authorized(id,'release',amount,payload.reason||'Final escrow release authorized by admin',payload.idempotency_key);
     await db("UPDATE order_escrows SET state='release_authorized',updated_at=now() WHERE order_id="+sqlString(id)+"::uuid");
     await audit(id,'AUTHORIZE_RELEASE',{amount_atomic:amount,authorization_id:auth.id});
     return auth;
@@ -267,7 +273,7 @@ export function createAdminEscrow({
     if(!eligible) throw new Error('refund requires a cancelled or disputed order');
     const amount=(await available(item)).toString();
     if(amount==='0') throw new Error('no amount remains to refund');
-    const auth=await authorized(id,'refund',amount,payload.reason||'Refund authorized by admin');
+    const auth=await authorized(id,'refund',amount,payload.reason||'Refund authorized by admin',payload.idempotency_key);
     await db("UPDATE order_escrows SET state='refund_authorized',updated_at=now() WHERE order_id="+sqlString(id)+"::uuid");
     await audit(id,'AUTHORIZE_REFUND',{amount_atomic:amount,authorization_id:auth.id});
     return auth;
@@ -293,7 +299,7 @@ export function createAdminEscrow({
     const offset=integer(payload.offset??0,'offset',0,100000);
     return json(
       "SELECT COALESCE(json_agg(row_to_json(x) ORDER BY x.created_at DESC),'[]'::json)::text FROM ("+
-      "SELECT ea.id,ea.order_id,ea.action,ea.amount_atomic::text AS amount_atomic,ea.actor,ea.reason,ea.state,ea.created_at,ea.executed_at,o.status AS order_status "+
+      "SELECT ea.id,ea.idempotency_key,ea.order_id,ea.action,ea.amount_atomic::text AS amount_atomic,ea.actor,ea.reason,ea.state,ea.created_at,ea.executed_at,o.status AS order_status "+
       "FROM escrow_authorizations ea JOIN orders o ON o.id=ea.order_id ORDER BY ea.created_at DESC LIMIT "+String(limit)+" OFFSET "+String(offset)+") x"
     );
   }
