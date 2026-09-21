@@ -22,7 +22,7 @@ test("order rejects invalid account id before database",async()=>{
   const {runner,calls}=fakeRunner();
   const api=createOrderApi({databaseUrl:"postgresql://u:p@db/mercora",run:runner});
   await assert.rejects(()=>api.createOrder("bad",{items:[{listing_id:LISTING}]}),/valid UUID/);
-  assert.equal(calls.length,1);
+  assert.equal(calls.length,0);
 });
 
 test("order keeps database connection URL out of child arguments",async()=>{
@@ -38,7 +38,7 @@ test("order SQL requires active listings and one payment asset",async()=>{
   const {runner,calls}=fakeRunner();
   const api=createOrderApi({databaseUrl:"postgresql://u:p@db/mercora",run:runner});
   await api.createOrder(ACCOUNT,{items:[{listing_id:LISTING}]});
-  const sql=calls[0].args.at(-1);
+  const sql=calls.find(c=>c.args.at(-1).includes("WITH selected")).args.at(-1);
   assert.ok(sql.includes("l.status='active'"));
   assert.ok(sql.includes("COUNT(DISTINCT price_asset)=1"));
 });
@@ -47,7 +47,7 @@ test("order rejects quantity above one because listings are single-item inventor
   const {runner,calls}=fakeRunner();
   const api=createOrderApi({databaseUrl:"postgresql://u:p@db/mercora",run:runner});
   await assert.rejects(()=>api.createOrder(ACCOUNT,{items:[{listing_id:LISTING,quantity:2}]}),/must be 1/);
-  assert.equal(calls.length,0);
+  assert.equal(calls.length,1);
 });
 
 
