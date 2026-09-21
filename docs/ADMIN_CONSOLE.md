@@ -28,6 +28,9 @@ La consola administra usuarios, tiendas, anuncios, pedidos, reportes, promocione
 La sección **Web** incluye un editor separado para los textos públicos que pueden necesitar corrección rápida sin modificar código:
 
 - nombre del sitio;
+- condiciones de uso;
+- política de privacidad;
+- normas de publicación;
 - enunciado/aviso;
 - mensaje de mantenimiento;
 - aviso del pie;
