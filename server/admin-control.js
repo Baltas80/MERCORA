@@ -83,17 +83,38 @@ export function createAdminController({
   }
 
   async function healthCheck() {
-    const checks = [];
-    checks.push(await probe('node', ['--version'], { cwd }));
-    checks.push(await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd }));
-    checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps'], { cwd }).then(sanitizeResult));
-    checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'], { cwd }).then(sanitizeResult));
-    checks.push(await backendProbe());
-    checks.push(await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd }).then(sanitizeResult));
-    checks.push(await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd }));
+    const checks = {
+      node: await probe('node', ['--version'], { cwd }),
+      docker: await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd }),
+      compose: await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps'], { cwd }).then(sanitizeResult),
+      postgres: await runner(
+        'docker',
+        [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'],
+        { cwd }
+      ).then(sanitizeResult),
+      backend: await backendProbe(),
+      onionService: await runner(
+        'docker',
+        [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'],
+        { cwd }
+      ).then(sanitizeResult),
+      storage: await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd })
+    };
+    const components = {
+      node: checks.node.ok ? 'OK' : 'ERROR',
+      docker: checks.docker.ok ? 'OK' : 'ERROR',
+      mercora: checks.compose.ok ? 'ONLINE' : 'DEGRADED',
+      postgres: checks.postgres.ok ? 'ONLINE' : 'ERROR',
+      backend: checks.backend.ok ? 'ONLINE' : 'ERROR',
+      tor: checks.compose.ok && checks.onionService.ok ? 'ONLINE' : 'ERROR',
+      onionService: checks.onionService.ok ? 'CONFIGURED' : 'ERROR',
+      storage: checks.storage.ok ? 'OK' : 'ERROR',
+      health: Object.values(checks).every((item) => item.ok) ? 'OK' : 'DEGRADED'
+    };
     return {
-      ok: checks.every((item) => item.ok),
-      checks: checks.map(sanitizeResult),
+      ok: components.health === 'OK',
+      components,
+      checks: Object.fromEntries(Object.entries(checks).map(([key, value]) => [key, sanitizeResult(value)])),
       platform: os.platform()
     };
   }
