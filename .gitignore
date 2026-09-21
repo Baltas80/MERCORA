@@ -38,3 +38,6 @@ logs/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local administrator backups (never commit database dumps)
+backups/
