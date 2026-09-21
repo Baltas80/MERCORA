@@ -160,6 +160,25 @@
         <div class="buttons"><button data-control="START" data-service="app">START MERCORA</button><button data-control="RESTART" data-service="app">RESTART MERCORA</button><button data-control="STOP" data-service="app" class="danger">STOP MERCORA</button><button data-control="START" data-service="tor">START TOR</button><button data-control="RESTART" data-service="tor">RESTART TOR</button><button data-control="RECOVER" class="secondary">RECOVER</button><button data-control="HEALTH_CHECK" class="secondary">HEALTH CHECK</button></div>
         <pre id="system-control-output" class="console-output">Listo.</pre>
       </section>
+      <div class="two-col">
+        <section class="card">
+          <div class="section-head"><div><div class="eyebrow">OBSERVABILIDAD</div><h3>Logs y métricas</h3></div></div>
+          <div class="toolbar"><select id="logs-service"><option value="app">Backend</option><option value="postgres">PostgreSQL</option><option value="tor">Tor</option></select><input id="logs-lines" type="number" min="1" max="500" value="100"><button id="logs-load">VER LOGS</button></div>
+          <pre id="logs-output" class="console-output">Selecciona un servicio.</pre>
+          <button id="metrics-load" class="secondary">ACTUALIZAR MÉTRICAS</button>
+          <pre id="metrics-output" class="console-output">Sin datos.</pre>
+        </section>
+        <section class="card">
+          <div class="section-head"><div><div class="eyebrow">MANTENIMIENTO</div><h3>Base de datos</h3></div></div>
+          <div class="buttons">
+            <button id="migrate-db">MIGRAR BD</button>
+            <button id="backup-db">CREAR BACKUP</button>
+            <button id="list-backups" class="secondary">LISTAR BACKUPS</button>
+          </div>
+          <div class="toolbar"><select id="backup-select"><option value="">Selecciona backup…</option></select><button id="verify-backup" class="secondary">VERIFICAR</button><button id="restore-backup" class="danger">RESTAURAR</button></div>
+          <pre id="backup-output" class="console-output">No se ha ejecutado ninguna operación.</pre>
+        </section>
+      </div>
     </section>
   </main>
 </section>
