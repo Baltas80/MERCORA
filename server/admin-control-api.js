@@ -18,11 +18,11 @@ function tokenMatches(received, expected){
   return a.length === b.length && timingSafeEqual(a,b);
 }
 
-export function createAdminApi({ controller, management, token, host='127.0.0.1', port=8787 } = {}){
+export function createAdminApi({ controller, management, system: systemOverride, token, host='127.0.0.1', port=8787 } = {}){
   if(!token || token.length < 32) throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
   const control = controller ?? createAdminController();
   const manage = management ?? createAdminManagement();
-  const system = createAdminSystem();
+  const system = systemOverride ?? createAdminSystem();
 
   const server = http.createServer(async (req,res)=>{
     res.setHeader('Content-Type','application/json; charset=utf-8');
