@@ -63,10 +63,34 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_validate_seller_rating ON seller_ratings;
 CREATE TRIGGER trg_validate_seller_rating
-BEFORE INSERT OR UPDATE
+BEFORE INSERT OR UPDATE OF order_id, seller_account_id, buyer_account_id
 ON seller_ratings
 FOR EACH ROW
 EXECUTE FUNCTION mercora_validate_seller_rating();
+
+CREATE OR REPLACE FUNCTION mercora_submit_seller_rating(
+  p_order_id UUID,
+  p_seller_account_id UUID,
+  p_buyer_account_id UUID,
+  p_score SMALLINT,
+  p_comment TEXT DEFAULT NULL
+)
+RETURNS seller_ratings
+LANGUAGE plpgsql
+AS $
+DECLARE
+  v_rating seller_ratings;
+BEGIN
+  INSERT INTO seller_ratings(
+    order_id, seller_account_id, buyer_account_id, score, comment
+  ) VALUES (
+    p_order_id, p_seller_account_id, p_buyer_account_id, p_score, p_comment
+  )
+  RETURNING * INTO v_rating;
+
+  RETURN v_rating;
+END;
+$;
 
 CREATE OR REPLACE FUNCTION mercora_refresh_seller_rating_totals(p_seller UUID)
 RETURNS void
