@@ -25,11 +25,14 @@ const DEFAULT_SITE_CONFIG = Object.freeze({
 const HOST = process.env.HOST ?? "127.0.0.1";
 const PORT = Number(process.env.PORT ?? "8080");
 const publicData = createPublicData();
+const auth = createAuthApi();
+const seller = createSellerApi();
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_SOCKET = 120;
 const MAX_REQUESTS_GLOBAL = 2_000;
 const socketBuckets = new WeakMap();
+const authBuckets = new WeakMap();
 let globalBucket = { start: Date.now(), count: 0 };
 
 function securityHeaders() {
@@ -69,6 +72,17 @@ function rateAllowed(socket) {
   return current.count <= MAX_REQUESTS_PER_SOCKET;
 }
 
+function authRateAllowed(socket) {
+  const now = Date.now();
+  const current = authBuckets.get(socket);
+  if (!current || now - current.start >= WINDOW_MS) {
+    authBuckets.set(socket, { start: now, count: 1 });
+    return true;
+  }
+  current.count += 1;
+  return current.count <= 20;
+}
+
 function contentType(file) {
   if (file.endsWith(".html")) return "text/html; charset=utf-8";
   if (file.endsWith(".css")) return "text/css; charset=utf-8";
@@ -76,8 +90,8 @@ function contentType(file) {
   return "application/octet-stream";
 }
 
-function sendJson(res, status, payload) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+function sendJson(res, status, payload, headers = {}) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...headers });
   return res.end(JSON.stringify(payload));
 }
 
