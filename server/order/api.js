@@ -122,6 +122,37 @@ export function createOrderApi({databaseUrl=process.env.DATABASE_URL,run=runner}
     return order;
   }
 
+  async function cancelOrder(accountId,orderId){
+    uuid(accountId,"account_id");
+    uuid(orderId,"order_id");
+    const result=await json(
+      `WITH target AS (
+        SELECT id,status FROM orders
+        WHERE id=:'order_id'::uuid AND buyer_account_id=:'account_id'::uuid
+        FOR UPDATE
+      ),
+      cancelled AS (
+        UPDATE orders o
+        SET status='cancelled',updated_at=now()
+        FROM target
+        WHERE o.id=target.id AND target.status IN ('pending','awaiting_payment')
+        RETURNING o.id,o.status,o.total_atomic::text AS total_atomic,o.total_asset,o.updated_at
+      ),
+      released AS (
+        UPDATE listings l
+        SET status='active',updated_at=now()
+        FROM order_items oi
+        JOIN cancelled c ON c.id=oi.order_id
+        WHERE l.id=oi.listing_id AND l.status='reserved'
+        RETURNING l.id
+      )
+      SELECT row_to_json(cancelled)::text FROM cancelled`,
+      {account_id:accountId,order_id:orderId}
+    );
+    if(!result)throw new Error("order cannot be cancelled");
+    return result;
+  }
+
   async function listOrders(accountId){
     uuid(accountId,"account_id");
     return json(
@@ -140,5 +171,5 @@ export function createOrderApi({databaseUrl=process.env.DATABASE_URL,run=runner}
     );
   }
 
-  return Object.freeze({createOrder,listOrders});
+  return Object.freeze({createOrder,listOrders,cancelOrder});
 }
