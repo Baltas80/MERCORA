@@ -8,7 +8,8 @@ function fakeRunner(){
     calls.push({file,args,options});
     const sql=args.at(-1);
     if(sql.includes("FROM site_settings")){
-      return{ok:true,stdout:JSON.stringify({value:sql.includes("key=:'key'") && sql.includes("site_mode")?'public':'true'}),stderr:''};
+      const keyArg=args.find(value=>value==='key=site_mode');
+      return{ok:true,stdout:JSON.stringify({value:keyArg?'public':'true'}),stderr:''};
     }
     if(sql.includes("FROM accounts WHERE id"))return{ok:true,stdout:'{"id":"11111111-1111-4111-8111-111111111111","status":"active"}',stderr:''};
     if(sql.includes("FROM mercora_stores WHERE id"))return{ok:true,stdout:'{"id":"22222222-2222-4222-8222-222222222222","status":"active"}',stderr:''};
