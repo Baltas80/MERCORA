@@ -89,6 +89,8 @@ jobs:
           node --check admin-console/ui/reputation.js
           node --check admin-console/ui/content-editor.js
           node --check admin-console/ui/security.test.js
+          node --check scripts/mercora-backup-scheduler.mjs
+          node --check scripts/mercora-backup-scheduler.test.mjs
           node --check web/account.js
           node --check web/seller.js
 
@@ -100,6 +102,9 @@ jobs:
 
       - name: Run unit tests
         run: npm test
+
+      - name: Run backup scheduler tests
+        run: npm run backup:test
 
       - name: Run admin console UI security test
         run: node --test admin-console/ui/security.test.js
