@@ -90,7 +90,6 @@ test('admin API enforces request body limit',async()=>{
   api.server.close();
 });
 
-
 test('system endpoint enforces its fixed action surface',async()=>{
   let calls=0;
   const api=makeApi({system:{
@@ -121,7 +120,6 @@ test('system endpoint rejects non-allowlisted actions',async()=>{
   api.server.close();
 });
 
-
 test('reputation endpoint receives only explicit action and payload objects',async()=>{
   let received=null;
   const api=makeApi({reputation:{run:async(action,payload)=>{received={action,payload};return{verified_sales_count:'12'}}}});
@@ -151,7 +149,6 @@ test('reputation endpoint propagates manager validation errors',async()=>{
   assert.equal(calls,1);
   api.server.close();
 });
-
 
 test('escrow endpoint receives only explicit action and payload objects',async()=>{
   let received=null;
@@ -208,5 +205,16 @@ test('overview returns structured system status for the console dashboard',async
   assert.equal(body.system.mercora,'ONLINE');
   assert.equal(body.system.postgresql,'ONLINE');
   assert.equal(body.system.tor,'ONLINE');
+  api.server.close();
+});
+
+test('admin API sanitizes diagnostics before returning them',async()=>{
+  const api=makeApi({management:{run:async()=>{throw new Error('failed at /srv/mercora/config with token=super-secret password=hunter2')}}});
+  const address=await start(api);
+  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/overview',{headers:{authorization:'Bearer '+token}});
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.equal(body.managementError,'failed at [path] with [redacted] [redacted]');
+  assert.doesNotMatch(body.managementError,/super-secret|hunter2|\/srv\/mercora/);
   api.server.close();
 });
