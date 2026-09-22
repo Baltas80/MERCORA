@@ -121,6 +121,52 @@ jobs:
       - name: Run admin console UI security test
         run: node --test admin-console/ui/security.test.js
 
+  admin-console-rust:
+    name: Admin Console Rust tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            admin-console/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('admin-console/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check Rust formatting
+        working-directory: admin-console/src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: Run Rust tests
+        working-directory: admin-console/src-tauri
+        run: cargo test --locked
+
   codeql:
     name: CodeQL
     runs-on: ubuntu-latest
