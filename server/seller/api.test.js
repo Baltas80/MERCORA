@@ -7,7 +7,9 @@ function fakeRunner(){
   const runner=async(file,args,options)=>{
     calls.push({file,args,options});
     const sql=args.at(-1);
-    if(sql.includes("FROM site_settings"))return{ok:true,stdout:'[{"key":"seller_registration_enabled","value":"true"},{"key":"new_listings_enabled","value":"true"}]',stderr:''};
+    if(sql.includes("FROM site_settings")){
+      return{ok:true,stdout:JSON.stringify({value:sql.includes("key=:'key'") && sql.includes("site_mode")?'public':'true'}),stderr:''};
+    }
     if(sql.includes("FROM accounts WHERE id"))return{ok:true,stdout:'{"id":"11111111-1111-4111-8111-111111111111","status":"active"}',stderr:''};
     if(sql.includes("FROM mercora_stores WHERE id"))return{ok:true,stdout:'{"id":"22222222-2222-4222-8222-222222222222","status":"active"}',stderr:''};
     if(sql.includes("FROM categories WHERE slug"))return{ok:true,stdout:'{"id":"33333333-3333-4333-8333-333333333333"}',stderr:''};
