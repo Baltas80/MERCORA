@@ -16,12 +16,6 @@ function isLoopback(address) {
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
 }
 
-async function drainRequest(req) {
-  for await (const _chunk of req) {
-    // Drain the body so the client can finish cleanly before the 413 response.
-  }
-}
-
 export function createAdminApi({ controller, token, host = '127.0.0.1', port = 8787 } = {}) {
   if (!token || token.length < 32) throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
   const control = controller ?? createAdminController();
@@ -44,7 +38,7 @@ export function createAdminApi({ controller, token, host = '127.0.0.1', port = 8
 
     const contentLength = Number(req.headers['content-length']);
     if (Number.isFinite(contentLength) && contentLength > MAX_BODY) {
-      await drainRequest(req);
+      req.resume();
       res.writeHead(413); return res.end(JSON.stringify({ error: 'request too large' }));
     }
 
