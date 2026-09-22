@@ -9,7 +9,7 @@ No existe una shell de comandos dentro de la interfaz.
 ## Gestión operativa
 
 - START / STOP / RESTART de MERCORA.
-- START / RESTART de Tor.
+- START / STOP / RESTART de MERCORA, PostgreSQL y Tor.
 - STATUS, HEALTH CHECK y RECOVER.
 - Recuperación orientada al componente afectado.
 - Tras una recuperación se ejecutan las comprobaciones de runtime/dependencias, backend, PostgreSQL, Tor, Onion Service y almacenamiento en un orden explícito antes de declarar el estado final.
@@ -49,6 +49,7 @@ Las modificaciones generan entradas en `admin_audit_log`. La consola no proporci
 - API de administración ligada a localhost.
 - Autenticación Bearer con comparación en tiempo constante.
 - Token de la consola únicamente en memoria.
+- Bloqueo automático por inactividad tras 15 minutos; el temporizador se inicia al autenticarse y se cancela al cerrar sesión.
 - Endpoints allow-listed.
 - Servicios Docker allow-listed.
 - Procesos lanzados con shell=false.
@@ -64,7 +65,7 @@ Los scripts montados en docker-entrypoint-initdb.d/ solo se ejecutan automática
 
 ## Verificación CI
 
-La pipeline específica de la consola ejecuta comprobación Rust (`cargo check`), tests Rust (`cargo test`), validación de sintaxis JavaScript y build del instalador Windows NSIS. La pipeline general también comprueba explícitamente la sintaxis de `server/admin-control-api.test.js` para evitar que el nuevo conjunto de pruebas quede fuera de la validación sintáctica. El conjunto de dependencias del frontend administrativo todavía no dispone de un `package-lock.json` propio, por lo que esa instalación continúa usando `npm install`; convertirla a `npm ci` queda como mejora de reproducibilidad pendiente hasta generar y revisar el lockfile completo.
+El CI general y la pipeline específica de la consola ejecutan además el test de regresión de seguridad del bloqueo por inactividad de la UI (`admin-console/ui/security.test.js`). La pipeline específica de la consola ejecuta comprobación Rust (`cargo check`), tests Rust (`cargo test`), validación de sintaxis JavaScript y build del instalador Windows NSIS. La pipeline general también comprueba explícitamente la sintaxis de `server/admin-control-api.test.js` para evitar que el nuevo conjunto de pruebas quede fuera de la validación sintáctica. El conjunto de dependencias del frontend administrativo todavía no dispone de un `package-lock.json` propio, por lo que esa instalación continúa usando `npm install`; convertirla a `npm ci` queda como mejora de reproducibilidad pendiente hasta generar y revisar el lockfile completo.
 
 ## Estado de producción
 
