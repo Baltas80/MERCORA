@@ -108,3 +108,10 @@ La web pública actual incluye:
 - páginas de condiciones, privacidad y normas de publicación.
 
 La capa web no ejecuta SQL recibido del navegador. Los endpoints del servidor validan identificadores, límites, estados y activos antes de tocar PostgreSQL. Las operaciones de pago blockchain y custodia permanecen fuera del checkout hasta que el servicio de wallets/custodia real esté validado.
+
+
+## Controles de la interfaz
+
+Los controles `ACTUALIZAR` de los módulos están conectados a su operación de carga real. Las acciones destructivas de infraestructura (`STOP` y `RECOVER`) requieren confirmación explícita antes de llegar al Admin Control API. La sesión de la consola se bloquea automáticamente tras 15 minutos de inactividad y borra el token mantenido en memoria.
+
+La interfaz de checkout pública conserva el método y cuerpo HTTP de la petición de creación de pedido; la página pública también valida que todos sus recursos locales y módulos JavaScript referenciados existan mediante una prueba estática del repositorio.
