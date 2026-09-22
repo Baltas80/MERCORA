@@ -11,6 +11,8 @@ const SERVICES = new Set(['app', 'postgres', 'tor']);
 const BACKUP_RE = /^mercora-\d{8}T\d{6}Z-[0-9a-f]{12}\.dump$/i;
 const MAX_LOG_LINES = 500;
 const MAX_BACKUP_BYTES = 8 * 1024 * 1024 * 1024;
+const COMMAND_TIMEOUT_MS = 120000;
+const BACKUP_TIMEOUT_MS = 15 * 60 * 1000;
 
 function clean(text=''){
   return String(text).split(/\r?\n/)
@@ -45,29 +47,34 @@ async function defaultRunner(file,args,options={}){
   return new Promise(resolve=>{
     const child=spawn(file,args,{cwd:options.cwd,shell:false,windowsHide:true,stdio:['ignore','pipe','pipe']});
     const out=[]; const err=[]; let total=0; const MAX=2*1024*1024;
-    const collect=(target,chunk)=>{total+=chunk.length;if(total>MAX){child.kill();return;}target.push(chunk);};
+    const timeoutMs=Number.isFinite(options.timeoutMs)?options.timeoutMs:COMMAND_TIMEOUT_MS;
+    let timedOut=false;
+    const timer=setTimeout(()=>{timedOut=true;child.kill('SIGTERM');},timeoutMs);
+    const collect=(target,chunk)=>{total+=chunk.length;if(total>MAX){child.kill('SIGTERM');return;}target.push(chunk);};
     child.stdout.on('data',chunk=>collect(out,chunk));
     child.stderr.on('data',chunk=>collect(err,chunk));
-    child.on('error',e=>resolve({ok:false,code:null,stdout:'',stderr:e.message}));
-    child.on('close',code=>resolve({ok:code===0,code,stdout:Buffer.concat(out).toString(),stderr:Buffer.concat(err).toString()}));
+    child.on('error',e=>{clearTimeout(timer);resolve({ok:false,code:null,stdout:'',stderr:timedOut?'command timed out':e.message});});
+    child.on('close',code=>{clearTimeout(timer);resolve({ok:code===0&&!timedOut,code,stdout:Buffer.concat(out).toString(),stderr:timedOut?'command timed out':Buffer.concat(err).toString()});});
   });
 }
 
-async function defaultInputRunner({file,args,source,cwd}){
+async function defaultInputRunner({file,args,source,cwd,timeoutMs=COMMAND_TIMEOUT_MS}){
   return new Promise((resolve,reject)=>{
     const child=spawn(file,args,{cwd,shell:false,windowsHide:true,stdio:['pipe','pipe','pipe']});
-    const out=[];const err=[];let outBytes=0;let errBytes=0;
+    const out=[];const err=[];let outBytes=0;let errBytes=0;let timedOut=false;
+    const timer=setTimeout(()=>{timedOut=true;child.kill('SIGTERM');},timeoutMs);
+    const input=createReadStream(source,{flags:'r',mode:0o400});
+    const fail=error=>{clearTimeout(timer);input.destroy();child.kill('SIGTERM');reject(error);};
     child.stdout.on('data',chunk=>{if(outBytes<524288){out.push(chunk);outBytes+=chunk.length}});
     child.stderr.on('data',chunk=>{if(errBytes<1048576){err.push(chunk);errBytes+=chunk.length}});
-    const input=createReadStream(source,{flags:'r',mode:0o400});
-    input.on('error',reject);
-    child.on('error',reject);
+    input.on('error',fail);
+    child.on('error',fail);
     input.pipe(child.stdin);
-    child.on('close',code=>resolve({
-      ok:code===0,code,
+    child.on('close',code=>{clearTimeout(timer);resolve({
+      ok:code===0&&!timedOut,code,
       stdout:clean(Buffer.concat(out).toString()),
-      stderr:clean(Buffer.concat(err).toString())
-    }));
+      stderr:timedOut?'command timed out':clean(Buffer.concat(err).toString())
+    })});
   });
 }
 
@@ -126,6 +133,8 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     const child=spawn('docker',COMPOSE.concat(['exec','-T','postgres','pg_dump','-Fc','-U','mercora','-d','mercora']),{
       cwd,shell:false,windowsHide:true,stdio:['ignore','pipe','pipe']
     });
+    let timedOut=false;
+    const backupTimer=setTimeout(()=>{timedOut=true;child.kill('SIGTERM');},BACKUP_TIMEOUT_MS);
     const output=createWriteStream(destination,{flags:'wx',mode:0o600});
     let bytes=0; const errors=[];
     child.stderr.on('data',chunk=>{if(Buffer.byteLength(errors.join(''))<65536)errors.push(chunk.toString())});
@@ -138,7 +147,7 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     });
     const childDone=new Promise((resolve,reject)=>{
       child.on('error',reject);
-      child.on('close',code=>resolve(code));
+      child.on('close',code=>{clearTimeout(backupTimer);resolve(code);});
     });
     let code;
     try {
@@ -149,6 +158,7 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
       await fs.rm(destination,{force:true});
       throw new Error(clean(error.message));
     }
+    if(timedOut) throw new Error('database backup timed out');
     if(code!==0 || bytes>MAX_BACKUP_BYTES){
       await fs.rm(destination,{force:true});
       throw new Error(clean(errors.join(' ')||'database backup failed'));
