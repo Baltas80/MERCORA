@@ -67,6 +67,7 @@ jobs:
         run: |
           node --check server/admin-control.js
           node --check server/admin-control-api.js
+          node --check server/admin-control-api.test.js
           node --check server/admin-management.js
           node --check server/admin-escrow.js
           node --check server/admin-system.js
