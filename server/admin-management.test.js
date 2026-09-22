@@ -10,6 +10,7 @@ function fakeRunnerFactory(){
     if(sql.includes('INSERT INTO promotion_codes')) return {ok:true,code:0,stdout:JSON.stringify({id:'11111111-1111-4111-8111-111111111111',code_prefix:'MERCO123',discount_type:'percent',discount_bps:1500,discount_atomic:null,discount_asset:null,max_redemptions:null,min_order_atomic:'0',starts_at:'2026-09-21T00:00:00Z',ends_at:null,active:true}),stderr:''};
     if(sql.includes('SELECT json_build_object')) return {ok:true,code:0,stdout:'{"users":3,"active_users":2,"banned_users":1,"stores":2,"active_stores":1,"active_listings":4,"blocked_listings":1,"open_reports":2,"active_orders":3,"active_promos":1,"active_discounts":2}',stderr:''};
     if(sql.includes('SELECT id,username FROM accounts')) return {ok:true,code:0,stdout:'{"id":"22222222-2222-4222-8222-222222222222","username":"seller"}',stderr:''};
+    if(sql.includes('SELECT id,status FROM orders')) return {ok:true,code:0,stdout:'{"id":"11111111-1111-4111-8111-111111111111","status":"processing"}',stderr:''};
     return {ok:true,code:0,stdout:'{"id":"11111111-1111-4111-8111-111111111111","status":"ok"}',stderr:''};
   };
   return {calls,runner};
