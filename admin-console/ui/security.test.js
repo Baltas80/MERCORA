@@ -10,6 +10,6 @@ test('admin console keeps an enforced idle-lock control in the UI code',async()=
   assert.match(source,/clearInterval\(idleTimer\);idleTimer=null/);
   assert.match(source,/invoke\?\.\('clear_token'\)/);
   assert.match(source,/pointerdown','keydown','mousemove','touchstart/);
-  assert.match(source,/'\[data-reload\]'\.forEach/);
+  assert.match(source,/document\.querySelectorAll\('\[data-reload\]'\)\.forEach/);
   assert.match(source,/action==='STOP'\|\|action==='RECOVER'/);
 });
