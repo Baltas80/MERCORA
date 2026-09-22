@@ -7,7 +7,7 @@ const token = 'x'.repeat(32);
 function makeApi(overrides={}){
   return createAdminApi({
     token,
-    controller:{run:async()=>({ok:true}),healthCheck:async()=>({ok:true}),status:async()=>({ok:true,mercora:'ONLINE',node:'ONLINE',postgresql:'ONLINE',backend:'ONLINE',tor:'ONLINE',onionService:'CONFIGURED',storage:'OK',health:'OK'})},
+    controller:{run:async()=>({ok:true}),healthCheck:async()=>({ok:true,mercora:'ONLINE',node:'ONLINE',postgresql:'ONLINE',backend:'ONLINE',tor:'ONLINE',onionService:'CONFIGURED',storage:'OK',health:'OK'})},
     management:{run:async(action,payload)=>({action,payload})},
     reputation:{run:async(action,payload)=>({action,payload})},
     system:{logs:async()=>({ok:true}),metrics:async()=>({ok:true}),migrateDb:async()=>({ok:true}),backupDb:async()=>({ok:true,id:'backup'}),listBackups:async()=>[],verifyBackup:async()=>({ok:true}),restoreBackup:async()=>({ok:true})},
@@ -85,6 +85,17 @@ test('admin API enforces request body limit',async()=>{
     method:'POST',
     headers:{authorization:'Bearer '+token},
     body:JSON.stringify({action:'LIST_USERS',payload:{q:huge}})
+  });
+  assert.equal(response.status,413);
+  api.server.close();
+});
+
+test('admin API rejects oversized Content-Length before reading the request body',async()=>{
+  const api=makeApi(); const address=await start(api);
+  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/management',{
+    method:'POST',
+    headers:{authorization:'Bearer '+token,'content-type':'application/json','content-length':String(33*1024)},
+    body:'x'.repeat(33*1024)
   });
   assert.equal(response.status,413);
   api.server.close();
@@ -170,11 +181,7 @@ test('escrow endpoint rejects unknown actions',async()=>{
   let calls=0;
   const api=makeApi({escrow:{run:async()=>{calls+=1;return{}}}});
   const address=await start(api);
-  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/escrow',{
-    method:'POST',
-    headers:{authorization:'Bearer '+token,'content-type':'application/json'},
-    body:JSON.stringify({action:'EXEC',payload:{sql:'DROP TABLE ledger_entries'}})
-  });
+  const response=await fetch('http://127.0.0.1:'+address.port+'/v1/escrow',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({action:'EXEC',payload:{sql:'DROP TABLE ledger_entries'}})});
   assert.equal(response.status,400);
   assert.equal(calls,0);
   api.server.close();
