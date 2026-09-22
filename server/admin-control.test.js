@@ -49,18 +49,20 @@ test('recovery targets only the affected component first and then verifies in de
   assert.equal(result.ok, true);
 });
 
-test('recovery health verification covers backend, database, Tor, Onion Service and storage after dependencies', async () => {
+test('recovery health verification covers database, Tor, Onion Service and storage after dependencies', async () => {
   const log = [];
   const controller = createAdminController({ runner: fakeRunner(log), probe: fakeProbe(log), backendProbe: okBackend });
   const result = await controller.run('RECOVER', 'app');
-  const commands = log.map((entry) => entry.slice(0, 2));
-  assert.deepEqual(commands.slice(1), [
-    ['node', '--version'],
-    ['docker', 'version'],
-    ['docker', 'compose'],
-    ['http:', undefined],
-  ]);
   assert.equal(result.ok, true);
+  assert.equal(log[0][4], 'restart');
+  assert.deepEqual(log.slice(1).map((entry) => entry[0]), [
+    'node', 'docker', 'docker', 'docker', 'docker', 'docker', 'docker'
+  ]);
+  assert.equal(log[3].at(-1), 'ps');
+  assert.ok(log[4].includes('pg_isready'));
+  assert.ok(log[5].includes('tor'));
+  assert.ok(log[6].includes('/data/hostname'));
+  assert.ok(log[7].includes('mercora_postgres_data'));
   assert.deepEqual(Object.keys(result.steps.at(-1).result.components), [
     'node', 'docker', 'mercora', 'backend', 'postgres', 'tor', 'onionService', 'storage', 'health'
   ]);
