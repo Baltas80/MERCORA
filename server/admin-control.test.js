@@ -49,6 +49,23 @@ test('recovery targets only the affected component first and then verifies in de
   assert.equal(result.ok, true);
 });
 
+test('recovery health verification covers backend, database, Tor, Onion Service and storage after dependencies', async () => {
+  const log = [];
+  const controller = createAdminController({ runner: fakeRunner(log), probe: fakeProbe(log), backendProbe: okBackend });
+  const result = await controller.run('RECOVER', 'app');
+  const commands = log.map((entry) => entry.slice(0, 2));
+  assert.deepEqual(commands.slice(1), [
+    ['node', '--version'],
+    ['docker', 'version'],
+    ['docker', 'compose'],
+    ['http:', undefined],
+  ]);
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.steps.at(-1).result.components), [
+    'node', 'docker', 'mercora', 'backend', 'postgres', 'tor', 'onionService', 'storage', 'health'
+  ]);
+});
+
 test('failed restart falls back to start for the same component', async () => {
   const log = [];
   let calls = 0;
