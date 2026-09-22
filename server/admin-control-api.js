@@ -22,6 +22,11 @@ function safeDiagnostic(error){
   .replace(/(?:Bearer\s+|token[=:]\s*|password[=:]\s*|secret[=:]\s*)[^\s,;]+/gi,'[redacted]')
   .slice(0,500);
 }
+function rejectOversizedRequest(req,res){
+ req.resume();
+ res.writeHead(413);
+ return res.end(JSON.stringify({error:'request too large'}));
+}
 export function createAdminApi({controller,management,reputation:reputationOverride,system:systemOverride,escrow:escrowOverride,content:contentOverride,token,host='127.0.0.1',port=8787}={}){
  if(!token||token.length<32)throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
  if(!localAddress(host))throw new Error('Admin Control API must bind to localhost only');
@@ -32,7 +37,11 @@ export function createAdminApi({controller,management,reputation:reputationOverr
   const authorization=req.headers.authorization||'',provided=authorization.startsWith('Bearer ')?authorization.slice(7):'';if(!tokenMatches(provided,token)){res.writeHead(401);return res.end(JSON.stringify({error:'unauthorized'}));}
   const url=new URL(req.url||'/','http://127.0.0.1');
   if(req.method==='GET'&&url.pathname==='/v1/overview'){try{const systemState=await control.healthCheck();let managementState=null,managementError=null;try{managementState=await manage.run('OVERVIEW',{});}catch(error){managementError=safeDiagnostic(error);}let reputationState=null,reputationError=null;try{reputationState=await reputation.run('OVERVIEW',{});}catch(error){reputationError=safeDiagnostic(error);}res.writeHead(200);return res.end(JSON.stringify({system:systemState,management:managementState,managementError,reputation:reputationState,reputationError}));}catch(error){res.writeHead(503);return res.end(JSON.stringify({error:safeDiagnostic(error)}));}}
-  let body='';if(req.method==='POST'){for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>MAX_BODY){res.writeHead(413);return res.end(JSON.stringify({error:'request too large'}));}}}
+  let body='';if(req.method==='POST'){
+   const contentLength=Number(req.headers['content-length']||0);
+   if(Number.isFinite(contentLength)&&contentLength>MAX_BODY)return rejectOversizedRequest(req,res);
+   for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>MAX_BODY)return rejectOversizedRequest(req,res);}
+  }
   try{
    const input=JSON.parse(body||'{}');if(input===null||typeof input!=='object'||Array.isArray(input))throw new Error('request body must be a JSON object');
    if(req.method==='POST'&&url.pathname==='/v1/control'){const action=String(input.action||'').toUpperCase(),service=input.service===undefined?undefined:String(input.service);if(!ACTIONS.has(action))throw new Error('unsupported action');if(service!==undefined&&!SERVICES.has(service))throw new Error('unsupported service');const result=action==='HEALTH_CHECK'?await control.healthCheck():await control.run(action,service);res.writeHead(result.ok?200:503);return res.end(JSON.stringify(result));}
