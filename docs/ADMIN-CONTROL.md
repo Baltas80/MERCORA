@@ -23,7 +23,7 @@ The admin surface does **not** expose a shell or arbitrary command execution.
 
 The API binds to `127.0.0.1:8787` by default and requires `MERCORA_ADMIN_TOKEN` with at least 32 characters. The token must be supplied through the process environment and must never be committed to the repository.
 
-Authentication uses a length-checked constant-time token comparison. The API also accepts IPv4-mapped loopback addresses while continuing to reject non-loopback clients. Requests larger than 4 KiB are rejected before they reach privileged operations.
+Authentication uses a length-checked constant-time token comparison. The API also accepts IPv4-mapped loopback addresses while continuing to reject non-loopback clients. Requests larger than 4 KiB are rejected before they reach privileged operations. When `Content-Length` already proves that the request is oversized, the API starts consuming the request stream without waiting for it to finish and returns `413` immediately.
 
 The HTTP API regression suite verifies authentication rejection, operation/service allowlisting, dedicated `HEALTH_CHECK` routing, the 4 KiB boundary, and defensive response headers.
 
@@ -79,9 +79,9 @@ The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its
 
 ## CI and preview
 
-The previous CI run completed successfully for CodeQL and the static-security job, including the existing unit-test suite. The visual preview workflow also completed successfully after being changed to package the frontend independently of GitHub Pages provisioning.
+CI currently runs the security/static checks and CodeQL independently. The latest oversized-request fix is being validated on the dedicated `admin-fix-413` branch before integration into `master`.
 
-The latest controller change makes runtime service state explicit. The current test file also exercises the HTTP control API boundary so the security properties are checked through the actual local server path rather than only through controller unit tests.
+The visual preview workflow is independent of GitHub Pages provisioning.
 
 ## Verification status
 
@@ -94,15 +94,16 @@ The latest controller change makes runtime service state explicit. The current t
 - **IMPLEMENTED:** embedded credential URL and inline secret redaction in diagnostics.
 - **IMPLEMENTED:** constant-time-compatible token verification and IPv4-mapped loopback handling.
 - **IMPLEMENTED:** 4 KiB request-size enforcement.
+- **IMPLEMENTED:** immediate rejection path for requests whose `Content-Length` exceeds 4 KiB.
 - **IMPLEMENTED:** dependency-injected backend probe for deterministic controller tests.
 - **IMPLEMENTED:** explicit running-state verification for `app`, `postgres`, and `tor`.
 - **IMPLEMENTED:** regression test for a missing required Compose service.
-- **IMPLEMENTED:** corrected oversized-request test.
 - **IMPLEMENTED:** HTTP API regression coverage for authentication, allowlisting, health-check routing, request limits, and response headers.
 - **IMPLEMENTED:** regression coverage for embedded credential redaction.
 - **IMPLEMENTED:** Tauri bridge/API endpoint alignment.
 - **IMPLEMENTED:** UI action-to-operation mapping.
 - **IMPLEMENTED:** visual preview artifact workflow independent of GitHub Pages site provisioning.
-- **TESTED BY PRIOR CI:** secret scan, forbidden artifact checks, syntax checks, Compose security verification, dependency audit, CodeQL, and the previous unit-test suite.
-- **PENDING:** CI execution for the latest controller/test/documentation commits.
+- **TESTED BY CI:** secret scan, forbidden artifact checks, syntax checks, Compose security verification, dependency audit, and CodeQL on the latest validation run.
+- **PENDING:** CI unit-test validation of the latest `admin-fix-413` commit.
+- **PENDING:** integration of the validated fix into `master`.
 - **PENDING:** live Docker/PostgreSQL/Tor health checks require the actual MERCORA runtime environment with Docker available.
