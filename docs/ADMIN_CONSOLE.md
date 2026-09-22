@@ -12,6 +12,7 @@ No existe una shell de comandos dentro de la interfaz.
 - START / RESTART de Tor.
 - STATUS, HEALTH CHECK y RECOVER.
 - Recuperación orientada al componente afectado.
+- Tras una recuperación se ejecutan las comprobaciones de runtime/dependencias, backend, PostgreSQL, Tor, Onion Service y almacenamiento en un orden explícito antes de declarar el estado final.
 - Logs sanitizados por servicio.
 - Métricas de contenedores.
 - Migración de la base administrativa mediante una migración SQL fija.
@@ -60,12 +61,15 @@ Las modificaciones generan entradas en `admin_audit_log`. La consola no proporci
 
 Los scripts montados en docker-entrypoint-initdb.d/ solo se ejecutan automáticamente cuando PostgreSQL inicializa un volumen nuevo. Para instalaciones ya existentes, la consola incorpora MIGRAR BD, que ejecuta únicamente las migraciones administrativas comprometidas en el repositorio, incluida `007_site_content_versions.sql` para el historial editorial.
 
+## Verificación CI
+
+La pipeline específica de la consola ejecuta comprobación Rust (`cargo check`), tests Rust (`cargo test`), validación de sintaxis JavaScript y build del instalador Windows NSIS. El conjunto de dependencias del frontend administrativo todavía no dispone de un `package-lock.json` propio, por lo que esa instalación continúa usando `npm install`; convertirla a `npm ci` queda como mejora de reproducibilidad pendiente hasta generar y revisar el lockfile completo.
+
 ## Estado de producción
 
 El código administrativo queda integrado y preparado para la infraestructura real, pero la aprobación de producción requiere ejecutar en el equipo objetivo la build Windows, Docker/WSL, PostgreSQL, Tor, Onion Service y los procedimientos de backup/restore de extremo a extremo. No se marcan esas verificaciones como superadas hasta que se ejecutan realmente.
 
 El editor de contenido está implementado en código y con tests unitarios; su ejecución contra PostgreSQL real queda pendiente de disponer del runtime Docker operativo.
-
 
 ## Web pública conectada a datos reales
 
@@ -83,7 +87,6 @@ La web también dispone de autenticación pseudónima real, sesiones y área de 
 En el Onion Service actual, que publica HTTP, `MERCORA_COOKIE_SECURE=false` es el modo de compatibilidad necesario para que el navegador acepte la sesión. Si se despliega el servicio público detrás de HTTPS, debe establecerse `MERCORA_COOKIE_SECURE=true`. HttpOnly y SameSite=Strict permanecen activos en ambos casos.
 
 El administrador puede bloquear el registro de vendedores y la creación de nuevos anuncios desde la consola; esos controles se validan también en el backend y no dependen exclusivamente de la UI.
-
 
 ## Flujos web conectados
 
