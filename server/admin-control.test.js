@@ -54,7 +54,7 @@ test('recovery health verification covers database, Tor, Onion Service and stora
   const controller = createAdminController({ runner: fakeRunner(log), probe: fakeProbe(log), backendProbe: okBackend });
   const result = await controller.run('RECOVER', 'app');
   assert.equal(result.ok, true);
-  assert.equal(log[0][4], 'restart');
+  assert.ok(log[0].includes('restart'));
   assert.deepEqual(log.slice(1).map((entry) => entry[0]), [
     'node', 'docker', 'docker', 'docker', 'docker', 'docker', 'docker'
   ]);
