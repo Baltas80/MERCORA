@@ -14,7 +14,7 @@ const output = document.querySelector('#system-control-output');
 const SESSION_IDLE_MS = 15 * 60 * 1000;
 const HEALTHY = new Set(['ONLINE','OK','RUNNING','CONFIGURED','PUBLIC']);
 const BAD = new Set(['OFFLINE','ERROR','STOPPED','DEGRADED']);
-let authenticated=false, lastActivity=0, refreshTimer=null, busy=false;
+let authenticated=false, lastActivity=0, refreshTimer=null, idleTimer=null, busy=false;
 
 const viewTitles={
   dashboard:'Dashboard',users:'Usuarios',stores:'Tiendas',listings:'Anuncios',orders:'Pedidos',escrow:'Escrow / Pagos',
@@ -341,13 +341,17 @@ async function loadModule(name){
   }
 }
 async function logout(){
-  authenticated=false;if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null}
+  authenticated=false;
+  if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null}
+  if(idleTimer){clearInterval(idleTimer);idleTimer=null}
   await invoke?.('clear_token').catch(()=>{});
   shell.classList.add('hidden');login.classList.remove('hidden');tokenInput.value='';activity()
 }
 async function afterLogin(){
-  authenticated=true;tokenInput.value='';login.classList.add('hidden');shell.classList.remove('hidden');showView('dashboard');
-  await refreshDashboard();refreshTimer=setInterval(refreshDashboard,15000);
+  authenticated=true;activity();tokenInput.value='';login.classList.add('hidden');shell.classList.remove('hidden');showView('dashboard');
+  await refreshDashboard();
+  refreshTimer=setInterval(refreshDashboard,15000);
+  idleTimer=setInterval(()=>{if(authenticated && Date.now()-lastActivity>SESSION_IDLE_MS)logout()},30000);
 }
 loginForm.addEventListener('submit',async e=>{
   e.preventDefault();loginError.hidden=true;
@@ -531,7 +535,7 @@ document.querySelector('#featured-save').addEventListener('click',async()=>{
   if(picker.selectedOptions.length>48){alert('Solo se pueden seleccionar 48 anuncios.');return}
   try{const r=await management('SET_FEATURED',{listing_ids:ids});document.querySelector('#featured-list').textContent='Destacados guardados: '+r.length;await loadWebsite();await refreshDashboard()}catch(err){alert(err.message||String(err))}
 });
-['pointerdown','keydown'].forEach(n=>document.addEventListener(n,()=>{if(authenticated)activity()},{passive:true}));
+['pointerdown','keydown','mousemove','touchstart'].forEach(n=>document.addEventListener(n,()=>{if(authenticated)activity()},{passive:true}));
 if(!invoke){loginError.textContent='La consola debe ejecutarse dentro de Tauri.';loginError.hidden=false}
 
 // Admin console release surface: management modules are intentionally kept behind explicit allowlisted actions.
