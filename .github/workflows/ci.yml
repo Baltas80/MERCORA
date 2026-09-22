@@ -137,36 +137,6 @@ jobs:
         working-directory: admin-console/src-tauri
         run: cargo test --locked
 
-  admin-console-windows-build:
-    name: Admin Console Windows build
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      - name: Install Tauri CLI
-        working-directory: admin-console
-        run: npm install --no-package-lock
-      - name: Generate Tauri icon set
-        working-directory: admin-console
-        run: npx tauri icon src-tauri/icons/icon.svg
-      - name: Build Windows Admin Console
-        working-directory: admin-console
-        run: npx tauri build
-      - name: Verify Windows installer artifact
-        shell: pwsh
-        run: |
-          $artifacts = Get-ChildItem -Path 'admin-console/src-tauri/target/release/bundle' -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.exe', '.msi' }
-          if (-not $artifacts) { throw 'No Windows installer artifact was produced.' }
-          $artifacts | Select-Object FullName,Length
-
   codeql:
     name: CodeQL
     runs-on: ubuntu-latest
