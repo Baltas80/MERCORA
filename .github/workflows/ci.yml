@@ -70,7 +70,6 @@ jobs:
           node --check server/admin-control-api.js
           node --check server/admin-control-api.test.js
           node --check server/admin-management.js
-          node --check server/admin-control-api.test.js
           node --check server/admin-management.test.js
           node --check server/admin-escrow.js
           node --check server/admin-escrow.test.js
@@ -182,8 +181,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: admin-console/package.json
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -192,7 +189,7 @@ jobs:
 
       - name: Install Tauri CLI
         working-directory: admin-console
-        run: npm install --no-package-lock --ignore-scripts
+        run: npm install --no-package-lock
 
       - name: Build Windows Admin Console
         working-directory: admin-console
