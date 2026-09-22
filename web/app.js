@@ -48,8 +48,12 @@ function itemKey(item) {
   return String(item.id);
 }
 
-async function api(path) {
-  const response = await fetch(path, { cache: "no-store", headers: { Accept: "application/json" } });
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    cache: "no-store",
+    headers: { Accept: "application/json", ...(options.headers || {}) },
+    ...options
+  });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || `HTTP ${response.status}`);
@@ -252,7 +256,6 @@ function renderCart() {
       : "Varios activos";
   }
   cartCount.textContent = String(state.cart.reduce((sum, item) => sum + item.quantity, 0));
-  saveCart();
   saveCart();
 }
 
