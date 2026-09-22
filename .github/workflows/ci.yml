@@ -1,6 +1,7 @@
 name: MERCORA CI
 
 on:
+  workflow_dispatch:
   push:
     branches: ["master", "feat/admin-full-management"]
   pull_request:
@@ -8,6 +9,10 @@ on:
 permissions:
   contents: read
   security-events: write
+
+concurrency:
+  group: mercora-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   static-security:
