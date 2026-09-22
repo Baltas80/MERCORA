@@ -19,18 +19,14 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - name: Check for obvious secret material
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -nIE \
-            -- ':!*.md' ':!.gitignore' ':!.github/workflows/ci.yml' ':!.github/workflows/pages.yml' ':!scripts/verify-compose-security.mjs' \
-            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' ; then
+          if git grep -nIE -- ':!*.md' ':!.gitignore' ':!.github/workflows/ci.yml' ':!.github/workflows/pages.yml' ':!scripts/verify-compose-security.mjs' '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' ; then
             echo "Potential secret material detected."
             exit 1
           fi
-
       - name: Check forbidden production artifacts
         shell: bash
         run: |
@@ -38,12 +34,10 @@ jobs:
           test ! -e .env
           test ! -e .env.production
           test ! -d tor/keys
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-
       - name: Check server syntax
         run: |
           node --check server/server.js
@@ -53,7 +47,6 @@ jobs:
           node --check server/auth/password.js
           node --check server/seller/api.js
           node --check server/admin-content.js
-
       - name: Check frontend syntax
         run: |
           node --check web/app.js
@@ -63,7 +56,6 @@ jobs:
           node --check web/legal.js
           node --check web/seller-profile.js
           node --check web/i18n.js
-
       - name: Check admin syntax
         run: |
           node --check server/admin-control.js
@@ -92,31 +84,21 @@ jobs:
           node --check admin-console/ui/security.test.js
           node --check scripts/mercora-backup-scheduler.mjs
           node --check scripts/mercora-backup-scheduler.test.mjs
-
       - name: Check Windows backup task least privilege
         shell: pwsh
         run: |
           $script = Get-Content -Raw -LiteralPath 'scripts/install-mercora-backup-task.ps1'
           [void][scriptblock]::Create($script)
-          if ($script -match "-UserId\s+'SYSTEM'" -or $script -match '-RunLevel\s+Highest') {
-            throw 'Windows backup task must not run as SYSTEM or with highest privileges.'
-          }
-          if ($script -notmatch '-LogonType\s+S4U' -or $script -notmatch '-RunLevel\s+Limited') {
-            throw 'Windows backup task must use an explicit limited S4U principal.'
-          }
-
+          if ($script -match "-UserId\s+'SYSTEM'" -or $script -match '-RunLevel\s+Highest') { throw 'Windows backup task must not run as SYSTEM or with highest privileges.' }
+          if ($script -notmatch '-LogonType\s+S4U' -or $script -notmatch '-RunLevel\s+Limited') { throw 'Windows backup task must use an explicit limited S4U principal.' }
       - name: Verify container network isolation
         run: node scripts/verify-compose-security.mjs
-
       - name: Dependency audit
         run: npm audit --audit-level=high
-
       - name: Run unit tests
         run: npm test
-
       - name: Run backup scheduler tests
         run: npm run backup:test
-
       - name: Run admin console UI security test
         run: node --test admin-console/ui/security.test.js
 
@@ -126,27 +108,15 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-
       - name: Install Tauri Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            curl \
-            file \
-            libayatana-appindicator3-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            librsvg2-dev \
-            libxdo-dev \
-            patchelf
-
+          sudo apt-get install -y build-essential curl file libayatana-appindicator3-dev libssl-dev libwebkit2gtk-4.1-dev librsvg2-dev libxdo-dev patchelf
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: rustfmt
-
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
@@ -157,15 +127,12 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('admin-console/src-tauri/Cargo.lock', 'admin-console/src-tauri/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-
       - name: Resolve Cargo lockfile
         working-directory: admin-console/src-tauri
         run: cargo generate-lockfile
-
       - name: Check Rust formatting
         working-directory: admin-console/src-tauri
         run: cargo fmt --all -- --check
-
       - name: Run Rust tests
         working-directory: admin-console/src-tauri
         run: cargo test --locked
@@ -176,30 +143,27 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-
       - name: Install Tauri CLI
         working-directory: admin-console
         run: npm install --no-package-lock
-
+      - name: Generate Tauri icon set
+        working-directory: admin-console
+        run: npx tauri icon src-tauri/icons/icon.svg
       - name: Build Windows Admin Console
         working-directory: admin-console
         run: npx tauri build
-
       - name: Verify Windows installer artifact
         shell: pwsh
         run: |
-          $artifacts = Get-ChildItem -Path 'admin-console/src-tauri/target/release/bundle' -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Extension -in '.exe', '.msi' }
+          $artifacts = Get-ChildItem -Path 'admin-console/src-tauri/target/release/bundle' -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.exe', '.msi' }
           if (-not $artifacts) { throw 'No Windows installer artifact was produced.' }
           $artifacts | Select-Object FullName,Length
 
