@@ -69,7 +69,7 @@ The backend probe is dependency-injected for tests while production uses the rea
 
 The sequence is used after recovery to verify dependencies and affected services without performing an unnecessary full-system restart.
 
-Diagnostics are truncated and filter common secret-bearing lines before they are returned to the console.
+Diagnostics are truncated and filter common secret-bearing lines before they are returned to the console. Credential-bearing URLs and inline `password`, `secret`, `token`, `api-key`, and `private-key` values are redacted rather than exposed. This is defense-in-depth; privileged commands must still avoid producing secrets in normal output.
 
 ## Privilege boundary
 
@@ -81,7 +81,7 @@ The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its
 
 The previous CI run completed successfully for CodeQL and the static-security job, including the existing unit-test suite. The visual preview workflow also completed successfully after being changed to package the frontend independently of GitHub Pages provisioning.
 
-The latest controller change makes runtime service state explicit. The current test file now also exercises the HTTP control API boundary so the security properties are checked through the actual local server path rather than only through controller unit tests.
+The latest controller change makes runtime service state explicit. The current test file also exercises the HTTP control API boundary so the security properties are checked through the actual local server path rather than only through controller unit tests.
 
 ## Verification status
 
@@ -91,6 +91,7 @@ The latest controller change makes runtime service state explicit. The current t
 - **IMPLEMENTED:** successful fallback is reflected in recovery result state.
 - **IMPLEMENTED:** structured infrastructure status.
 - **IMPLEMENTED:** secret-filtered diagnostics.
+- **IMPLEMENTED:** embedded credential URL and inline secret redaction in diagnostics.
 - **IMPLEMENTED:** constant-time-compatible token verification and IPv4-mapped loopback handling.
 - **IMPLEMENTED:** 4 KiB request-size enforcement.
 - **IMPLEMENTED:** dependency-injected backend probe for deterministic controller tests.
@@ -98,6 +99,7 @@ The latest controller change makes runtime service state explicit. The current t
 - **IMPLEMENTED:** regression test for a missing required Compose service.
 - **IMPLEMENTED:** corrected oversized-request test.
 - **IMPLEMENTED:** HTTP API regression coverage for authentication, allowlisting, health-check routing, request limits, and response headers.
+- **IMPLEMENTED:** regression coverage for embedded credential redaction.
 - **IMPLEMENTED:** Tauri bridge/API endpoint alignment.
 - **IMPLEMENTED:** UI action-to-operation mapping.
 - **IMPLEMENTED:** visual preview artifact workflow independent of GitHub Pages site provisioning.
