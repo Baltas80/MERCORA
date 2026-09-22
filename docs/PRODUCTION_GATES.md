@@ -67,4 +67,6 @@ Privileged Docker operations have bounded execution time. General administrative
 
 A dedicated `scripts/mercora-backup-scheduler.mjs` now performs an immediate backup when started and then repeats every six hours by default. The interval cannot be configured below 15 minutes. Retention defaults to seven days and 28 backups, with configurable bounded values. The scheduler prevents overlapping backup cycles and prunes only validated regular files inside the managed backup directory. Backups are excluded from Git by `backups/` in `.gitignore`.
 
+Restore-path unit coverage now verifies the destructive-operation ordering: the backend is stopped before the pre-restore safety backup, the requested archive is restored through the managed-file stream, the backend is started again even when restore fails, and the final audit event is emitted. The production gate remains pending because these tests do not replace an end-to-end PostgreSQL runtime restore test.
+
 On Windows, `scripts/install-mercora-backup-task.ps1` installs the scheduler as a SYSTEM Task Scheduler job, configured by default for every six hours and to start when available. The task is intentionally separate from the public web process and therefore does not grant Docker privileges to the web application.
