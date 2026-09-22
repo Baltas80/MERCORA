@@ -74,6 +74,23 @@ test('verify backup accepts only managed files',async()=>{
   await fs.rm(dir,{recursive:true,force:true});
 });
 
+test('verify backup rejects symlinked backup files outside the managed directory',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mercora-admin-'));
+  const outside=await fs.mkdtemp(path.join(os.tmpdir(),'mercora-outside-'));
+  const id='mercora-20260921T171000Z-abcdef123456.dump';
+  const target=path.join(outside,'outside.dump');
+  await fs.writeFile(target,'sensitive');
+  await fs.symlink(target,path.join(dir,id));
+  const system=createAdminSystem({
+    backupDir:dir,
+    runner:async()=>({ok:true,code:0,stdout:'',stderr:''}),
+    streamRunner:async()=>{throw new Error('stream should not be called')}
+  });
+  await assert.rejects(()=>system.verifyBackup(id),/invalid backup path/);
+  await fs.rm(dir,{recursive:true,force:true});
+  await fs.rm(outside,{recursive:true,force:true});
+});
+
 test('restore requires an explicit confirmation phrase',async()=>{
   const system=createAdminSystem();
   await assert.rejects(()=>system.restoreBackup('mercora-20260921T171000Z-abcdef123456.dump','YES'),/restore confirmation required/);
