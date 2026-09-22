@@ -110,9 +110,14 @@ test('status exposes structured infrastructure state without exposing raw diagno
   assert.equal(result.health, 'OK');
 });
 
-test('diagnostics remove secret-bearing lines', () => {
-  const result = sanitizeResult({ ok: false, code: 1, stdout: 'safe\nTOKEN=do-not-show', stderr: 'password=secret' });
-  assert.equal(result.stdout, 'safe');
+test('diagnostics remove secret-bearing lines and redact embedded credentials', () => {
+  const result = sanitizeResult({
+    ok: false,
+    code: 1,
+    stdout: 'safe\nTOKEN=do-not-show\npostgres://mercora:supersecret@db:5432/mercora\nendpoint token=still-secret',
+    stderr: 'password=secret'
+  });
+  assert.equal(result.stdout, 'safe\npostgres://mercora:[REDACTED]@db:5432/mercora\nendpoint token=[REDACTED]');
   assert.equal(result.stderr, '');
 });
 
