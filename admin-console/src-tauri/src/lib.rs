@@ -134,3 +134,43 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running MERCORA Admin Console");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_rejects_empty_and_header_injection() {
+        assert!(!valid_token(""));
+        assert!(!valid_token("   "));
+        assert!(!valid_token("valid-token\r\nInjected: yes"));
+        assert!(valid_token(&"x".repeat(32)));
+        assert!(valid_token(&"x".repeat(512)));
+        assert!(!valid_token(&"x".repeat(513)));
+    }
+
+    #[test]
+    fn endpoint_surface_is_explicit() {
+        assert!(allowed_endpoint("GET", "/v1/overview"));
+        for path in [
+            "/v1/control",
+            "/v1/management",
+            "/v1/reputation",
+            "/v1/escrow",
+            "/v1/system",
+            "/v1/content",
+        ] {
+            assert!(allowed_endpoint("POST", path), "expected allowlisted endpoint: {path}");
+        }
+        assert!(!allowed_endpoint("POST", "/v1/exec"));
+        assert!(!allowed_endpoint("POST", "/v1/system/../../exec"));
+        assert!(!allowed_endpoint("GET", "/v1/control"));
+        assert!(!allowed_endpoint("POST", "/v1/control?command=id"));
+    }
+
+    #[test]
+    fn transport_limits_are_finite() {
+        assert_eq!(MAX_REQUEST_BYTES, 32 * 1024);
+        assert_eq!(MAX_RESPONSE_BYTES, 1024 * 1024);
+    }
+}
