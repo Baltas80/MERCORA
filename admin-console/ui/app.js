@@ -364,11 +364,16 @@ nav.addEventListener('click',async e=>{
 });
 document.querySelectorAll('[data-view-jump]').forEach(b=>b.addEventListener('click',()=>{showView(b.dataset.viewJump);loadModule(b.dataset.viewJump)}));
 document.querySelector('#refresh-all').addEventListener('click',()=>loadModule(document.querySelector('.nav-item.active')?.dataset.view||'dashboard'));
+document.querySelectorAll('[data-reload]').forEach(b=>b.addEventListener('click',()=>loadModule(b.dataset.reload==='featured'?'website':b.dataset.reload)));
 document.querySelector('#logout').addEventListener('click',logout);
 document.querySelector('#dashboard-health').addEventListener('click',async()=>{try{const r=await control('HEALTH_CHECK');systemOutput.textContent=JSON.stringify(r,null,2);await refreshDashboard()}catch(e){systemOutput.textContent=e.message||String(e)}});
 document.querySelectorAll('[data-control]').forEach(b=>b.addEventListener('click',async()=>{
-  if(busy)return;busy=true;document.querySelectorAll('[data-control]').forEach(x=>x.disabled=true);
-  try{const r=await control(b.dataset.control,b.dataset.service);output.textContent=JSON.stringify(r,null,2);await refreshDashboard()}catch(e){output.textContent=e.message||String(e)}
+  if(busy)return;
+  const action=b.dataset.control;
+  const service=b.dataset.service;
+  if((action==='STOP'||action==='RECOVER') && !confirm(action+' '+(service||'MERCORA')+'?'))return;
+  busy=true;document.querySelectorAll('[data-control]').forEach(x=>x.disabled=true);
+  try{const r=await control(action,service);output.textContent=JSON.stringify(r,null,2);await refreshDashboard()}catch(e){output.textContent=e.message||String(e)}
   finally{busy=false;document.querySelectorAll('[data-control]').forEach(x=>x.disabled=false)}
 }));
 document.querySelector('#users-search').addEventListener('click',()=>loadUsers());
