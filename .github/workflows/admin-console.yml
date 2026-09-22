@@ -55,6 +55,10 @@ jobs:
           node --check admin-console/ui/app.js
           node --check admin-console/ui/content-editor.js
           node --check admin-console/ui/reputation.js
+          node --check admin-console/ui/security.test.js
+      - name: Run UI security regression test
+        run: node --test admin-console/ui/security.test.js
+
       - name: Build Windows installer
         working-directory: admin-console
         run: npm run tauri build -- --bundles nsis
