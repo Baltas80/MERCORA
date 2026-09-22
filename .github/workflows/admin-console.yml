@@ -47,6 +47,9 @@ jobs:
       - name: Check Rust
         working-directory: admin-console
         run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Test Rust
+        working-directory: admin-console
+        run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Check JavaScript
         run: |
           node --check admin-console/ui/app.js
