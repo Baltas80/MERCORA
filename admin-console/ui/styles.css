@@ -16,3 +16,5 @@ button:hover{filter:brightness(1.08)}button:disabled{opacity:.45;cursor:not-allo
 @media(max-width:520px){.view{padding:18px}.metric-grid,.system-grid,.two-col{grid-template-columns:1fr}.sidebar nav{grid-template-columns:repeat(2,minmax(0,1fr))}.topbar{padding:0 18px}}
 
 .featured-picker{min-height:260px;margin-bottom:12px}
+
+:focus-visible{outline:2px solid #d8b867;outline-offset:3px}
