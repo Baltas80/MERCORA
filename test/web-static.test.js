@@ -13,7 +13,7 @@ function localPath(value) {
 }
 
 async function assertHtmlResources(htmlFile) {
-  const html = await fs.readFile(path.join(ROOT, htmlFile), "utf8");
+  const html = await fs.readFile(path.join(ROOT, "web", htmlFile), "utf8");
   const refs = [
     ...[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map((m) => m[1]),
     ...[...html.matchAll(/<link[^>]+href=["']([^"']+)["']/gi)].map((m) => m[1])
@@ -21,8 +21,8 @@ async function assertHtmlResources(htmlFile) {
   for (const ref of refs) {
     const local = localPath(ref);
     if (!local) continue;
-    const target = path.resolve(ROOT, local);
-    assert.ok(target.startsWith(ROOT + path.sep), `resource escapes web root: ${ref}`);
+    const target = path.resolve(ROOT, "web", local);
+    assert.ok(target.startsWith(path.resolve(ROOT, "web") + path.sep), `resource escapes web root: ${ref}`);
     await fs.access(target);
   }
 }
