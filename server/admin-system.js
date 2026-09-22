@@ -78,12 +78,12 @@ async function defaultInputRunner({file,args,source,cwd,timeoutMs=COMMAND_TIMEOU
   });
 }
 
-export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaultRunner,streamRunner=defaultInputRunner,backupDir=path.resolve(cwd,'backups'),audit=null,actor=process.env.MERCORA_ADMIN_ACTOR || 'admin'}={}){
+export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaultRunner,streamRunner=defaultInputRunner,backupDir=path.resolve(cwd,'backups'),audit=null,actor=process.env.MERCORA_ADMIN_ACTOR || 'admin',backupRunner=null}={}){
   async function recordAudit(action,resourceType,resourceId,metadata){
     if(audit) await audit(action,resourceType,resourceId,metadata);
     else await runCommand(COMPOSE.concat(['exec','-T','postgres','psql','-U','mercora','-d','mercora','-v','ON_ERROR_STOP=1','-q','-c',
       'INSERT INTO admin_audit_log(actor,action,resource_type,resource_id,metadata) VALUES ('+
-      sqlString(actor)+','+sqlString(action)+','+sqlString(resourceType)+','+sqlNullable(resourceId)+','+sqlString(JSON.stringify(metadata || {}))+'::jsonb)']));
+      sqlString(actor)+','+sqlString(action)+','+sqlString(resourceType)+','+sqlNullable(resourceId)+','+sqlString(JSON.stringify(metadata || {}))+'::jsonb']));
   }
   async function runCommand(args){
     return commandResult(await runner('docker',args,{cwd}));
@@ -195,7 +195,7 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     let result;
     let start;
     try {
-      safety=await backupDb();
+      safety=await (backupRunner ? backupRunner() : backupDb());
       result=await withBackupInput(safe,COMPOSE.concat([
         'exec','-T','postgres','pg_restore','--clean','--if-exists','--no-owner','-U','mercora','-d','mercora'
       ]),BACKUP_TIMEOUT_MS);
@@ -215,3 +215,5 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
   return Object.freeze({logs,metrics,migrateDb,backupDb,listBackups,verifyBackup,restoreBackup});
 }
 
+function sqlString(value){ return `'${String(value).replace(/'/g,"''")}'`; }
+function sqlNullable(value){ return value == null ? 'NULL' : sqlString(value); }
