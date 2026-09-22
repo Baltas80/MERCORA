@@ -9,7 +9,8 @@ This document records the evidence required before the administrative control pl
 | Admin Control API localhost binding | IMPLEMENTED | Automated unit/security tests and CI |
 | Explicit admin endpoint/action allowlists | IMPLEMENTED | Source review + tests |
 | Diagnostic secret/path filtering | IMPLEMENTED | `server/admin-control-api.test.js` |
-| Directed recovery | IMPLEMENTED | Controller tests + real runtime test |
+| Directed recovery | IMPLEMENTED | `server/admin-control.test.js` + real runtime test |
+| Recovery verification order | IMPLEMENTED | `server/admin-control.test.js` + real runtime test |
 | Request body size enforcement and safe draining | IMPLEMENTED | `server/admin-control-api.test.js` + CI |
 | Tauri endpoint isolation | IMPLEMENTED | Rust source review + `cargo test` |
 | Rust Admin Console tests | PENDING | GitHub Actions run for current head |
@@ -28,6 +29,10 @@ This document records the evidence required before the administrative control pl
 ## CI security baseline
 
 The general CI workflow grants `contents: read` globally. `security-events: write` is restricted to the CodeQL job instead of being granted to the unit/security job. Both jobs have explicit execution timeouts to prevent a stalled dependency audit or test suite from consuming an unbounded runner allocation.
+
+## Recovery contract
+
+`RECOVER` is restricted to the fixed service allowlist (`app`, `postgres`, `tor`). It first restarts only the requested component and falls back to starting that same component if restart fails. It never performs a broad restart as a recovery fallback. After a successful component repair, the controller runs health verification in this order: Node/runtime dependencies, Docker, Compose/MERCORA, backend, PostgreSQL, Tor, Onion Service, and storage. The final health state is returned to the Admin Console. Diagnostics are sanitized before crossing the Admin Control API boundary.
 
 ## Rule
 
