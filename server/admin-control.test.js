@@ -94,8 +94,8 @@ test('failed restart and failed start abort recovery without broad restart', asy
   assert.equal(result.ok, false);
   assert.equal(result.recoveryAborted, true);
   assert.equal(log.length, 2);
-  assert.equal(log[0][4], 'restart');
-  assert.equal(log[1][4], 'up');
+  assert.equal(log[0].at(-2), 'restart');
+  assert.equal(log[1].at(-2), 'up');
 });
 
 test('diagnostics remove secret-bearing lines', () => {
