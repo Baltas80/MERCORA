@@ -13,7 +13,7 @@ This document records the evidence required before the administrative control pl
 | Recovery verification order | IMPLEMENTED | `server/admin-control.test.js` + real runtime test |
 | Request body size enforcement and safe draining | IMPLEMENTED | `server/admin-control-api.test.js` + CI |
 | Tauri endpoint isolation | IMPLEMENTED | Rust source review + `cargo test` |
-| Rust Admin Console tests | PENDING | GitHub Actions run for current head |
+| Rust Admin Console tests | PENDING | New CI job must complete successfully on current head |
 | Windows installer | PENDING | Successful Windows build artifact |
 | Docker/WSL runtime | PENDING | Runtime validation on target host |
 | PostgreSQL backup/verify/restore | PENDING | End-to-end runtime test |
@@ -33,6 +33,8 @@ This document records the evidence required before the administrative control pl
 ## CI security baseline
 
 The general CI workflow grants `contents: read` globally. `security-events: write` is restricted to the CodeQL job instead of being granted to the unit/security job. Both jobs have explicit execution timeouts to prevent a stalled dependency audit or test suite from consuming an unbounded runner allocation.
+
+The CI now has a dedicated `admin-console-rust` job. It installs the Linux dependencies required by Tauri, checks Rust formatting, and runs `cargo test --locked` against `admin-console/src-tauri`. Until that job completes successfully on the current head, Rust console validation remains PENDING.
 
 ## Recovery contract
 
