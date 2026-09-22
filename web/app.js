@@ -194,6 +194,8 @@ async function loadListings({ query = state.query, category = state.category } =
   state.query = query;
   state.category = category;
   catalogStatus.textContent = "CARGANDO";
+  const databaseStatus = document.querySelector("#databaseStatus");
+  if (databaseStatus) databaseStatus.textContent = "COMPROBANDO";
   message.hidden = true;
   try {
     const params = new URLSearchParams({ limit: "48" });
@@ -202,10 +204,12 @@ async function loadListings({ query = state.query, category = state.category } =
     const response = await api("./api/listings?" + params.toString());
     state.items = Array.isArray(response.listings) ? response.listings : [];
     catalogStatus.textContent = "CONECTADO";
+    if (databaseStatus) databaseStatus.textContent = "CONECTADA";
     render();
   } catch (error) {
     state.items = [];
     catalogStatus.textContent = "NO DISPONIBLE";
+    if (databaseStatus) databaseStatus.textContent = "NO DISPONIBLE";
     count.textContent = "—";
     message.hidden = false;
     message.textContent = "El catálogo no está disponible en este momento.";
