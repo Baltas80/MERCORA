@@ -87,6 +87,7 @@ jobs:
           node --check admin-console/ui/app.js
           node --check admin-console/ui/reputation.js
           node --check admin-console/ui/content-editor.js
+          node --check admin-console/ui/security.test.js
           node --check web/account.js
           node --check web/seller.js
 
@@ -98,6 +99,9 @@ jobs:
 
       - name: Run unit tests
         run: npm test
+
+      - name: Run admin console UI security test
+        run: node --test admin-console/ui/security.test.js
 
   codeql:
     name: CodeQL
