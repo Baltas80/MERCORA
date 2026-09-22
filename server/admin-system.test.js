@@ -95,3 +95,21 @@ test('restore requires an explicit confirmation phrase',async()=>{
   const system=createAdminSystem();
   await assert.rejects(()=>system.restoreBackup('mercora-20260921T171000Z-abcdef123456.dump','YES'),/restore confirmation required/);
 });
+
+test('restore rejects symlinked backup before stopping the backend',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mercora-admin-'));
+  const outside=await fs.mkdtemp(path.join(os.tmpdir(),'mercora-outside-'));
+  const id='mercora-20260921T171000Z-abcdef123456.dump';
+  const target=path.join(outside,'outside.dump');
+  await fs.writeFile(target,'sensitive');
+  await fs.symlink(target,path.join(dir,id));
+  let calls=0;
+  const system=createAdminSystem({
+    backupDir:dir,
+    runner:async()=>{calls+=1;return{ok:true,code:0,stdout:'',stderr:''}}
+  });
+  await assert.rejects(()=>system.restoreBackup(id,'RESTORE_MERCORA'),/invalid backup path/);
+  assert.equal(calls,0);
+  await fs.rm(dir,{recursive:true,force:true});
+  await fs.rm(outside,{recursive:true,force:true});
+});
