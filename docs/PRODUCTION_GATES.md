@@ -13,8 +13,9 @@ This document records the evidence required before the administrative control pl
 | Recovery verification order | IMPLEMENTED | `server/admin-control.test.js` + real runtime test |
 | Request body size enforcement and safe draining | IMPLEMENTED | `server/admin-control-api.test.js` + CI |
 | Tauri endpoint isolation | IMPLEMENTED | Rust source review + `cargo test` |
-| Rust Admin Console tests | PENDING | New CI job must complete successfully on current head |
-| Windows installer | PENDING | Successful Windows build artifact |
+| Rust Admin Console tests | PENDING | Dedicated Linux Rust CI job must complete successfully on current head |
+| Windows Admin Console build | PENDING | Successful Windows CI build producing `.exe` or `.msi` artifact |
+| Windows backup-task installer | PENDING | Successful Windows installation and scheduled execution on target host |
 | Docker/WSL runtime | PENDING | Runtime validation on target host |
 | PostgreSQL backup/verify/restore | PENDING | End-to-end runtime test |
 | Scheduled PostgreSQL backups | IMPLEMENTED | Scheduler unit tests + Windows Task Scheduler installation; target-host execution still required |
@@ -32,9 +33,11 @@ This document records the evidence required before the administrative control pl
 
 ## CI security baseline
 
-The general CI workflow grants `contents: read` globally. `security-events: write` is restricted to the CodeQL job instead of being granted to the unit/security job. Both jobs have explicit execution timeouts to prevent a stalled dependency audit or test suite from consuming an unbounded runner allocation.
+The general CI workflow grants `contents: read` globally. `security-events: write` is restricted to the CodeQL job instead of being granted to the unit/security job. All jobs have explicit execution timeouts to prevent stalled dependency resolution, builds, audits, or tests from consuming an unbounded runner allocation.
 
-The CI now has a dedicated `admin-console-rust` job. It installs the Linux dependencies required by Tauri, checks Rust formatting, and runs `cargo test --locked` against `admin-console/src-tauri`. Until that job completes successfully on the current head, Rust console validation remains PENDING.
+The CI has a dedicated `admin-console-rust` job. It installs the Linux dependencies required by Tauri, resolves the Rust dependency lockfile in the runner when the repository does not yet contain one, checks Rust formatting, and runs `cargo test --locked` against `admin-console/src-tauri`. The repository should add and review the generated `Cargo.lock` before claiming full dependency reproducibility.
+
+The CI also has a dedicated `admin-console-windows-build` job. It installs the pinned Tauri CLI declared by `admin-console/package.json`, builds the Windows application on a Windows runner, and fails unless an `.exe` or `.msi` bundle is produced.
 
 ## Recovery contract
 
@@ -67,8 +70,8 @@ Backup identifiers are constrained to the generated `mercora-<UTC>-<random>.dump
 
 Privileged Docker operations have bounded execution time. General administrative commands and backup verification default to a two-minute timeout; backup generation and database restoration have a fifteen-minute limit. A timeout is returned as a sanitized diagnostic and does not expose process arguments or secrets. Runtime validation on the target host remains required.
 
-A dedicated `scripts/mercora-backup-scheduler.mjs` now performs an immediate backup when started and then repeats every six hours by default. The interval cannot be configured below 15 minutes. Retention defaults to seven days and 28 backups, with configurable bounded values. The scheduler prevents overlapping backup cycles and prunes only validated regular files inside the managed backup directory. Backups are excluded from Git by `backups/` in `.gitignore`.
+A dedicated `scripts/mercora-backup-scheduler.mjs` performs an immediate backup when started and then repeats every six hours by default. The interval cannot be configured below 15 minutes. Retention defaults to seven days and 28 backups, with configurable bounded values. The scheduler prevents overlapping backup cycles and prunes only validated regular files inside the managed backup directory. Backups are excluded from Git by `backups/` in `.gitignore`.
 
-Restore-path unit coverage now verifies the destructive-operation ordering: the backend is stopped before the pre-restore safety backup, the requested archive is restored through the managed-file stream, the backend is started again even when restore fails, and the final audit event is emitted. The production gate remains pending because these tests do not replace an end-to-end PostgreSQL runtime restore test.
+Restore-path unit coverage verifies the destructive-operation ordering: the backend is stopped before the pre-restore safety backup, the requested archive is restored through the managed-file stream, the backend is started again even when restore fails, and the final audit event is emitted. The production gate remains pending because these tests do not replace an end-to-end PostgreSQL runtime restore test.
 
 On Windows, `scripts/install-mercora-backup-task.ps1` installs the scheduler for the invoking user using an S4U principal with `Limited` run level. It explicitly rejects execution under SYSTEM. This avoids granting the Node.js scheduler a machine-wide elevated token. The task is intentionally separate from the public web process. The target account must have the minimum Docker access required by the real deployment; that permission and actual scheduled execution remain pending target-host validation.
