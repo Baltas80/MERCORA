@@ -62,6 +62,7 @@ jobs:
           node --check web/listing.js
           node --check web/legal.js
           node --check web/seller-profile.js
+          node --check web/i18n.js
 
       - name: Check admin syntax
         run: |
