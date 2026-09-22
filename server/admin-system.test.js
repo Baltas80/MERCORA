@@ -113,3 +113,50 @@ test('restore rejects symlinked backup before stopping the backend',async()=>{
   await fs.rm(dir,{recursive:true,force:true});
   await fs.rm(outside,{recursive:true,force:true});
 });
+
+test('restore stops the backend before the safety backup and always starts it afterwards',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mercora-admin-'));
+  const id='mercora-20260921T171000Z-abcdef123456.dump';
+  await fs.writeFile(path.join(dir,id),'placeholder');
+  const events=[];
+  const runner=async(file,args)=>{
+    if(args.includes('stop')) events.push('stop');
+    if(args.includes('start')) events.push('start');
+    return {ok:true,code:0,stdout:'',stderr:''};
+  };
+  const system=createAdminSystem({
+    backupDir:dir,
+    runner,
+    backupRunner:async()=>{events.push('safety-backup');return{id:'mercora-safety.dump',size_bytes:1};},
+    streamRunner:async()=>{events.push('restore');return{ok:true,code:0,stdout:'restore ok',stderr:''}},
+    audit:async()=>{events.push('audit')}
+  });
+  const result=await system.restoreBackup(id,'RESTORE_MERCORA');
+  assert.equal(result.ok,true);
+  assert.equal(result.pre_restore_backup,'mercora-safety.dump');
+  assert.deepEqual(events,['stop','safety-backup','restore','start','audit']);
+  await fs.rm(dir,{recursive:true,force:true});
+});
+
+test('restore starts the backend again when pg_restore fails',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'mercora-admin-'));
+  const id='mercora-20260921T171000Z-abcdef123456.dump';
+  await fs.writeFile(path.join(dir,id),'placeholder');
+  const events=[];
+  const system=createAdminSystem({
+    backupDir:dir,
+    runner:async(file,args)=>{
+      if(args.includes('stop')) events.push('stop');
+      if(args.includes('start')) events.push('start');
+      return {ok:true,code:0,stdout:'',stderr:''};
+    },
+    backupRunner:async()=>{events.push('safety-backup');return{id:'mercora-safety.dump'};},
+    streamRunner:async()=>{events.push('restore');return{ok:false,code:1,stdout:'',stderr:'restore failed'}},
+    audit:async()=>{events.push('audit')}
+  });
+  const result=await system.restoreBackup(id,'RESTORE_MERCORA');
+  assert.equal(result.ok,false);
+  assert.equal(result.backend_restart.ok,true);
+  assert.deepEqual(events,['stop','safety-backup','restore','start','audit']);
+  await fs.rm(dir,{recursive:true,force:true});
+});
