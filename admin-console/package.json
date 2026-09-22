@@ -1,6 +1,7 @@
 {
   "name": "mercora-admin-console",
   "private": true,
+  "type": "module",
   "version": "0.1.0",
   "description": "MERCORA desktop administration console",
   "scripts": {
