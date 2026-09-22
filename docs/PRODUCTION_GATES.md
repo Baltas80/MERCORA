@@ -17,6 +17,8 @@ This document records the evidence required before the administrative control pl
 | Windows installer | PENDING | Successful Windows build artifact |
 | Docker/WSL runtime | PENDING | Runtime validation on target host |
 | PostgreSQL backup/verify/restore | PENDING | End-to-end runtime test |
+| Backup path/symlink confinement | IMPLEMENTED | `server/admin-system.test.js` + target-host filesystem test |
+| Privileged command timeout bounds | IMPLEMENTED | Source review + CI tests; runtime drill still required |
 | Tor runtime | PENDING | Target-host Tor health check |
 | Onion Service | PENDING | Real Onion Service reachability test |
 | Authenticated payment flow | PENDING | End-to-end authenticated test |
@@ -54,3 +56,10 @@ A gate marked `IMPLEMENTED` means the corresponding code/control exists. It does
 The Admin Control API rejects POST bodies larger than 32 KiB using both an early `Content-Length` check and a streaming byte-count check. Oversized requests are drained before the 413 response is returned, preventing unread request data from being left on the connection.
 
 No secrets, Onion private keys, database dumps, wallet keys, or credentials belong in this repository.
+
+
+## Backup safety
+
+Backup identifiers are constrained to the generated `mercora-<UTC>-<random>.dump` format. Before `pg_restore` input is opened, the service resolves the managed backup directory and the requested file with `realpath`, requires the resolved path to remain inside the managed directory, and requires a regular file. This also blocks symlink-based escapes. Listing ignores entries that fail the same managed-file check.
+
+Privileged Docker operations have bounded execution time. General administrative commands default to a two-minute timeout; database backup generation has a fifteen-minute limit. A timeout is returned as a sanitized diagnostic and does not expose process arguments or secrets. Runtime validation on the target host remains required.
