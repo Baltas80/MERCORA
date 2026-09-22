@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAdminSystem, validateBackupId } from '../server/admin-system.js';
 
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 const HOURS = 60 * 60 * 1000;
 export const DEFAULT_INTERVAL_MS = 6 * HOURS;
 export const DEFAULT_RETENTION_DAYS = 7;
@@ -63,7 +65,7 @@ export async function runScheduler({ system, backupDir, intervalMs, retentionDay
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const config = parseBackupConfig();
-  const backupDir = path.resolve(process.env.MERCORA_BACKUP_DIR ?? path.join(process.cwd(), 'backups'));
+  const backupDir = path.resolve(process.env.MERCORA_BACKUP_DIR ?? path.join(REPO_ROOT, 'backups'));
   const system = createAdminSystem({ backupDir });
   const stop = await runScheduler({ system, backupDir, ...config });
   const shutdown = signal => { stop(); console.log(`[backup] received ${signal}; shutting down`); process.exit(0); };
