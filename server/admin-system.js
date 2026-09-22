@@ -110,8 +110,11 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     const names=await fs.readdir(backupDir);
     const entries=[];
     for(const name of names.filter(n=>BACKUP_RE.test(n))){
-      const stat=await fs.stat(path.join(backupDir,name));
-      entries.push({id:name,size_bytes:stat.size,modified_at:stat.mtime.toISOString()});
+      try{
+        const managed=await managedBackupPath(name);
+        const stat=await fs.stat(managed.full);
+        entries.push({id:name,size_bytes:stat.size,modified_at:stat.mtime.toISOString()});
+      }catch{}
     }
     return entries.sort((a,b)=>b.modified_at.localeCompare(a.modified_at));
   }
@@ -154,11 +157,19 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     await recordAudit('BACKUP_DB','backup',id,{size_bytes:stat.size});
     return {ok:true,id,size_bytes:stat.size,created_at:stat.mtime.toISOString()};
   }
-  async function withBackupInput(id,args){
+  async function managedBackupPath(id){
     const safe=validateBackupId(id);
-    const full=path.join(backupDir,safe);
-    await fs.stat(full);
-    return streamRunner({file:'docker',args,source:full,cwd});
+    const root=await fs.realpath(backupDir);
+    const full=await fs.realpath(path.join(root,safe));
+    const relative=path.relative(root,full);
+    if(!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('invalid backup path');
+    const stat=await fs.stat(full);
+    if(!stat.isFile()) throw new Error('invalid backup file');
+    return {id:safe,full};
+  }
+  async function withBackupInput(id,args){
+    const managed=await managedBackupPath(id);
+    return streamRunner({file:'docker',args,source:managed.full,cwd});
   }
   async function verifyBackup(id){
     const result=await withBackupInput(id,COMPOSE.concat(['exec','-T','postgres','pg_restore','--list','-U','mercora']));
