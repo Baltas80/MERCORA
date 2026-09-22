@@ -17,6 +17,8 @@ This document records the evidence required before the administrative control pl
 | Windows installer | PENDING | Successful Windows build artifact |
 | Docker/WSL runtime | PENDING | Runtime validation on target host |
 | PostgreSQL backup/verify/restore | PENDING | End-to-end runtime test |
+| Scheduled PostgreSQL backups | IMPLEMENTED | Scheduler unit tests + Windows Task Scheduler installation; target-host execution still required |
+| Backup retention | IMPLEMENTED | Scheduler retention tests + filesystem confinement checks |
 | Backup path/symlink confinement | IMPLEMENTED | `server/admin-system.test.js` + target-host filesystem test |
 | Privileged command timeout bounds | IMPLEMENTED | Source review + CI tests; runtime drill still required |
 | Tor runtime | PENDING | Target-host Tor health check |
@@ -57,9 +59,12 @@ The Admin Control API rejects POST bodies larger than 32 KiB using both an early
 
 No secrets, Onion private keys, database dumps, wallet keys, or credentials belong in this repository.
 
-
-## Backup safety
+## Backup safety and schedule
 
 Backup identifiers are constrained to the generated `mercora-<UTC>-<random>.dump` format. Before `pg_restore` input is opened, the service resolves the managed backup directory and the requested file with `realpath`, requires the resolved path to remain inside the managed directory, and requires a regular file. This also blocks symlink-based escapes. Listing ignores entries that fail the same managed-file check.
 
 Privileged Docker operations have bounded execution time. General administrative commands and backup verification default to a two-minute timeout; backup generation and database restoration have a fifteen-minute limit. A timeout is returned as a sanitized diagnostic and does not expose process arguments or secrets. Runtime validation on the target host remains required.
+
+A dedicated `scripts/mercora-backup-scheduler.mjs` now performs an immediate backup when started and then repeats every six hours by default. The interval cannot be configured below 15 minutes. Retention defaults to seven days and 28 backups, with configurable bounded values. The scheduler prevents overlapping backup cycles and prunes only validated regular files inside the managed backup directory. Backups are excluded from Git by `backups/` in `.gitignore`.
+
+On Windows, `scripts/install-mercora-backup-task.ps1` installs the scheduler as a SYSTEM Task Scheduler job, configured by default for every six hours and to start when available. The task is intentionally separate from the public web process and therefore does not grant Docker privileges to the web application.
