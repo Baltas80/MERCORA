@@ -25,6 +25,10 @@ This document records the evidence required before the administrative control pl
 | RBAC/MFA | PENDING | Security tests and runtime verification |
 | Final recovery/security review | PENDING | Full operational drill |
 
+## CI security baseline
+
+The general CI workflow grants `contents: read` globally. `security-events: write` is restricted to the CodeQL job instead of being granted to the unit/security job. Both jobs have explicit execution timeouts to prevent a stalled dependency audit or test suite from consuming an unbounded runner allocation.
+
 ## Rule
 
 A gate marked `IMPLEMENTED` means the corresponding code/control exists. It does **not** mean that production validation has passed. A gate becomes production-verified only after the required evidence is available.
