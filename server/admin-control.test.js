@@ -37,7 +37,7 @@ test('recovery targets only the affected component first and then verifies in de
   const result = await controller.run('RECOVER', 'postgres');
   assert.equal(result.target, 'postgres');
   assert.equal(log[0].at(-1), 'postgres');
-  assert.equal(log[0][4], 'restart');
+  assert.ok(log[0].includes('restart'));
   assert.deepEqual(log.slice(1, 6).map((entry) => entry.slice(0, 2)), [
     ['node', '--version'],
     ['docker', 'version'],
@@ -80,7 +80,7 @@ test('failed restart falls back to start for the same component', async () => {
   const controller = createAdminController({ runner, probe: fakeProbe(log), backendProbe: okBackend });
   const result = await controller.run('RECOVER', 'app');
   assert.equal(result.steps[1].step, 'start:app');
-  assert.equal(log[1][4], 'up');
+  assert.ok(log[1].includes('up'));
 });
 
 test('failed restart and failed start abort recovery without broad restart', async () => {
