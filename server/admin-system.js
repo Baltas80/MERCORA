@@ -62,8 +62,8 @@ async function defaultInputRunner({file,args,source,cwd,timeoutMs=COMMAND_TIMEOU
   return new Promise((resolve,reject)=>{
     const child=spawn(file,args,{cwd,shell:false,windowsHide:true,stdio:['pipe','pipe','pipe']});
     const out=[];const err=[];let outBytes=0;let errBytes=0;let timedOut=false;
-    const timer=setTimeout(()=>{timedOut=true;child.kill('SIGTERM');},timeoutMs);
     const input=createReadStream(source,{flags:'r',mode:0o400});
+    const timer=setTimeout(()=>{timedOut=true;input.destroy();child.kill('SIGTERM');},timeoutMs);
     const fail=error=>{clearTimeout(timer);input.destroy();child.kill('SIGTERM');reject(error);};
     child.stdout.on('data',chunk=>{if(outBytes<524288){out.push(chunk);outBytes+=chunk.length}});
     child.stderr.on('data',chunk=>{if(errBytes<1048576){err.push(chunk);errBytes+=chunk.length}});
@@ -177,12 +177,12 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
     if(!stat.isFile()) throw new Error('invalid backup file');
     return {id:safe,full};
   }
-  async function withBackupInput(id,args){
+  async function withBackupInput(id,args,timeoutMs=COMMAND_TIMEOUT_MS){
     const managed=await managedBackupPath(id);
-    return streamRunner({file:'docker',args,source:managed.full,cwd});
+    return streamRunner({file:'docker',args,source:managed.full,cwd,timeoutMs});
   }
   async function verifyBackup(id){
-    const result=await withBackupInput(id,COMPOSE.concat(['exec','-T','postgres','pg_restore','--list','-U','mercora']));
+    const result=await withBackupInput(id,COMPOSE.concat(['exec','-T','postgres','pg_restore','--list','-U','mercora']),COMMAND_TIMEOUT_MS);
     return {ok:result.ok,id:validateBackupId(id),diagnostic:commandResult(result)};
   }
   async function restoreBackup(id,confirm){
@@ -198,7 +198,7 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
       safety=await backupDb();
       result=await withBackupInput(safe,COMPOSE.concat([
         'exec','-T','postgres','pg_restore','--clean','--if-exists','--no-owner','-U','mercora','-d','mercora'
-      ]));
+      ]),BACKUP_TIMEOUT_MS);
     } finally {
       start=await runCommand(COMPOSE.concat(['start','app']));
     }
