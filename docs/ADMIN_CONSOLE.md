@@ -54,7 +54,8 @@ Las modificaciones generan entradas en `admin_audit_log`. La consola no proporci
 - Procesos lanzados con shell=false.
 - Validación estricta de UUID, slugs, estados, límites y tipos de descuento.
 - No se aceptan SQL, comandos o rutas de fichero arbitrarias desde la UI.
-- Los diagnósticos eliminan líneas con contraseñas, tokens, semillas, claves privadas y autorizaciones.
+- Los diagnósticos de error del API pasan por un sanitizador que elimina rutas de sistema y valores asociados a `token`, `password` o `secret`, además de limitar su longitud.
+- Los logs de servicio y diagnósticos no deben exponer credenciales, semillas, claves privadas ni autorizaciones.
 - Las claves privadas de Tor y credenciales de pago quedan fuera de la frontera administrativa.
 
 ## Migraciones
@@ -63,13 +64,15 @@ Los scripts montados en docker-entrypoint-initdb.d/ solo se ejecutan automática
 
 ## Verificación CI
 
-La pipeline específica de la consola ejecuta comprobación Rust (`cargo check`), tests Rust (`cargo test`), validación de sintaxis JavaScript y build del instalador Windows NSIS. El conjunto de dependencias del frontend administrativo todavía no dispone de un `package-lock.json` propio, por lo que esa instalación continúa usando `npm install`; convertirla a `npm ci` queda como mejora de reproducibilidad pendiente hasta generar y revisar el lockfile completo.
+La pipeline específica de la consola ejecuta comprobación Rust (`cargo check`), tests Rust (`cargo test`), validación de sintaxis JavaScript y build del instalador Windows NSIS. La pipeline general también comprueba explícitamente la sintaxis de `server/admin-control-api.test.js` para evitar que el nuevo conjunto de pruebas quede fuera de la validación sintáctica. El conjunto de dependencias del frontend administrativo todavía no dispone de un `package-lock.json` propio, por lo que esa instalación continúa usando `npm install`; convertirla a `npm ci` queda como mejora de reproducibilidad pendiente hasta generar y revisar el lockfile completo.
 
 ## Estado de producción
 
 El código administrativo queda integrado y preparado para la infraestructura real, pero la aprobación de producción requiere ejecutar en el equipo objetivo la build Windows, Docker/WSL, PostgreSQL, Tor, Onion Service y los procedimientos de backup/restore de extremo a extremo. No se marcan esas verificaciones como superadas hasta que se ejecutan realmente.
 
 El editor de contenido está implementado en código y con tests unitarios; su ejecución contra PostgreSQL real queda pendiente de disponer del runtime Docker operativo.
+
+La ejecución CI del `HEAD` actual debe considerarse **PENDIENTE** hasta que GitHub publique los workflow runs correspondientes; la integración del código por sí sola no se considera evidencia de que los tests hayan pasado.
 
 ## Web pública conectada a datos reales
 
