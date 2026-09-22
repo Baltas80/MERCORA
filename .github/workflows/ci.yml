@@ -94,6 +94,18 @@ jobs:
           node --check web/account.js
           node --check web/seller.js
 
+      - name: Check Windows backup task least privilege
+        shell: pwsh
+        run: |
+          $script = Get-Content -Raw -LiteralPath 'scripts/install-mercora-backup-task.ps1'
+          [void][scriptblock]::Create($script)
+          if ($script -match "-UserId\s+'SYSTEM'" -or $script -match '-RunLevel\s+Highest') {
+            throw 'Windows backup task must not run as SYSTEM or with highest privileges.'
+          }
+          if ($script -notmatch '-LogonType\s+S4U' -or $script -notmatch '-RunLevel\s+Limited') {
+            throw 'Windows backup task must use an explicit limited S4U principal.'
+          }
+
       - name: Verify container network isolation
         run: node scripts/verify-compose-security.mjs
 
