@@ -13,14 +13,14 @@ const COMPOSE_BASE = Object.freeze(['compose', '-f', 'docker-compose.yml']);
 const ONION_COMPOSE = 'docker-compose.onion.yml';
 const ALLOWED_SERVICES = new Set(['app', 'postgres', 'tor']);
 const REQUIRED_SERVICES = Object.freeze(['app', 'postgres', 'tor']);
-const SENSITIVE = /(password|secret|seed|private.?key|mnemonic|authorization)/i;
+const SENSITIVE_LINE = /^\s*(password|secret|token|seed|private.?key|mnemonic|authorization)\s*[:=]/i;
 const CREDENTIAL_URL = /([a-z][a-z\d+.-]*:\/\/[^\s:/@]+:)[^\s/@]+(@)/gi;
 const INLINE_SECRET = /((?:password|secret|token|api[_-]?key|private[_-]?key)\s*[:=]\s*)[^\s,;]+/gi;
 
 function cleanDiagnostic(text = '') {
   return String(text)
     .split(/\r?\n/)
-    .filter((line) => !SENSITIVE.test(line))
+    .filter((line) => !SENSITIVE_LINE.test(line))
     .map((line) => line.replace(CREDENTIAL_URL, '$1[REDACTED]$2').replace(INLINE_SECRET, '$1[REDACTED]'))
     .join('\n')
     .slice(0, 4000);
