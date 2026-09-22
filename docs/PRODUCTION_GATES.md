@@ -34,6 +34,19 @@ The general CI workflow grants `contents: read` globally. `security-events: writ
 
 `RECOVER` is restricted to the fixed service allowlist (`app`, `postgres`, `tor`). It first restarts only the requested component and falls back to starting that same component if restart fails. It never performs a broad restart as a recovery fallback. After a successful component repair, the controller runs health verification in this order: Node/runtime dependencies, Docker, Compose/MERCORA, backend, PostgreSQL, Tor, Onion Service, and storage. The final health state is returned to the Admin Console. Diagnostics are sanitized before crossing the Admin Control API boundary.
 
+## Admin action boundary
+
+Every privileged Admin Control API family has its own fixed action allowlist before dispatch:
+
+- control: `START`, `STOP`, `RESTART`, `STATUS`, `HEALTH_CHECK`, `RECOVER`;
+- management: fixed marketplace/admin actions defined by `admin-management.js`;
+- reputation: fixed seller/review actions defined by `admin-reputation.js`;
+- escrow: fixed custody/authorization actions defined by `admin-escrow.js`;
+- system: fixed logs/metrics/database maintenance actions;
+- content: fixed versioned site-content actions.
+
+An action not present in the API allowlist is rejected before the corresponding privileged manager is invoked. This is an explicit boundary in addition to validation inside the individual managers. The UI therefore has no route to an arbitrary shell, SQL statement, filesystem path, or manager method through an uncontrolled action name.
+
 ## Rule
 
 A gate marked `IMPLEMENTED` means the corresponding code/control exists. It does **not** mean that production validation has passed. A gate becomes production-verified only after the required evidence is available.
