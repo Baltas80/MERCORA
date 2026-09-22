@@ -10,6 +10,7 @@ This document records the evidence required before the administrative control pl
 | Explicit admin endpoint/action allowlists | IMPLEMENTED | Source review + tests |
 | Diagnostic secret/path filtering | IMPLEMENTED | `server/admin-control-api.test.js` |
 | Directed recovery | IMPLEMENTED | Controller tests + real runtime test |
+| Request body size enforcement and safe draining | IMPLEMENTED | `server/admin-control-api.test.js` + CI |
 | Tauri endpoint isolation | IMPLEMENTED | Rust source review + `cargo test` |
 | Rust Admin Console tests | PENDING | GitHub Actions run for current head |
 | Windows installer | PENDING | Successful Windows build artifact |
@@ -27,5 +28,7 @@ This document records the evidence required before the administrative control pl
 ## Rule
 
 A gate marked `IMPLEMENTED` means the corresponding code/control exists. It does **not** mean that production validation has passed. A gate becomes production-verified only after the required evidence is available.
+
+The Admin Control API rejects POST bodies larger than 32 KiB using both an early `Content-Length` check and a streaming byte-count check. Oversized requests are drained before the 413 response is returned, preventing unread request data from being left on the connection.
 
 No secrets, Onion private keys, database dumps, wallet keys, or credentials belong in this repository.
