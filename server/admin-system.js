@@ -187,8 +187,8 @@ export function createAdminSystem({cwd=path.resolve(process.cwd()),runner=defaul
   }
   async function restoreBackup(id,confirm){
     if(confirm!=='RESTORE_MERCORA') throw new Error('restore confirmation required');
-    const safe=validateBackupId(id);
-    await fs.stat(path.join(backupDir,safe));
+    const managed=await managedBackupPath(id);
+    const safe=managed.id;
     const stop=await runCommand(COMPOSE.concat(['stop','app']));
     if(!stop.ok) throw new Error(clean(stop.stderr || stop.stdout || 'unable to stop backend safely'));
     let safety;
