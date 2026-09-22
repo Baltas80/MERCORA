@@ -18,8 +18,8 @@ test('backup scheduler defaults to a six-hour interval and bounded retention', (
 
 test('backup scheduler rejects unsafe frequency and retention settings', () => {
   assert.throws(() => parseBackupConfig({ MERCORA_BACKUP_INTERVAL_MS: '60000' }), /15 minutes/);
-  assert.throws(() => parseBackupConfig({ MERCORA_BACKUP_RETENTION_DAYS: '0' }), /RETENTION_DAYS/);
-  assert.throws(() => parseBackupConfig({ MERCORA_BACKUP_RETENTION_COUNT: '1' }), /RETENTION_COUNT/);
+  assert.throws(() => parseBackupConfig({ MERCORA_BACKUP_RETENTION_DAYS: '0' }), /retention days/i);
+  assert.throws(() => parseBackupConfig({ MERCORA_BACKUP_RETENTION_COUNT: '1' }), /retention count/i);
 });
 
 test('retention deletes only managed files outside the age/count policy', async () => {
