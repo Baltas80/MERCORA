@@ -10,7 +10,7 @@ function fakeDb(){
       calls.push(args.join(' '));
       const sql=args[args.length-1];
       if(sql.includes('SELECT COALESCE(json_object_agg')) return {ok:true,stdout:'{"announcement":"hello"}',stderr:''};
-      if(sql.includes('INSERT INTO site_content_versions') && sql.includes('RETURNING json_build_object')) return {ok:true,stdout:'{"id":1,"site_key":"announcement","value":"hello","published":true,"actor":"tester","created_at":"2026-09-22T00:00:00Z"}',stderr:''};
+      if(sql.includes('INSERT INTO site_content_versions') && sql.includes('RETURNING id,site_key,value,published,actor,created_at')) return {ok:true,stdout:'{"id":1,"site_key":"announcement","value":"hello","published":true,"actor":"tester","created_at":"2026-09-22T00:00:00Z"}',stderr:''};
       if(sql.includes('SELECT COALESCE(json_agg(row_to_json')) return {ok:true,stdout:'[{"id":1,"site_key":"announcement","value":"hello","published":true,"actor":"tester","created_at":"2026-09-22T00:00:00Z"}]',stderr:''};
       if(sql.includes('SELECT json_build_object') && sql.includes('site_content_versions')) return {ok:true,stdout:'{"id":1,"site_key":"announcement","value":"hello","published":true,"actor":"tester","created_at":"2026-09-22T00:00:00Z"}',stderr:''};
       return {ok:true,stdout:'',stderr:''};
@@ -46,9 +46,7 @@ test('new published version supersedes the previous version', async()=>{
   db.runner=async (_file,args)=>{
     db.calls.push(args.join(' '));
     const sql=args[args.length-1];
-    if(sql.includes('INSERT INTO site_content_versions')&&sql.includes('RETURNING json_build_object')){
-      return {ok:true,stdout:'{"id":2,"site_key":"announcement","value":"new","published":true,"actor":"tester","created_at":"2026-09-22T01:00:00Z"}',stderr:''};
-    }
+    if(sql.includes('INSERT INTO site_content_versions')&&sql.includes('RETURNING id,site_key,value,published,actor,created_at')) return {ok:true,stdout:'{"id":2,"site_key":"announcement","value":"new","published":true,"actor":"tester","created_at":"2026-09-22T01:00:00Z"}',stderr:''};
     if(sql.includes('SELECT COALESCE(json_object_agg')) return {ok:true,stdout:'{"announcement":"new"}',stderr:''};
     if(sql.includes('SELECT COALESCE(json_agg(row_to_json')) return {ok:true,stdout:'[{"id":2,"site_key":"announcement","value":"new","published":true,"actor":"tester","created_at":"2026-09-22T01:00:00Z"}]',stderr:''};
     return {ok:true,stdout:'',stderr:''};
