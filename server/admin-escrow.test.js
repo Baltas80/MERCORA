@@ -4,11 +4,13 @@ import { createAdminEscrow, ESCROW_ADMIN_ACTIONS } from './admin-escrow.js';
 
 function fake(){
   const calls=[];
+  let custody='normal';
   const runner=async(file,args)=>{
     calls.push({file,args:[...args]});
     const sql=args.at(-1);
     if(sql.includes("FROM escrow_policies")) return {ok:true,code:0,stdout:'{"id":1,"escrow_enabled":true,"mid_escrow_enabled":true,"mid_release_bps":5000,"early_pay_enabled":true,"early_pay_delay_hours":24,"early_pay_max_bps":8000,"dispute_window_hours":48,"auto_release_hours":72,"new_seller_escrow_required":true,"new_seller_hold_hours":168,"high_value_review_enabled":true,"high_value_threshold_atomic":"0","manual_release_required":false,"updated_at":"2026-09-21T18:00:00Z","updated_by":"admin"}',stderr:''};
-    if(sql.includes("FROM system_state")) return {ok:true,code:0,stdout:'{"key":"custody_mode","value":"normal","updated_at":"2026-09-21T18:00:00Z"}',stderr:''};
+    if(sql.includes("FROM system_state")) return {ok:true,code:0,stdout:JSON.stringify({key:'custody_mode',value:custody,updated_at:'2026-09-21T18:00:00Z'}),stderr:''};
+    if(sql.includes("INSERT INTO system_state")){const m=sql.match(/VALUES\('custody_mode','([^']+)'/);if(m)custody=m[1];return {ok:true,code:0,stdout:'',stderr:''};}
     if(sql.includes("FROM orders o CROSS JOIN")) return {ok:true,code:0,stdout:'{"id":"11111111-1111-4111-8111-111111111111","status":"shipped","total_atomic":"100000","total_asset":"BTC","updated_at":"2026-09-20T12:00:00Z","escrow_enabled":true,"dispute_window_hours":48,"auto_release_hours":72}',stderr:''};
     if(sql.includes("SELECT id,order_id,action,amount_atomic::text AS amount_atomic")) return {ok:true,code:0,stdout:'',stderr:''};
     if(sql.includes("SELECT id FROM escrow_authorizations")) return {ok:true,code:0,stdout:'',stderr:''};
