@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { auth } from './auth/better-auth.js';
+import { auth as defaultAuth } from './auth/better-auth.js';
 import { createAdminController } from './admin-control.js';
 
 const ACTIONS = new Set(['START', 'STOP', 'RESTART', 'STATUS', 'HEALTH_CHECK', 'RECOVER']);
@@ -21,6 +21,9 @@ function requestHeaders(req, cookie = null) {
   const headers = new Headers();
   for (const [name, value] of Object.entries(req.headers)) {
     if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+  }
+  if (!headers.has('x-forwarded-for') && req.socket.remoteAddress) {
+    headers.set('x-forwarded-for', req.socket.remoteAddress);
   }
   if (cookie !== null) headers.set('cookie', cookie);
   return headers;
@@ -61,13 +64,13 @@ async function readJson(req) {
   }
 }
 
-async function requireAdmin(req) {
+async function requireAdmin(auth, req) {
   const session = await auth.api.getSession({ headers: requestHeaders(req) });
   if (!session?.user || session.user.role !== 'admin') return null;
   return session;
 }
 
-async function authenticateLogin(req, res) {
+async function authenticateLogin(auth, req, res) {
   const input = await readJson(req);
   const username = typeof input.username === 'string' ? input.username : '';
   const password = typeof input.password === 'string' ? input.password : '';
@@ -112,7 +115,7 @@ async function authenticateLogin(req, res) {
   }
 }
 
-async function logout(req, res) {
+async function logout(auth, req, res) {
   try {
     const response = await auth.api.signOut({ headers: requestHeaders(req), asResponse: true });
     forwardSetCookies(res, response.headers);
@@ -121,8 +124,9 @@ async function logout(req, res) {
   res.end(JSON.stringify({ ok: true }));
 }
 
-export function createAdminApi({ controller, host = '127.0.0.1', port = 8787 } = {}) {
+export function createAdminApi({ controller, auth, host = '127.0.0.1', port = 8787 } = {}) {
   const control = controller ?? createAdminController();
+  const authProvider = auth ?? defaultAuth;
 
   const server = http.createServer(async (req, res) => {
     responseHeaders(res);
@@ -134,7 +138,7 @@ export function createAdminApi({ controller, host = '127.0.0.1', port = 8787 } =
 
     if (req.method === 'POST' && req.url === '/v1/login') {
       try {
-        return await authenticateLogin(req, res);
+        return await authenticateLogin(authProvider, req, res);
       } catch (error) {
         const status = Number.isInteger(error?.statusCode) ? error.statusCode : 400;
         res.writeHead(status);
@@ -142,10 +146,10 @@ export function createAdminApi({ controller, host = '127.0.0.1', port = 8787 } =
       }
     }
 
-    if (req.method === 'POST' && req.url === '/v1/logout') return logout(req, res);
+    if (req.method === 'POST' && req.url === '/v1/logout') return logout(authProvider, req, res);
 
     if (req.method === 'GET' && req.url === '/v1/session') {
-      const session = await requireAdmin(req);
+      const session = await requireAdmin(authProvider, req);
       if (!session) {
         res.writeHead(401);
         return res.end(JSON.stringify({ error: 'unauthorized' }));
@@ -154,7 +158,7 @@ export function createAdminApi({ controller, host = '127.0.0.1', port = 8787 } =
       return res.end(JSON.stringify({ ok: true, user: { id: session.user.id, username: session.user.username ?? null, role: session.user.role } }));
     }
 
-    const authenticated = await requireAdmin(req);
+    const authenticated = await requireAdmin(authProvider, req);
     if (!authenticated) {
       res.writeHead(401);
       return res.end(JSON.stringify({ error: 'unauthorized' }));
