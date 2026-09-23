@@ -39,11 +39,15 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install Node dependencies
+        run: npm install --no-audit
+
       - name: Check server syntax
         run: node --check server/server.js
 
-      - name: Check admin control syntax
+      - name: Check admin authentication syntax
         run: |
+          node --check server/auth/better-auth.js
           node --check server/admin-control.js
           node --check server/admin-control-api.js
           node --check scripts/mercora-admin-api.mjs
