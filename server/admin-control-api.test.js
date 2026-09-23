@@ -20,7 +20,7 @@ async function withApi(controller, fn, options = {}) {
 }
 
 test('admin API rejects invalid credential hashes', () => {
-  assert.throws(() => createAdminApi({ token: 'short' }), /credential hash/);
+  assert.throws(() => createAdminApi({ token: 'short' }), /Invalid admin token/);
 });
 
 test('admin API requires bearer authentication', async () => {
