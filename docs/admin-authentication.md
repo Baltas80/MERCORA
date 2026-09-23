@@ -30,12 +30,21 @@ After installing dependencies and configuring the secret:
 
 ```text
 npm run admin:auth:migrate
-npm run admin:auth:create -- --email admin@example.invalid --name "MERCORA Admin" --role admin
+npm run admin:auth:create -- --email admin@example.invalid --password "<strong-random-password>" --name "MERCORA Admin" --role admin --data '{"username":"<admin-username>"}' --yes
 ```
 
-Better Auth's CLI performs the initial administrator creation through its supported server-side path; MERCORA does not generate or store an initial password itself.
+Better Auth's CLI performs the initial administrator creation through its supported server-side path. MERCORA does not generate, persist, or manage the administrator password itself.
 
-The username plugin is enabled for console login. If the initial admin is created without a username, provision the username through the supported Better Auth user-management path before using username login.
+The username plugin is the console's login mechanism. Usernames are immutable once provisioned, and public sign-up is disabled.
+
+## Session and rate limiting
+
+- Server-side session lifetime: 30 minutes.
+- Session update age: 5 minutes.
+- Idle timeout enforced by the desktop console: 15 minutes.
+- Username login is rate-limited to 5 attempts per minute.
+- The Admin Control API supplies the loopback client address to Better Auth for rate-limit accounting.
+- The session cookie is `HttpOnly`, `SameSite=Strict`, and never persisted by the console.
 
 ## Runtime flow
 
