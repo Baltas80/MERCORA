@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { hashAdminToken } from './auth/admin-credential.js';
 import { createAdminApi } from './admin-control-api.js';
 
 const token = 'x'.repeat(32);
@@ -18,8 +19,8 @@ async function withApi(controller, fn, options = {}) {
   }
 }
 
-test('admin API rejects short tokens', () => {
-  assert.throws(() => createAdminApi({ token: 'short' }), /at least 32/);
+test('admin API rejects invalid credential hashes', () => {
+  assert.throws(() => createAdminApi({ token: 'short' }), /credential hash/);
 });
 
 test('admin API requires bearer authentication', async () => {
@@ -41,7 +42,27 @@ test('admin API validates action and service before calling controller', async (
   });
 });
 
-test('admin API uses constant-time-compatible token comparison and forwards valid requests', async () => {
+test('admin API authenticates against the persisted hash without a plaintext token', async () => {
+  const controller = {
+    run: async (action, service) => ({ ok: true, action, service }),
+    healthCheck: async () => ({ ok: true, checks: [] })
+  };
+  const api = createAdminApi({ controller, tokenHash: hashAdminToken(token), port: 0 });
+  await api.listen();
+  const address = api.server.address();
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/control`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'STATUS' })
+    });
+    assert.equal(response.status, 200);
+  } finally {
+    await new Promise((resolve) => api.server.close(resolve));
+  }
+});
+
+test('admin API forwards valid credentials using a stored hash', async () => {
   const calls = [];
   const controller = {
     run: async (action, service) => { calls.push([action, service]); return { ok: true, action, service }; },
@@ -87,19 +108,32 @@ test('admin API exposes a one-time localhost bootstrap endpoint for generated cr
   try {
     const { loadOrCreateAdminCredential } = await import('./auth/admin-credential.js');
     const generated = await loadOrCreateAdminCredential({ tokenFile });
-    await withApi(
-      { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) },
-      async (base) => {
-        const first = await fetch(`${base}/v1/bootstrap`, { method: 'POST' });
-        assert.equal(first.status, 200);
-        const body = await first.json();
-        assert.equal(body.token, generated.token);
+    const api = createAdminApi({
+      controller: { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) },
+      token: generated.token,
+      tokenFile,
+      bootstrapPending: true,
+      port: 0
+    });
+    await api.listen();
+    const address = api.server.address();
+    const base = `http://127.0.0.1:${address.port}`;
+    try {
+      const first = await fetch(`${base}/v1/bootstrap`, { method: 'POST' });
+      assert.equal(first.status, 200);
+      const body = await first.json();
+      assert.equal(body.token, generated.token);
 
-        const second = await fetch(`${base}/v1/bootstrap`, { method: 'POST' });
-        assert.equal(second.status, 409);
-      },
-      { tokenFile, bootstrapPending: true }
-    );
+      const second = await fetch(`${base}/v1/bootstrap`, { method: 'POST' });
+      assert.equal(second.status, 409);
+
+      const raw = JSON.parse(await readFile(tokenFile, 'utf8'));
+      assert.equal(raw.bootstrapPending, false);
+      assert.equal(raw.tokenHash, hashAdminToken(generated.token));
+      assert.equal(Object.hasOwn(raw, 'token'), false);
+    } finally {
+      await new Promise((resolve, reject) => api.server.close((error) => error ? reject(error) : resolve()));
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
