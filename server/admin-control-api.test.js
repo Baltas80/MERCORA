@@ -81,6 +81,30 @@ test('admin API does not expose arbitrary control endpoints', async () => {
   });
 });
 
+test('admin login does not issue a session cookie to a non-admin user', async () => {
+  let signOutCalls = 0;
+  const fakeAuth = {
+    api: {
+      getSession: async () => null,
+      signOut: async () => { signOutCalls += 1; return { ok: true }; },
+    },
+    handler: async () => new Response(JSON.stringify({ user: { id: 'user-1', username: 'ordinary-user', role: 'user' } }), {
+      status: 200,
+      headers: { 'set-cookie': 'mercora_admin.session=temporary-session; HttpOnly; Path=/; SameSite=Strict' },
+    }),
+  };
+  await withApi({ run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) }, async (base) => {
+    const response = await fetch(`${base}/v1/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'ordinary-user', password: 'password' }),
+    });
+    assert.equal(response.status, 403);
+    assert.equal(sessionCookie(response), null);
+    assert.equal(signOutCalls, 1);
+  }, fakeAuth);
+});
+
 test('admin API authenticates a provisioned Better Auth admin and authorizes control operations', {
   skip: !process.env.MERCORA_ADMIN_TEST_USERNAME || !process.env.MERCORA_ADMIN_TEST_PASSWORD,
 }, async () => {
