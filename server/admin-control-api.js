@@ -78,13 +78,15 @@ async function authenticateLogin(req, res) {
   }
 
   try {
-    // Route through Better Auth's HTTP handler rather than auth.api so its
-    // built-in client-request rate limiting remains active for sign-in.
+    const headers = requestHeaders(req);
+    headers.delete('content-length');
+    headers.delete('host');
+    headers.set('content-type', 'application/json');
     const request = new Request(
       `http://127.0.0.1:${process.env.MERCORA_ADMIN_PORT ?? '8787'}/api/auth/sign-in/username`,
       {
         method: 'POST',
-        headers: requestHeaders(req),
+        headers,
         body: JSON.stringify({ username, password, rememberMe: false }),
       },
     );
