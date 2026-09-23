@@ -115,6 +115,8 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
     const checks = [];
     checks.push(named('node', await probe('node', ['--version'], { cwd })));
     checks.push(named('docker', await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd })));
+    checks.push(named('backend', await backendProbeFn()));
+    checks.push(named('postgresql', await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'], { cwd })));
 
     const composeServices = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'ps', '--status', 'running', '--services'], { cwd });
     checks.push({
@@ -125,9 +127,6 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
       torRunning: Boolean(composeServices?.ok) && serviceRunning(composeServices?.stdout, 'tor')
     });
     checks.at(-1).ok = checks.at(-1).ok && allServicesRunning(composeServices?.stdout);
-
-    checks.push(named('postgresql', await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'postgres', 'pg_isready', '-U', 'mercora', '-d', 'mercora'], { cwd })));
-    checks.push(named('backend', await backendProbeFn()));
     checks.push(named('onionService', await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd })));
     checks.push(named('storage', await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd })));
 
