@@ -16,9 +16,12 @@ const ADMIN_SESSION = 'mercora-admin-session';
 function fakeAuth() {
   return {
     api: {
-      getSession: async ({ headers }) => headers.get('cookie') === `session=${ADMIN_SESSION}`
-        ? { user: { id: 'ci-admin', username: 'ciadmin', role: 'admin' } }
-        : null,
+      getSession: async ({ headers }) => {
+        const cookie = headers.get('cookie') ?? '';
+        return cookie.split(';').map((value) => value.trim()).includes(`session=${ADMIN_SESSION}`)
+          ? { user: { id: 'ci-admin', username: 'ciadmin', role: 'admin' } }
+          : null;
+      },
       signOut: async () => ({ ok: true }),
     },
     handler: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
