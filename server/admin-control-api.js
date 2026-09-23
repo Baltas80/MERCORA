@@ -38,8 +38,10 @@ export function createAdminApi({ controller, token, host = '127.0.0.1', port = 8
 
     const contentLength = Number(req.headers['content-length']);
     if (Number.isFinite(contentLength) && contentLength > MAX_BODY) {
+      res.writeHead(413);
+      res.end(JSON.stringify({ error: 'request too large' }));
       req.resume();
-      res.writeHead(413); return res.end(JSON.stringify({ error: 'request too large' }));
+      return;
     }
 
     let body = '';
