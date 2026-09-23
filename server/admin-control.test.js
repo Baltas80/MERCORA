@@ -11,10 +11,22 @@ function fakeRunner(log, result = { ok: true, code: 0, stdout: '', stderr: '' })
 }
 
 const RUNNING_SERVICES = 'app\npostgres\ntor\n';
-const ADMIN_TOKEN = 'x'.repeat(64);
+const ADMIN_SESSION = 'mercora-admin-session';
+
+function fakeAuth() {
+  return {
+    api: {
+      getSession: async ({ headers }) => headers.get('cookie') === `session=${ADMIN_SESSION}`
+        ? { user: { id: 'ci-admin', username: 'ciadmin', role: 'admin' } }
+        : null,
+      signOut: async () => ({ ok: true }),
+    },
+    handler: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+  };
+}
 
 async function withApi(controller, fn) {
-  const api = createAdminApi({ controller, token: ADMIN_TOKEN, port: 0 });
+  const api = createAdminApi({ controller, auth: fakeAuth(), port: 0 });
   await api.listen();
   const address = api.server.address();
   try {
@@ -25,7 +37,7 @@ async function withApi(controller, fn) {
 }
 
 const apiHeaders = {
-  authorization: `Bearer ${ADMIN_TOKEN}`,
+  cookie: `session=${ADMIN_SESSION}`,
   'content-type': 'application/json'
 };
 
@@ -154,14 +166,14 @@ test('admin API rejects missing or invalid authentication', async () => {
     assert.equal(missing.status, 401);
 
     const invalid = await fetch(`${base}/v1/control`, {
-      method: 'POST', headers: { authorization: 'Bearer wrong', 'content-type': 'application/json' },
+      method: 'POST', headers: { cookie: 'session=wrong', 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'STATUS' })
     });
     assert.equal(invalid.status, 401);
   });
 });
 
-test('admin API forwards only validated operations', async () => {
+test('admin API forwards only validated operations after session authorization', async () => {
   const calls = [];
   const controller = {
     run: async (action, service) => {
