@@ -1,16 +1,17 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
-import { claimBootstrapToken, isValidAdminToken } from './auth/admin-credential.js';
+import { claimBootstrapToken, hashAdminToken, isValidAdminToken } from './auth/admin-credential.js';
 import { createAdminController } from './admin-control.js';
 
 const ACTIONS = new Set(['START', 'STOP', 'RESTART', 'STATUS', 'HEALTH_CHECK', 'RECOVER']);
 const SERVICES = new Set(['app', 'postgres', 'tor']);
 const MAX_BODY = 4096;
 
-function sameToken(provided, expected) {
-  const providedBytes = Buffer.from(String(provided ?? ''));
-  const expectedBytes = Buffer.from(String(expected ?? ''));
-  return providedBytes.length === expectedBytes.length && crypto.timingSafeEqual(providedBytes, expectedBytes);
+function sameToken(provided, expectedHash) {
+  if (!isValidAdminToken(provided)) return false;
+  const providedHash = Buffer.from(hashAdminToken(provided), 'hex');
+  const expected = Buffer.from(String(expectedHash ?? ''), 'hex');
+  return expected.length === providedHash.length && crypto.timingSafeEqual(providedHash, expected);
 }
 
 function isLoopback(address) {
@@ -35,16 +36,18 @@ async function rejectOversized(req, res) {
   return false;
 }
 
-export function createAdminApi({ controller, token, tokenFile = null, bootstrapPending = false, host = '127.0.0.1', port = 8787 } = {}) {
-  if (!isValidAdminToken(token)) throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
+export function createAdminApi({ controller, token, tokenHash, tokenFile = null, bootstrapPending = false, host = '127.0.0.1', port = 8787 } = {}) {
+  const expectedHash = tokenHash ?? (token ? hashAdminToken(token) : null);
+  if (!expectedHash || !/^[0-9a-f]{64}$/i.test(expectedHash)) throw new Error('A valid admin credential hash is required');
   const control = controller ?? createAdminController();
-  let canBootstrap = Boolean(tokenFile && bootstrapPending);
+  let canBootstrap = Boolean(tokenFile && bootstrapPending && token);
 
   const server = http.createServer(async (req, res) => {
     responseHeaders(res);
 
     if (!isLoopback(req.socket.remoteAddress)) {
-      res.writeHead(403); return res.end(JSON.stringify({ error: 'local access only' }));
+      res.writeHead(403);
+      return res.end(JSON.stringify({ error: 'local access only' }));
     }
 
     if (req.method === 'POST' && req.url === '/v1/bootstrap') {
@@ -54,10 +57,10 @@ export function createAdminApi({ controller, token, tokenFile = null, bootstrapP
         return res.end(JSON.stringify({ error: 'bootstrap unavailable' }));
       }
       try {
-        const bootstrapToken = await claimBootstrapToken(tokenFile);
+        const bootstrapSecret = await claimBootstrapToken(tokenFile, token);
         canBootstrap = false;
         res.writeHead(200);
-        return res.end(JSON.stringify({ token: bootstrapToken }));
+        return res.end(JSON.stringify({ token: bootstrapSecret }));
       } catch (error) {
         canBootstrap = false;
         res.writeHead(409);
@@ -65,11 +68,13 @@ export function createAdminApi({ controller, token, tokenFile = null, bootstrapP
       }
     }
 
-    if (!sameToken(req.headers.authorization?.replace(/^Bearer\s+/i, ''), token)) {
-      res.writeHead(401); return res.end(JSON.stringify({ error: 'unauthorized' }));
+    if (!sameToken(req.headers.authorization?.replace(/^Bearer\s+/i, ''), expectedHash)) {
+      res.writeHead(401);
+      return res.end(JSON.stringify({ error: 'unauthorized' }));
     }
     if (req.method !== 'POST' || req.url !== '/v1/control') {
-      res.writeHead(404); return res.end(JSON.stringify({ error: 'not found' }));
+      res.writeHead(404);
+      return res.end(JSON.stringify({ error: 'not found' }));
     }
 
     if (await rejectOversized(req, res)) return;
