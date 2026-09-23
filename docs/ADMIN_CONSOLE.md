@@ -10,15 +10,16 @@ The UI does not expose a command shell. The bridge accepts only the status and a
 
 ## Operator functions
 
-- START MERCORA
-- STOP MERCORA
-- RESTART MERCORA
-- START/RESTART TOR
-- RECOVER
+- START / STOP / RESTART MERCORA
+- START / STOP / RESTART PostgreSQL
+- START / STOP / RESTART Tor
+- RECOVER MERCORA
+- RECOVER PostgreSQL
+- RECOVER Tor
 - HEALTH CHECK
 - LOCK/logout
 
-Recovery is component-oriented. The control plane should repair the affected component first and then verify dependencies, backend, database, Tor, Onion Service and final health state.
+Recovery is component-oriented. The control plane repairs only the selected component first. It then verifies the complete dependency chain: Node.js, Docker/services, backend, PostgreSQL, Tor, Onion Service, storage and final health state. A recovery result includes sanitized technical diagnostics without exposing credentials or tokens.
 
 ## Windows build
 
