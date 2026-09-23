@@ -61,14 +61,8 @@ async function readJson(req) {
   }
 }
 
-function cookieHeader(req) {
-  return typeof req.headers.cookie === 'string' ? req.headers.cookie : '';
-}
-
 async function requireAdmin(req) {
-  const session = await auth.api.getSession({
-    headers: requestHeaders(req),
-  });
+  const session = await auth.api.getSession({ headers: requestHeaders(req) });
   if (!session?.user || session.user.role !== 'admin') return null;
   return session;
 }
@@ -84,28 +78,32 @@ async function authenticateLogin(req, res) {
   }
 
   try {
-    const response = await auth.api.signInUsername({
-      body: { username, password, rememberMe: false },
-      headers: requestHeaders(req),
-      asResponse: true,
-    });
+    // Route through Better Auth's HTTP handler rather than auth.api so its
+    // built-in client-request rate limiting remains active for sign-in.
+    const request = new Request(
+      `http://127.0.0.1:${process.env.MERCORA_ADMIN_PORT ?? '8787'}/api/auth/sign-in/username`,
+      {
+        method: 'POST',
+        headers: requestHeaders(req),
+        body: JSON.stringify({ username, password, rememberMe: false }),
+      },
+    );
+    const response = await auth.handler(request);
     forwardSetCookies(res, response.headers);
-    const body = await response.json();
-    if (!response.ok || !body?.user) {
+    const body = await response.text();
+    if (!response.ok) {
       res.writeHead(response.status || 401);
-      res.end(JSON.stringify({ error: 'unauthorized' }));
-      return;
+      return res.end(JSON.stringify({ error: response.status === 429 ? 'too many authentication attempts' : 'unauthorized' }));
     }
-    if (body.user.role !== 'admin') {
-      try {
-        await auth.api.signOut({ headers: new Headers({ cookie: response.headers.get('set-cookie') ?? '' }) });
-      } catch {}
+    const parsed = JSON.parse(body || '{}');
+    if (parsed?.user?.role !== 'admin') {
+      const cookie = response.headers.getSetCookie?.()[0]?.split(';', 1)[0] ?? response.headers.get('set-cookie')?.split(';', 1)[0];
+      if (cookie) await auth.api.signOut({ headers: new Headers({ cookie }) }).catch(() => {});
       res.writeHead(403);
-      res.end(JSON.stringify({ error: 'admin role required' }));
-      return;
+      return res.end(JSON.stringify({ error: 'admin role required' }));
     }
     res.writeHead(200);
-    res.end(JSON.stringify({ ok: true, user: { id: body.user.id, username: body.user.username ?? null, role: body.user.role } }));
+    return res.end(JSON.stringify({ ok: true, user: { id: parsed.user.id, username: parsed.user.username ?? null, role: parsed.user.role } }));
   } catch {
     res.writeHead(401);
     res.end(JSON.stringify({ error: 'unauthorized' }));
@@ -142,9 +140,7 @@ export function createAdminApi({ controller, host = '127.0.0.1', port = 8787 } =
       }
     }
 
-    if (req.method === 'POST' && req.url === '/v1/logout') {
-      return logout(req, res);
-    }
+    if (req.method === 'POST' && req.url === '/v1/logout') return logout(req, res);
 
     if (req.method === 'GET' && req.url === '/v1/session') {
       const session = await requireAdmin(req);
