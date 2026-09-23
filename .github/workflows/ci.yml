@@ -62,7 +62,21 @@ jobs:
       - name: Dependency audit
         run: npm audit --audit-level=high
 
+      - name: Prepare isolated admin authentication database
+        env:
+          BETTER_AUTH_SECRET: mercora-ci-auth-secret-0123456789-abcdef
+          MERCORA_ADMIN_AUTH_DB: ${{ runner.temp }}/mercora-admin-auth.db
+          MERCORA_ADMIN_TEST_PASSWORD: Mercora-CI-Password-2026!
+        run: |
+          npm run admin:auth:migrate
+          npm run admin:auth:create -- --email admin@example.invalid --password "$MERCORA_ADMIN_TEST_PASSWORD" --name "CI Admin" --role admin --data '{"username":"ciadmin"}' --yes
+
       - name: Run unit tests
+        env:
+          BETTER_AUTH_SECRET: mercora-ci-auth-secret-0123456789-abcdef
+          MERCORA_ADMIN_AUTH_DB: ${{ runner.temp }}/mercora-admin-auth.db
+          MERCORA_ADMIN_TEST_USERNAME: ciadmin
+          MERCORA_ADMIN_TEST_PASSWORD: Mercora-CI-Password-2026!
         run: npm test
 
   codeql:
