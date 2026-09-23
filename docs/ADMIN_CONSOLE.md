@@ -48,6 +48,8 @@ If the targeted restart fails, the controller attempts a targeted start of the s
 
 The `Admin Console` GitHub Actions workflow runs on Windows, checks Rust and JavaScript, builds the Tauri NSIS installer, and publishes the installer as a short-lived CI artifact.
 
+The bundle currently declares an empty `bundle.icon` list because the previously checked-in Windows ICO was rejected by Microsoft's resource compiler (`RC2176`). This deliberately removes the invalid legacy resource from the build path; a valid multi-resolution Windows icon can be reintroduced later through the standard Tauri icon pipeline without changing the admin-control security boundary.
+
 ## Runtime gate
 
 A successful source/CI build does not prove that a particular Windows/WSL installation has working Docker, PostgreSQL or Tor. Those live-environment checks must be executed on the target machine before production sign-off.
