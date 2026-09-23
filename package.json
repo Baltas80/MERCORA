@@ -8,7 +8,9 @@
     "start": "node server/server.js",
     "test": "node --test",
     "admin:api": "node scripts/mercora-admin-api.mjs",
-    "admin": "node scripts/mercora-admin.mjs"
+    "admin": "node scripts/mercora-admin.mjs",
+    "backup": "node scripts/mercora-backup-scheduler.mjs",
+    "backup:test": "node --test scripts/mercora-backup-scheduler.test.mjs"
   },
   "engines": {
     "node": ">=20"
