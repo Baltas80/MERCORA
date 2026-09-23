@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
+import { claimBootstrapToken, isValidAdminToken } from './auth/admin-credential.js';
 import { createAdminController } from './admin-control.js';
 
 const ACTIONS = new Set(['START', 'STOP', 'RESTART', 'STATUS', 'HEALTH_CHECK', 'RECOVER']);
@@ -16,19 +17,54 @@ function isLoopback(address) {
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
 }
 
-export function createAdminApi({ controller, token, host = '127.0.0.1', port = 8787 } = {}) {
-  if (!token || token.length < 32) throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
+function responseHeaders(res) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+}
+
+async function rejectOversized(req, res) {
+  const contentLength = Number(req.headers['content-length']);
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY) {
+    res.writeHead(413);
+    res.end(JSON.stringify({ error: 'request too large' }));
+    req.resume();
+    return true;
+  }
+  return false;
+}
+
+export function createAdminApi({ controller, token, tokenFile = null, bootstrapPending = false, host = '127.0.0.1', port = 8787 } = {}) {
+  if (!isValidAdminToken(token)) throw new Error('MERCORA_ADMIN_TOKEN must be at least 32 characters');
   const control = controller ?? createAdminController();
+  let canBootstrap = Boolean(tokenFile && bootstrapPending);
 
   const server = http.createServer(async (req, res) => {
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
+    responseHeaders(res);
 
     if (!isLoopback(req.socket.remoteAddress)) {
       res.writeHead(403); return res.end(JSON.stringify({ error: 'local access only' }));
     }
+
+    if (req.method === 'POST' && req.url === '/v1/bootstrap') {
+      if (await rejectOversized(req, res)) return;
+      if (!canBootstrap) {
+        res.writeHead(409);
+        return res.end(JSON.stringify({ error: 'bootstrap unavailable' }));
+      }
+      try {
+        const bootstrapToken = await claimBootstrapToken(tokenFile);
+        canBootstrap = false;
+        res.writeHead(200);
+        return res.end(JSON.stringify({ token: bootstrapToken }));
+      } catch (error) {
+        canBootstrap = false;
+        res.writeHead(409);
+        return res.end(JSON.stringify({ error: String(error.message ?? 'bootstrap unavailable') }));
+      }
+    }
+
     if (!sameToken(req.headers.authorization?.replace(/^Bearer\s+/i, ''), token)) {
       res.writeHead(401); return res.end(JSON.stringify({ error: 'unauthorized' }));
     }
@@ -36,13 +72,7 @@ export function createAdminApi({ controller, token, host = '127.0.0.1', port = 8
       res.writeHead(404); return res.end(JSON.stringify({ error: 'not found' }));
     }
 
-    const contentLength = Number(req.headers['content-length']);
-    if (Number.isFinite(contentLength) && contentLength > MAX_BODY) {
-      res.writeHead(413);
-      res.end(JSON.stringify({ error: 'request too large' }));
-      req.resume();
-      return;
-    }
+    if (await rejectOversized(req, res)) return;
 
     let body = '';
     let oversized = false;

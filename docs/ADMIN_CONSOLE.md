@@ -6,7 +6,17 @@ The Windows Admin Console is a Tauri 2 desktop operator interface for the local 
 
 `Admin UI -> Tauri/Rust bridge -> 127.0.0.1 Admin Control API -> allow-listed privileged operations`
 
-The UI does not expose a command shell. The bridge accepts only the status and action endpoints and keeps the admin token in process memory. The Admin Control API remains localhost-only.
+The UI does not expose a command shell. The bridge accepts only the status and action endpoints. It keeps the active credential in process memory and persists it through Windows Credential Manager so the next launch can reconnect without a manual copy/paste.
+
+## First launch
+
+When the Admin Control API is started without `MERCORA_ADMIN_TOKEN`, it generates a random 32-byte credential and stores it in per-user local state outside the repository. The first-run bootstrap remains pending until the desktop console claims it through the loopback-only `POST /v1/bootstrap` endpoint.
+
+The console's **INITIALIZE LOCAL CREDENTIAL** action receives the credential through the localhost bridge and immediately stores it in Windows Credential Manager. The secret is not shown in the UI, committed to GitHub, or embedded in the NSIS installer.
+
+When a credential already exists in Windows Credential Manager, the console loads it at startup and attempts to connect automatically. **LOCK** removes the persisted credential and clears the active in-memory session.
+
+For environments that deliberately use an explicit `MERCORA_ADMIN_TOKEN`, the manual token field remains available and bootstrap is disabled.
 
 ## Operator functions
 
@@ -19,7 +29,7 @@ The UI does not expose a command shell. The bridge accepts only the status and a
 - HEALTH CHECK
 - LOCK/logout
 
-Recovery is component-oriented. The control plane repairs only the selected component first. It then verifies the complete dependency chain: Node.js, Docker/services, backend, PostgreSQL, Tor, Onion Service, storage and final health state. A recovery result includes sanitized technical diagnostics without exposing credentials or tokens.
+Recovery is component-oriented. The control plane repairs only the selected component first, then verifies Node.js, Docker/services, backend, PostgreSQL, Tor, Onion Service, storage and final health state.
 
 ## Windows build
 

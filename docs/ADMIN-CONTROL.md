@@ -15,95 +15,43 @@ The admin surface does **not** expose a shell or arbitrary command execution.
 - `HEALTH_CHECK`
 - `RECOVER [app|postgres|tor]`
 
-`RECOVER` first restarts only the requested component. If that fails, it attempts to start that same component. A successful fallback is treated as a successful recovery. It then runs the health sequence rather than restarting unrelated services.
+## First-run administrative credential
 
-`STATUS` returns a structured, secret-free summary for MERCORA, Node.js, PostgreSQL, backend, Tor, Onion Service, storage, and overall health. It is derived from the same health probes rather than exposing raw Docker output to the UI.
+A fresh MERCORA Admin Control API instance now creates a cryptographically random 32-byte bearer token when no `MERCORA_ADMIN_TOKEN` environment variable is supplied. The generated credential is persisted outside the repository at a per-user state path and is marked as **bootstrap pending**.
 
-## Local API
+On Windows the default path is under `%LOCALAPPDATA%\\MERCORA\\Admin\\admin-token.json`. On Unix-like systems it uses `$XDG_STATE_HOME/mercora/admin-token.json` or `~/.local/state/mercora/admin-token.json`.
 
-The API binds to `127.0.0.1:8787` by default and requires `MERCORA_ADMIN_TOKEN` with at least 32 characters. The token must be supplied through the process environment and must never be committed to the repository.
+The token file is created with restrictive file permissions where the operating system exposes them. The credential is never committed to Git, never baked into the installer, and is never printed. The Windows Admin Console performs the one-time localhost bootstrap and stores the resulting credential in Windows Credential Manager. Subsequent launches can load the stored credential without showing it in the UI.
 
-Authentication uses a length-checked constant-time token comparison. The API also accepts IPv4-mapped loopback addresses while continuing to reject non-loopback clients. Requests larger than 4 KiB are rejected before they reach privileged operations. When `Content-Length` already proves that the request is oversized, the API starts consuming the request stream without waiting for it to finish and returns `413` immediately.
+The bootstrap endpoint is `POST /v1/bootstrap`, is localhost-only, returns the generated token only while bootstrap is pending, and permanently disables bootstrap for that credential after it is claimed. When an explicit `MERCORA_ADMIN_TOKEN` is configured, bootstrap is disabled and the console can use that configured token manually.
 
-The HTTP API regression suite verifies authentication rejection, operation/service allowlisting, dedicated `HEALTH_CHECK` routing, the 4 KiB boundary, and defensive response headers.
-
-Start it from the repository root:
+For automated/headless deployments, retain the existing explicit environment-variable path:
 
 ```text
 MERCORA_ADMIN_TOKEN=<local-secret> npm run admin:api
 ```
 
-The CLI uses the same authenticated local API:
+Do not place the token in a script, Docker image, GitHub Actions file, repository secret committed to source, or installer resource.
 
-```text
-MERCORA_ADMIN_TOKEN=<local-secret> npm run admin -- STATUS
-MERCORA_ADMIN_TOKEN=<local-secret> npm run admin -- RESTART app
-MERCORA_ADMIN_TOKEN=<local-secret> npm run admin -- RECOVER postgres
-MERCORA_ADMIN_TOKEN=<local-secret> npm run admin -- HEALTH_CHECK
-```
+## Existing control-plane guarantees
 
-On Windows PowerShell, set the environment variable for the current session before running the commands. Do not place the token in a script checked into Git.
+`RECOVER` first restarts only the requested component. If that fails, it attempts to start that same component. It then runs the health sequence rather than restarting unrelated services.
 
-The Windows Admin Console exposes only two virtual bridge operations to its UI:
+`STATUS` returns a structured, secret-free summary for MERCORA, Node.js, PostgreSQL, backend, Tor, Onion Service, storage, and overall health.
 
-- `GET /api/admin/status` -> fixed `POST /v1/control` request with `STATUS`.
-- `POST /api/admin/action` -> validated `POST /v1/control` request with one allowlisted action and optional `app`, `postgres`, or `tor` service.
-
-The Rust bridge performs the validation before forwarding to the local API. The browser UI cannot supply an arbitrary path, command, shell expression, or unallowlisted service.
-
-## Health coverage
-
-The health sequence checks:
-
-1. Node.js availability;
-2. Docker daemon availability;
-3. that all required Compose services (`app`, `postgres`, `tor`) are actually **running**;
-4. PostgreSQL readiness;
-5. backend `GET /api/healthz` on the local application binding;
-6. Onion Service hostname file inside the Tor data volume;
-7. PostgreSQL Docker volume presence.
-
-The Compose service check uses `docker compose ps --status running --services`, so a successful Docker/Compose command is no longer treated as proof that MERCORA is running. Missing required services make the overall health check fail and are reflected in the structured status.
-
-The backend probe is dependency-injected for tests while production uses the real local `/api/healthz` endpoint.
-
-The sequence is used after recovery to verify dependencies and affected services without performing an unnecessary full-system restart.
-
-Diagnostics are truncated and filter common secret-bearing lines before they are returned to the console. Credential-bearing URLs and inline `password`, `secret`, `token`, `api-key`, and `private-key` values are redacted rather than exposed. This is defense-in-depth; privileged commands must still avoid producing secrets in normal output.
-
-## Privilege boundary
+Authentication uses a length-checked constant-time token comparison. The API binds to `127.0.0.1:8787` by default and rejects non-loopback clients. Requests larger than 4 KiB are rejected before privileged operations.
 
 The control implementation invokes `docker` with `execFile` and `shell: false`. Arguments are generated exclusively from fixed allowlists. No user-supplied command string is passed to a shell.
 
-The control API must remain local-only. Do not bind it to `0.0.0.0`, publish its port through Tor, or place it behind the public MERCORA web server.
+Diagnostics are truncated and filter common secret-bearing lines before they are returned to the console.
 
-## CI and preview
+## Verification
 
-CI currently runs the security/static checks and CodeQL independently. The latest oversized-request fix is being validated on the dedicated `admin-fix-413` branch before integration into `master`.
-
-The visual preview workflow is independent of GitHub Pages provisioning.
-
-## Verification status
-
-- **IMPLEMENTED:** allowlisted control operations.
-- **IMPLEMENTED:** local authenticated control API.
-- **IMPLEMENTED:** component-targeted recovery with restart-to-start fallback.
-- **IMPLEMENTED:** successful fallback is reflected in recovery result state.
-- **IMPLEMENTED:** structured infrastructure status.
-- **IMPLEMENTED:** secret-filtered diagnostics.
-- **IMPLEMENTED:** embedded credential URL and inline secret redaction in diagnostics.
-- **IMPLEMENTED:** constant-time-compatible token verification and IPv4-mapped loopback handling.
-- **IMPLEMENTED:** 4 KiB request-size enforcement.
-- **IMPLEMENTED:** immediate rejection path for requests whose `Content-Length` exceeds 4 KiB.
-- **IMPLEMENTED:** dependency-injected backend probe for deterministic controller tests.
-- **IMPLEMENTED:** explicit running-state verification for `app`, `postgres`, and `tor`.
-- **IMPLEMENTED:** regression test for a missing required Compose service.
-- **IMPLEMENTED:** HTTP API regression coverage for authentication, allowlisting, health-check routing, request limits, and response headers.
-- **IMPLEMENTED:** regression coverage for embedded credential redaction.
-- **IMPLEMENTED:** Tauri bridge/API endpoint alignment.
-- **IMPLEMENTED:** UI action-to-operation mapping.
-- **IMPLEMENTED:** visual preview artifact workflow independent of GitHub Pages site provisioning.
-- **TESTED BY CI:** secret scan, forbidden artifact checks, syntax checks, Compose security verification, dependency audit, and CodeQL on the latest validation run.
-- **PENDING:** CI unit-test validation of the latest `admin-fix-413` commit.
-- **PENDING:** integration of the validated fix into `master`.
-- **PENDING:** live Docker/PostgreSQL/Tor health checks require the actual MERCORA runtime environment with Docker available.
+- **IMPLEMENTED:** first-run random admin credential generation.
+- **IMPLEMENTED:** credential persistence outside the repository.
+- **IMPLEMENTED:** one-time localhost bootstrap.
+- **IMPLEMENTED:** Windows Credential Manager storage for the desktop console.
+- **IMPLEMENTED:** explicit environment-token mode for headless deployments.
+- **IMPLEMENTED:** tests for generation, persistence, one-time bootstrap and environment mode.
+- **PENDING:** live Windows installer build after the credential-store dependency is compiled and tested by CI.
+- **PENDING:** live runtime health checks require the actual MERCORA Docker/PostgreSQL/Tor environment.

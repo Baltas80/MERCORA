@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { createAdminApi } from './admin-control-api.js';
 
 const token = 'x'.repeat(32);
 
-async function withApi(controller, fn) {
-  const api = createAdminApi({ token, controller, port: 0 });
+async function withApi(controller, fn, options = {}) {
+  const api = createAdminApi({ token, controller, port: 0, ...options });
   await api.listen();
   const address = api.server.address();
   try {
@@ -76,4 +79,28 @@ test('admin API rejects oversized requests before controller execution', async (
     assert.equal(response.status, 413);
     assert.equal(calls, 0);
   });
+});
+
+test('admin API exposes a one-time localhost bootstrap endpoint for generated credentials', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'mercora-admin-api-'));
+  const tokenFile = path.join(dir, 'admin-token.json');
+  try {
+    const { loadOrCreateAdminCredential } = await import('./auth/admin-credential.js');
+    const generated = await loadOrCreateAdminCredential({ tokenFile });
+    await withApi(
+      { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) },
+      async (base) => {
+        const first = await fetch(`${base}/v1/bootstrap`, { method: 'POST' });
+        assert.equal(first.status, 200);
+        const body = await first.json();
+        assert.equal(body.token, generated.token);
+
+        const second = await fetch(`${base}/v1/bootstrap`, { method: 'POST' });
+        assert.equal(second.status, 409);
+      },
+      { tokenFile, bootstrapPending: true }
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
