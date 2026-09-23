@@ -2,7 +2,7 @@ name: MERCORA CI
 
 on:
   push:
-    branches: ["master", "admin-fix-413"]
+    branches: ["master", "admin-fix-413", "admin-recovery-hardening"]
   pull_request:
 
 permissions:
@@ -44,6 +44,7 @@ jobs:
 
       - name: Check admin control syntax
         run: |
+          node --check server/admin-control.js
           node --check server/admin-control-api.js
           node --check scripts/mercora-admin-api.mjs
           node --check scripts/mercora-admin.mjs

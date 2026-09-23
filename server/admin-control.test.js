@@ -76,6 +76,29 @@ test('failed restart falls back to start for the same component and can still re
   assert.equal(result.ok, true);
 });
 
+test('recovery verification follows dependency, backend, database, Tor, onion and aggregate order', async () => {
+  const sequence = [];
+  const runner = async (file, args) => {
+    if (args.includes('pg_isready')) sequence.push('postgresql');
+    else if (args.includes('--services')) sequence.push('services');
+    else if (args.includes('/data/hostname')) sequence.push('onionService');
+    else if (args.includes('restart')) sequence.push('restart');
+    return { ok: true, code: 0, stdout: args.includes('--services') ? RUNNING_SERVICES : '', stderr: '' };
+  };
+  const probe = async (file) => {
+    sequence.push(file);
+    return { ok: true, code: 0, stdout: '', stderr: '' };
+  };
+  const backendProbeFn = async () => {
+    sequence.push('backend');
+    return { ok: true, code: 200, stdout: 'backend 200', stderr: '' };
+  };
+  const controller = createAdminController({ runner, probe, backendProbeFn });
+  const result = await controller.run('RECOVER', 'tor');
+  assert.equal(result.ok, true);
+  assert.deepEqual(sequence, ['restart', 'node', 'docker', 'backend', 'postgresql', 'services', 'onionService', 'docker']);
+});
+
 test('health check reports offline when a required compose service is not running', async () => {
   const runner = async (file, args) => {
     if (args.includes('--services')) return { ok: true, code: 0, stdout: 'app\npostgres\n', stderr: '' };
