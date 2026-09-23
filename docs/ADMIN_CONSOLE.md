@@ -14,7 +14,7 @@ When the Admin Control API is started without `MERCORA_ADMIN_TOKEN`, it generate
 
 The console's **INITIALIZE LOCAL CREDENTIAL** action receives the credential through the localhost bridge and immediately stores it in Windows Credential Manager. The secret is not shown in the UI, committed to GitHub, or embedded in the NSIS installer.
 
-When a credential already exists in Windows Credential Manager, the console loads it at startup and attempts to connect automatically. **LOCK** removes the persisted credential and clears the active in-memory session.
+When a credential already exists in Windows Credential Manager, the console loads it at startup and attempts to connect automatically. **LOCK** clears only the active in-memory session; it does not destroy the saved credential. **UNLOCK SAVED CREDENTIAL** reloads that credential without displaying it.
 
 For environments that deliberately use an explicit `MERCORA_ADMIN_TOKEN`, the manual token field remains available and bootstrap is disabled.
 
@@ -27,9 +27,7 @@ For environments that deliberately use an explicit `MERCORA_ADMIN_TOKEN`, the ma
 - RECOVER PostgreSQL
 - RECOVER Tor
 - HEALTH CHECK
-- LOCK/logout
-
-Recovery is component-oriented. The control plane repairs only the selected component first, then verifies Node.js, Docker/services, backend, PostgreSQL, Tor, Onion Service, storage and final health state.
+- LOCK / UNLOCK saved credential
 
 ## Windows build
 
