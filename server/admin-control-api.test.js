@@ -13,8 +13,8 @@ const { getMigrations } = await import('better-auth/db/migration');
 const migrations = await getMigrations(auth.options);
 await migrations.runMigrations();
 
-async function withApi(controller, fn) {
-  const api = createAdminApi({ controller, port: 0 });
+async function withApi(controller, fn, authProvider = auth) {
+  const api = createAdminApi({ controller, auth: authProvider, port: 0 });
   await api.listen();
   const address = api.server.address();
   try {
@@ -49,6 +49,29 @@ test('admin API rejects oversized requests before authentication/controller exec
     assert.equal(response.status, 413);
     assert.equal(calls, 0);
   });
+});
+
+test('admin API ignores spoofed forwarded IP headers for authentication', async () => {
+  let observedHeaders;
+  const fakeAuth = {
+    api: {
+      getSession: async ({ headers }) => {
+        observedHeaders = headers;
+        return null;
+      },
+      signOut: async () => ({ ok: true }),
+    },
+    handler: async () => new Response('{}', { status: 401 }),
+  };
+  await withApi({ run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) }, async (base) => {
+    const response = await fetch(`${base}/v1/control`, {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '203.0.113.7', 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'STATUS' }),
+    });
+    assert.equal(response.status, 401);
+    assert.equal(observedHeaders.get('x-forwarded-for'), '127.0.0.1');
+  }, fakeAuth);
 });
 
 test('admin API does not expose arbitrary control endpoints', async () => {
