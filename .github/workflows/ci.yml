@@ -2,7 +2,7 @@ name: MERCORA CI
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master", "admin-fix-413"]
   pull_request:
 
 permissions:

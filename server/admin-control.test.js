@@ -182,14 +182,19 @@ test('admin API routes HEALTH_CHECK without invoking an arbitrary action', async
 });
 
 test('admin API rejects bodies larger than 4 KiB', async () => {
-  const controller = { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) };
+  let calls = 0;
+  const controller = {
+    run: async () => { calls += 1; return { ok: true }; },
+    healthCheck: async () => ({ ok: true })
+  };
   await withApi(controller, async (base) => {
     const response = await fetch(`${base}/v1/control`, {
       method: 'POST',
-      headers: { ...apiHeaders, 'content-length': '4097' },
-      body: JSON.stringify({ action: 'STATUS', padding: 'x'.repeat(4100) })
+      headers: apiHeaders,
+      body: 'x'.repeat(4097)
     });
     assert.equal(response.status, 413);
+    assert.equal(calls, 0);
   });
 });
 
