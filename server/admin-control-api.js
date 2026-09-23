@@ -95,7 +95,6 @@ async function authenticateLogin(auth, req, res) {
       },
     );
     const response = await auth.handler(request);
-    forwardSetCookies(res, response.headers);
     const body = await response.text();
     if (!response.ok) {
       res.writeHead(response.status || 401);
@@ -108,6 +107,9 @@ async function authenticateLogin(auth, req, res) {
       res.writeHead(403);
       return res.end(JSON.stringify({ error: 'admin role required' }));
     }
+    // Only establish the browser session after the authenticated identity has
+    // been confirmed to have the required admin role.
+    forwardSetCookies(res, response.headers);
     res.writeHead(200);
     return res.end(JSON.stringify({ ok: true, user: { id: parsed.user.id, username: parsed.user.username ?? null, role: parsed.user.role } }));
   } catch {
