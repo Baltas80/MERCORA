@@ -22,9 +22,10 @@ function requestHeaders(req, cookie = null) {
   for (const [name, value] of Object.entries(req.headers)) {
     if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
   }
-  if (!headers.has('x-forwarded-for') && req.socket.remoteAddress) {
-    headers.set('x-forwarded-for', req.socket.remoteAddress);
-  }
+  // This service is loopback-only. Never trust a client-supplied forwarded IP;
+  // Better Auth must receive the actual peer address for rate limiting.
+  if (req.socket.remoteAddress) headers.set('x-forwarded-for', req.socket.remoteAddress);
+  else headers.delete('x-forwarded-for');
   if (cookie !== null) headers.set('cookie', cookie);
   return headers;
 }
