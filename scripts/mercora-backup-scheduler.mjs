@@ -28,7 +28,11 @@ function backupId(date = new Date()) {
 
 function backupTimestamp(id) {
   const match = id.match(BACKUP_RE);
-  return match ? Date.parse(match[1].replace(/^([0-9]{4})([0-9]{2})([0-9]{2})T/, '$1-$2-$3T').replace(/^(.{10})([0-9]{2})([0-9]{2})([0-9]{2})Z$/, '$1$2:$3:$4Z')) : NaN;
+  if (!match) return NaN;
+  const [, compact] = match;
+  const [, date, time] = compact.match(/^(\d{8})T(\d{6})Z$/) ?? [];
+  if (!date || !time) return NaN;
+  return Date.parse(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}Z`);
 }
 
 function runPgDump({ output, cwd, timeoutMs = BACKUP_TIMEOUT_MS, runner = spawn }) {
