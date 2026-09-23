@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 
-const adminSecret = 'test-secret-for-better-auth-only-32-chars-minimum';
+const adminSecret = process.env.BETTER_AUTH_SECRET ?? 'test-secret-for-better-auth-only-32-chars-minimum';
 process.env.BETTER_AUTH_SECRET = adminSecret;
-process.env.MERCORA_ADMIN_AUTH_DB = path.join(os.tmpdir(), `mercora-admin-auth-test-${process.pid}.db`);
+process.env.MERCORA_ADMIN_AUTH_DB = process.env.MERCORA_ADMIN_AUTH_DB ?? path.join(os.tmpdir(), `mercora-admin-auth-test-${process.pid}.db`);
 
 const { createAdminApi } = await import('./admin-control-api.js');
 const { auth } = await import('./auth/better-auth.js');
@@ -22,6 +22,11 @@ async function withApi(controller, fn) {
   } finally {
     await new Promise((resolve, reject) => api.server.close((error) => error ? reject(error) : resolve()));
   }
+}
+
+function sessionCookie(response) {
+  const cookies = response.headers.getSetCookie?.() ?? [];
+  return cookies[0]?.split(';', 1)[0] ?? response.headers.get('set-cookie')?.split(';', 1)[0] ?? null;
 }
 
 test('admin API remains loopback-only and rejects unauthenticated control requests', async () => {
@@ -50,5 +55,44 @@ test('admin API does not expose arbitrary control endpoints', async () => {
   await withApi({ run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) }, async (base) => {
     const response = await fetch(`${base}/v1/exec`, { method: 'POST', body: '{}' });
     assert.equal(response.status, 401);
+  });
+});
+
+test('admin API authenticates a provisioned Better Auth admin and authorizes control operations', {
+  skip: !process.env.MERCORA_ADMIN_TEST_USERNAME || !process.env.MERCORA_ADMIN_TEST_PASSWORD,
+}, async () => {
+  const calls = [];
+  const controller = {
+    run: async (action, service) => { calls.push([action, service]); return { ok: true, action, service }; },
+    healthCheck: async () => ({ ok: true, checks: [] })
+  };
+  await withApi(controller, async (base) => {
+    const login = await fetch(`${base}/v1/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: process.env.MERCORA_ADMIN_TEST_USERNAME, password: process.env.MERCORA_ADMIN_TEST_PASSWORD })
+    });
+    assert.equal(login.status, 200);
+    const cookie = sessionCookie(login);
+    assert.ok(cookie);
+
+    const good = await fetch(`${base}/v1/control`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'RESTART', service: 'app' })
+    });
+    assert.equal(good.status, 200);
+    assert.deepEqual(await good.json(), { ok: true, action: 'RESTART', service: 'app' });
+    assert.deepEqual(calls, [['RESTART', 'app']]);
+
+    const logout = await fetch(`${base}/v1/logout`, { method: 'POST', headers: { cookie } });
+    assert.equal(logout.status, 200);
+
+    const denied = await fetch(`${base}/v1/control`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'STATUS' })
+    });
+    assert.equal(denied.status, 401);
   });
 });
