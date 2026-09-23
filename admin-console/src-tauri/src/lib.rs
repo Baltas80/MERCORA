@@ -4,18 +4,10 @@ use std::net::TcpStream;
 use std::sync::Mutex;
 use tauri::State;
 
-struct AdminToken(Mutex<Option<String>>);
+struct AdminSession(Mutex<Option<String>>);
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
 const CONTROL_HOST: &str = "127.0.0.1";
 const CONTROL_PORT: &str = "8787";
-#[cfg(windows)]
-const KEYRING_SERVICE: &str = "MERCORA Admin Console";
-#[cfg(windows)]
-const KEYRING_ACCOUNT: &str = "admin-token";
-
-fn valid_token(token: &str) -> bool {
-    !token.trim().is_empty() && token.len() <= 512 && !token.bytes().any(|b| b == b'\r' || b == b'\n')
-}
 
 fn allowed_endpoint(method: &str, path: &str) -> bool {
     matches!((method, path), ("GET", "/api/admin/status") | ("POST", "/api/admin/action"))
@@ -45,78 +37,7 @@ fn action_payload(method: &str, path: &str, body: &str) -> Result<String, String
     Ok(json!({ "action": action }).to_string())
 }
 
-#[cfg(windows)]
-fn credential_entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
-        .map_err(|e| format!("Windows Credential Manager unavailable: {e}"))
-}
-
-fn store_token(state: &State<'_, AdminToken>, token: String) -> Result<(), String> {
-    if !valid_token(&token) { return Err("Invalid admin token".into()); }
-    #[cfg(windows)]
-    credential_entry()?.set_password(&token).map_err(|e| format!("Unable to store admin credential: {e}"))?;
-    *state.0.lock().map_err(|_| "Token state unavailable")? = Some(token);
-    Ok(())
-}
-
-#[tauri::command]
-fn load_stored_token(state: State<'_, AdminToken>) -> Result<bool, String> {
-    #[cfg(windows)]
-    {
-        match credential_entry()?.get_password() {
-            Ok(token) => {
-                if !valid_token(&token) { return Err("Stored admin credential is invalid".into()); }
-                *state.0.lock().map_err(|_| "Token state unavailable")? = Some(token);
-                Ok(true)
-            }
-            Err(keyring::Error::NoEntry) => Ok(false),
-            Err(error) => Err(format!("Unable to read admin credential: {error}"))
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        Ok(false)
-    }
-}
-
-#[tauri::command]
-fn set_token(state: State<'_, AdminToken>, token: String) -> Result<(), String> {
-    store_token(&state, token)
-}
-
-#[tauri::command]
-fn bootstrap_token(state: State<'_, AdminToken>) -> Result<(), String> {
-    let response = raw_http_request("POST", "/v1/bootstrap", None, "")?;
-    let status_line = response.lines().next().unwrap_or("");
-    if !status_line.starts_with("HTTP/1.1 200 ") {
-        return Err("First-run bootstrap is unavailable. Enter the configured admin token.".into());
-    }
-    let body_start = response.find("\r\n\r\n").ok_or_else(|| "Malformed bootstrap response".to_string())? + 4;
-    let body: Value = serde_json::from_str(&response[body_start..]).map_err(|_| "Invalid bootstrap response".to_string())?;
-    let token = body.get("token").and_then(Value::as_str).ok_or_else(|| "Bootstrap response did not contain a credential".to_string())?;
-    store_token(&state, token.to_string())
-}
-
-#[tauri::command]
-fn clear_token(state: State<'_, AdminToken>) -> Result<(), String> {
-    *state.0.lock().map_err(|_| "Token state unavailable")? = None;
-    Ok(())
-}
-
-#[tauri::command]
-fn forget_token(state: State<'_, AdminToken>) -> Result<(), String> {
-    *state.0.lock().map_err(|_| "Token state unavailable")? = None;
-    #[cfg(windows)]
-    {
-        match credential_entry()?.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => {}
-            Err(error) => return Err(format!("Unable to remove admin credential: {error}"))
-        }
-    }
-    Ok(())
-}
-
-fn raw_http_request(method: &str, path: &str, token: Option<&str>, payload: &str) -> Result<String, String> {
+fn raw_http_request(method: &str, path: &str, cookie: Option<&str>, payload: &str) -> Result<String, String> {
     let address = format!("{CONTROL_HOST}:{CONTROL_PORT}");
     let mut stream = TcpStream::connect_timeout(
         &address.parse().map_err(|_| "Invalid control endpoint")?,
@@ -125,9 +46,9 @@ fn raw_http_request(method: &str, path: &str, token: Option<&str>, payload: &str
     stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).map_err(|e| format!("Unable to configure read timeout: {e}"))?;
     stream.set_write_timeout(Some(std::time::Duration::from_secs(5))).map_err(|e| format!("Unable to configure write timeout: {e}"))?;
 
-    let authorization = token.map(|value| format!("Authorization: Bearer {value}\r\n")).unwrap_or_default();
+    let cookie_header = cookie.map(|value| format!("Cookie: {value}\r\n")).unwrap_or_default();
     let request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: {CONTROL_HOST}\r\n{authorization}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+        "{method} {path} HTTP/1.1\r\nHost: {CONTROL_HOST}\r\n{cookie_header}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
         payload.as_bytes().len()
     );
     stream.write_all(request.as_bytes()).map_err(|e| format!("Request failed: {e}"))?;
@@ -143,20 +64,61 @@ fn raw_http_request(method: &str, path: &str, token: Option<&str>, payload: &str
     String::from_utf8(response).map_err(|_| "Admin API response is not valid UTF-8".to_string())
 }
 
+fn response_status(response: &str) -> &str {
+    response.lines().next().unwrap_or("")
+}
+
+fn response_body(response: &str) -> Result<&str, String> {
+    let start = response.find("\r\n\r\n").ok_or_else(|| "Malformed Admin API response".to_string())? + 4;
+    Ok(&response[start..])
+}
+
+fn response_cookie(response: &str) -> Option<String> {
+    response.lines()
+        .find(|line| line.to_ascii_lowercase().starts_with("set-cookie:"))
+        .and_then(|line| line.split_once(':').map(|(_, value)| value.trim()))
+        .and_then(|value| value.split(';').next())
+        .map(str::to_string)
+}
+
 #[tauri::command]
-fn admin_request(state: State<'_, AdminToken>, method: String, path: String, body: Option<String>) -> Result<String, String> {
+fn admin_login(state: State<'_, AdminSession>, username: String, password: String) -> Result<String, String> {
+    if username.trim().is_empty() || password.is_empty() || password.len() > 256 {
+        return Err("Invalid credentials".into());
+    }
+    let payload = serde_json::to_string(&json!({ "username": username, "password": password }))
+        .map_err(|_| "Unable to prepare login request".to_string())?;
+    let response = raw_http_request("POST", "/v1/login", None, &payload)?;
+    if !response_status(&response).starts_with("HTTP/1.1 200 ") {
+        return Err("Invalid username or password".into());
+    }
+    let cookie = response_cookie(&response).ok_or_else(|| "Authentication session was not established".to_string())?;
+    *state.0.lock().map_err(|_| "Session state unavailable")? = Some(cookie);
+    Ok(response_body(&response)?.to_string())
+}
+
+#[tauri::command]
+fn admin_logout(state: State<'_, AdminSession>) -> Result<(), String> {
+    let cookie = state.0.lock().map_err(|_| "Session state unavailable")?.clone();
+    if let Some(cookie) = cookie {
+        let _ = raw_http_request("POST", "/v1/logout", Some(&cookie), "{}");
+    }
+    *state.0.lock().map_err(|_| "Session state unavailable")? = None;
+    Ok(())
+}
+
+#[tauri::command]
+fn admin_request(state: State<'_, AdminSession>, method: String, path: String, body: Option<String>) -> Result<String, String> {
     if !allowed_endpoint(&method, &path) { return Err("Administrative endpoint is not allow-listed".into()); }
     let payload = action_payload(&method, &path, body.as_deref().unwrap_or("{}"))?;
-    let token = state.0.lock().map_err(|_| "Token state unavailable")?.clone().ok_or_else(|| "Not authenticated".to_string())?;
-    if !valid_token(&token) { return Err("Invalid stored admin token".into()); }
+    let cookie = state.0.lock().map_err(|_| "Session state unavailable")?.clone().ok_or_else(|| "Not authenticated".to_string())?;
 
-    let response = raw_http_request("POST", "/v1/control", Some(&token), &payload)?;
-    let status_line = response.lines().next().unwrap_or("");
+    let response = raw_http_request("POST", "/v1/control", Some(&cookie), &payload)?;
+    let status_line = response_status(&response);
     if !status_line.starts_with("HTTP/1.1 200 ") && !status_line.starts_with("HTTP/1.1 503 ") {
         return Err(format!("Admin API error: {status_line}"));
     }
-    let body_start = response.find("\r\n\r\n").ok_or_else(|| "Malformed Admin API response".to_string())? + 4;
-    let response_body = &response[body_start..];
+    let response_body = response_body(&response)?;
     let _: Value = serde_json::from_str(response_body).map_err(|_| "Invalid Admin API JSON".to_string())?;
     Ok(response_body.to_string())
 }
@@ -164,8 +126,8 @@ fn admin_request(state: State<'_, AdminToken>, method: String, path: String, bod
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(AdminToken(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![set_token, load_stored_token, bootstrap_token, clear_token, forget_token, admin_request])
+        .manage(AdminSession(Mutex::new(None)))
+        .invoke_handler(tauri::generate_handler![admin_login, admin_logout, admin_request])
         .run(tauri::generate_context!())
         .expect("error while running MERCORA Admin Console");
 }
