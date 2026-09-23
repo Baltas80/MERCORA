@@ -10,7 +10,7 @@ const DEFAULT_RETENTION_DAYS = 7;
 const DEFAULT_RETENTION_COUNT = 28;
 const MAX_BACKUP_BYTES = 8 * 1024 * 1024 * 1024;
 const BACKUP_TIMEOUT_MS = 15 * 60 * 1000;
-const BACKUP_RE = /^mercora-\d{8}T\d{6}Z-[0-9a-f]{12}\.dump$/i;
+const BACKUP_RE = /^mercora-(\d{8}T\d{6}Z)-[0-9a-f]{12}\.dump$/i;
 
 export function parseBackupConfig(env = process.env) {
   const intervalMs = Number(env.MERCORA_BACKUP_INTERVAL_MS ?? DEFAULT_INTERVAL_MS);
@@ -24,6 +24,11 @@ export function parseBackupConfig(env = process.env) {
 
 function backupId(date = new Date()) {
   return `mercora-${date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')}-${randomUUID().slice(0, 12)}.dump`;
+}
+
+function backupTimestamp(id) {
+  const match = id.match(BACKUP_RE);
+  return match ? Date.parse(match[1].replace(/^([0-9]{4})([0-9]{2})([0-9]{2})T/, '$1-$2-$3T').replace(/^(.{10})([0-9]{2})([0-9]{2})([0-9]{2})Z$/, '$1$2:$3:$4Z')) : NaN;
 }
 
 function runPgDump({ output, cwd, timeoutMs = BACKUP_TIMEOUT_MS, runner = spawn }) {
@@ -78,7 +83,10 @@ export async function listBackups(backupDir) {
     const stat = await fs.stat(path.join(backupDir, name));
     if (stat.isFile()) entries.push({ id: name, size_bytes: stat.size, modified_at: stat.mtime.toISOString() });
   }
-  return entries.sort((a, b) => b.modified_at.localeCompare(a.modified_at));
+  return entries.sort((a, b) => {
+    const timestampDiff = backupTimestamp(b.id) - backupTimestamp(a.id);
+    return Number.isNaN(timestampDiff) || timestampDiff === 0 ? b.modified_at.localeCompare(a.modified_at) : timestampDiff;
+  });
 }
 
 export async function pruneBackups({ backupDir, retentionDays, retentionCount, now = Date.now() }) {
@@ -86,7 +94,9 @@ export async function pruneBackups({ backupDir, retentionDays, retentionCount, n
   const cutoff = now - retentionDays * 24 * 60 * 60 * 1000;
   let removed = 0;
   for (let index = 0; index < entries.length; index += 1) {
-    if (index < retentionCount && Date.parse(entries[index].modified_at) >= cutoff) continue;
+    const backupTime = backupTimestamp(entries[index].id);
+    const withinRetentionWindow = Number.isFinite(backupTime) ? backupTime >= cutoff : Date.parse(entries[index].modified_at) >= cutoff;
+    if (index < retentionCount && withinRetentionWindow) continue;
     await fs.rm(path.join(backupDir, entries[index].id), { force: true });
     removed += 1;
   }
