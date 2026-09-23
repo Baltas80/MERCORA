@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -48,16 +48,12 @@ async function writeCredential(tokenFile, credential) {
     { encoding: 'utf8', mode: 0o600, flag: 'wx' }
   );
   try {
-    await chmodSafe(temp);
+    await chmod(temp, 0o600).catch(() => {});
     await rename(temp, tokenFile);
   } catch (error) {
     await unlink(temp).catch(() => {});
     throw error;
   }
-}
-
-async function chmodSafe(file) {
-  try { await (await import('node:fs/promises')).chmod(file, 0o600); } catch {}
 }
 
 async function createInitialCredential(tokenFile) {
