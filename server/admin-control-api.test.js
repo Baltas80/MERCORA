@@ -1,12 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 
 const adminSecret = 'test-secret-for-better-auth-only-32-chars-minimum';
 process.env.BETTER_AUTH_SECRET = adminSecret;
-process.env.MERCORA_ADMIN_AUTH_DB = ':memory:';
+process.env.MERCORA_ADMIN_AUTH_DB = path.join(os.tmpdir(), `mercora-admin-auth-test-${process.pid}.db`);
 
 const { createAdminApi } = await import('./admin-control-api.js');
+const { auth } = await import('./auth/better-auth.js');
+const { getMigrations } = await import('better-auth/db/migration');
+const migrations = await getMigrations(auth.options);
+await migrations.runMigrations();
 
 async function withApi(controller, fn) {
   const api = createAdminApi({ controller, port: 0 });
