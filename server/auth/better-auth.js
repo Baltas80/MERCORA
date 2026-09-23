@@ -70,6 +70,7 @@ export const auth = betterAuth({
     useSecureCookies: false,
     cookiePrefix: 'mercora_admin',
     ipAddress: {
+      ipAddressHeaders: ['x-forwarded-for'],
       trustedProxies: ['127.0.0.1', '::1'],
     },
     defaultCookieAttributes: {
