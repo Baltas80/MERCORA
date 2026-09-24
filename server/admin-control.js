@@ -156,7 +156,7 @@ async function backendProbe() {
 
 async function defaultRunner(file, args, options) {
   try {
-    const result = await execFileAsync(file, args, { ...options, shell: false, windowsHide: true, timeout: 30_000, maxBuffer: 512 * 1024 });
+    const result = await execFileAsync(file, args, { ...options, shell: false, windowsHide: true, env: process.env, timeout: 30_000, maxBuffer: 512 * 1024 });
     return { ok: true, code: 0, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     return { ok: false, code: Number.isInteger(error.code) ? error.code : null, stdout: error.stdout, stderr: error.stderr || error.message };
