@@ -29,9 +29,26 @@ For environments that deliberately use an explicit `MERCORA_ADMIN_TOKEN`, the ma
 - HEALTH CHECK
 - LOCK / UNLOCK saved credential
 
+The status dashboard exposes MERCORA, Node.js, PostgreSQL, Tor, Backend, Onion Service, Storage and aggregate Health Checks as separate states.
+
+## Recovery contract
+
+Recovery always targets the requested component first. It does not restart unrelated services as a first response. After the targeted repair, verification runs in this order:
+
+1. Runtime dependencies (Node.js and Docker)
+2. Backend
+3. PostgreSQL
+4. Running service state, including Tor
+5. Onion Service
+6. Supporting storage invariant and aggregate health result
+
+If the targeted restart fails, the controller attempts a targeted start of the same component. Diagnostics returned to the console are sanitized so credential-bearing lines and embedded credentials are not exposed.
+
 ## Windows build
 
 The `Admin Console` GitHub Actions workflow runs on Windows, checks Rust and JavaScript, builds the Tauri NSIS installer, and publishes the installer as a short-lived CI artifact.
+
+The bundle currently declares an empty `bundle.icon` list because the previously checked-in Windows ICO was rejected by Microsoft's resource compiler (`RC2176`). This deliberately removes the invalid legacy resource from the build path; a valid multi-resolution Windows icon can be reintroduced later through the standard Tauri icon pipeline without changing the admin-control security boundary.
 
 ## Runtime gate
 

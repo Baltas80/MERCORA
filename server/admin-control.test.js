@@ -11,10 +11,25 @@ function fakeRunner(log, result = { ok: true, code: 0, stdout: '', stderr: '' })
 }
 
 const RUNNING_SERVICES = 'app\npostgres\ntor\n';
-const ADMIN_TOKEN = 'x'.repeat(64);
+const ADMIN_SESSION = 'mercora-admin-session';
+
+function fakeAuth() {
+  return {
+    api: {
+      getSession: async ({ headers }) => {
+        const cookie = headers.get('cookie') ?? '';
+        return cookie.split(';').map((value) => value.trim()).includes(`session=${ADMIN_SESSION}`)
+          ? { user: { id: 'ci-admin', username: 'ciadmin', role: 'admin' } }
+          : null;
+      },
+      signOut: async () => ({ ok: true }),
+    },
+    handler: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+  };
+}
 
 async function withApi(controller, fn) {
-  const api = createAdminApi({ controller, token: ADMIN_TOKEN, port: 0 });
+  const api = createAdminApi({ controller, auth: fakeAuth(), port: 0 });
   await api.listen();
   const address = api.server.address();
   try {
@@ -25,7 +40,7 @@ async function withApi(controller, fn) {
 }
 
 const apiHeaders = {
-  authorization: `Bearer ${ADMIN_TOKEN}`,
+  cookie: `session=${ADMIN_SESSION}`,
   'content-type': 'application/json'
 };
 
@@ -74,6 +89,29 @@ test('failed restart falls back to start for the same component and can still re
   assert.equal(result.steps[1].step, 'start:app');
   assert.equal(log[1][4], 'up');
   assert.equal(result.ok, true);
+});
+
+test('recovery verification follows dependency, backend, database, Tor, onion and aggregate order', async () => {
+  const sequence = [];
+  const runner = async (file, args) => {
+    if (args.includes('pg_isready')) sequence.push('postgresql');
+    else if (args.includes('--services')) sequence.push('services');
+    else if (args.includes('/data/hostname')) sequence.push('onionService');
+    else if (args.includes('restart')) sequence.push('restart');
+    return { ok: true, code: 0, stdout: args.includes('--services') ? RUNNING_SERVICES : '', stderr: '' };
+  };
+  const probe = async (file) => {
+    sequence.push(file);
+    return { ok: true, code: 0, stdout: '', stderr: '' };
+  };
+  const backendProbeFn = async () => {
+    sequence.push('backend');
+    return { ok: true, code: 200, stdout: 'backend 200', stderr: '' };
+  };
+  const controller = createAdminController({ runner, probe, backendProbeFn });
+  const result = await controller.run('RECOVER', 'tor');
+  assert.equal(result.ok, true);
+  assert.deepEqual(sequence, ['restart', 'node', 'docker', 'backend', 'postgresql', 'services', 'onionService', 'docker']);
 });
 
 test('health check reports offline when a required compose service is not running', async () => {
@@ -131,14 +169,14 @@ test('admin API rejects missing or invalid authentication', async () => {
     assert.equal(missing.status, 401);
 
     const invalid = await fetch(`${base}/v1/control`, {
-      method: 'POST', headers: { authorization: 'Bearer wrong', 'content-type': 'application/json' },
+      method: 'POST', headers: { cookie: 'session=wrong', 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'STATUS' })
     });
     assert.equal(invalid.status, 401);
   });
 });
 
-test('admin API forwards only validated operations', async () => {
+test('admin API forwards only validated operations after session authorization', async () => {
   const calls = [];
   const controller = {
     run: async (action, service) => {
