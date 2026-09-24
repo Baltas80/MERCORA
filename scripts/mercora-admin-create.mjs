@@ -7,7 +7,6 @@ import path from 'node:path';
 
 const MIN_PASSWORD_LENGTH = 12;
 const MAX_PASSWORD_LENGTH = 256;
-const MAX_USERNAME_LENGTH = 64;
 const LOCK_STALE_MS = 10 * 60 * 1000;
 
 export function hashOwnerBootstrapToken(token) {
@@ -75,8 +74,7 @@ async function prompt(question, { secret = false } = {}) {
   }
 
   if (!stdin.isTTY) throw new Error('Secret input requires an interactive terminal.');
-  const mutableOutput = { write() {} };
-  const rl = createInterface({ input: stdin, output: mutableOutput, terminal: true });
+  const rl = createInterface({ input: stdin, output: null, terminal: true });
   stdout.write(question);
   try {
     return await rl.question('');
@@ -84,6 +82,23 @@ async function prompt(question, { secret = false } = {}) {
     rl.close();
     stdout.write('\n');
   }
+}
+
+async function collectCredentials() {
+  if (process.argv.includes('--non-interactive')) {
+    const ownerToken = process.env.MERCORA_OWNER_BOOTSTRAP_TOKEN ?? '';
+    const username = normalizeUsername(process.env.MERCORA_BOOTSTRAP_USERNAME ?? '');
+    const password = process.env.MERCORA_BOOTSTRAP_PASSWORD ?? '';
+    const confirmation = process.env.MERCORA_BOOTSTRAP_PASSWORD_CONFIRM ?? password;
+    return { ownerToken, username, password, confirmation };
+  }
+
+  return {
+    ownerToken: await prompt('Owner bootstrap token: ', { secret: true }),
+    username: normalizeUsername(await prompt('Username: ')),
+    password: await prompt('Password: ', { secret: true }),
+    confirmation: await prompt('Confirm password: ', { secret: true }),
+  };
 }
 
 async function main() {
@@ -101,7 +116,6 @@ async function main() {
 
   const { database, databasePath, auth } = await import('../server/auth/better-auth.js');
   const releaseLock = await acquireBootstrapLock(databasePath);
-  let completed = false;
 
   try {
     const adminCount = database.prepare('SELECT COUNT(*) AS count FROM "user" WHERE role = ?').get('admin')?.count ?? 0;
@@ -115,12 +129,8 @@ async function main() {
       if (error?.code !== 'ENOENT') throw error;
     }
 
-    const ownerToken = await prompt('Owner bootstrap token: ', { secret: true });
+    const { ownerToken, username, password, confirmation } = await collectCredentials();
     if (!verifyOwnerBootstrapToken(ownerToken, expectedHash)) throw new Error('Owner authorization failed.');
-
-    const username = normalizeUsername(await prompt('Username: '));
-    const password = await prompt('Password: ', { secret: true });
-    const confirmation = await prompt('Confirm password: ', { secret: true });
 
     if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
       throw new Error(`Password must be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters long.`);
@@ -157,14 +167,9 @@ async function main() {
       encoding: 'utf8',
       mode: 0o600,
     });
-    completed = true;
     stdout.write('MERCORA owner administrator created successfully.\n');
     stdout.write('Owner bootstrap is now permanently disabled for this installation.\n');
   } finally {
-    if (!completed) {
-      // Leave the pending marker in place only if user creation may have succeeded.
-      // A subsequent run checks the database before allowing another bootstrap.
-    }
     database.close();
     await releaseLock();
   }
