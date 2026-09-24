@@ -12,7 +12,7 @@ on:
       - '.github/workflows/admin-console.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: mercora-admin-console-${{ github.event.pull_request.number || github.ref }}
@@ -26,8 +26,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: package-lock.json
       - name: Install admin console dependencies
         working-directory: admin-console
         run: npm install --no-audit --no-fund
@@ -44,10 +42,27 @@ jobs:
       - name: Build Windows installer
         working-directory: admin-console
         run: npm run tauri build -- --bundles nsis
-      - name: Upload installer
+      - name: Validate installer exists
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem 'admin-console/src-tauri/target/release/bundle/nsis/*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'Windows installer was not produced' }
+          Write-Host "Installer: $($installer.FullName)"
+      - name: Publish Windows release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem 'admin-console/src-tauri/target/release/bundle/nsis/*.exe' | Select-Object -First 1
+          $asset = 'MERCORA-Admin-Console-Windows.exe'
+          Copy-Item $installer.FullName $asset -Force
+          $tag = "admin-console-v0.1.${{ github.run_number }}"
+          gh release create $tag $asset --title "MERCORA Admin Console $tag" --notes "Windows installer built and validated by CI from commit $env:GITHUB_SHA."
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: mercora-admin-console-windows
-          path: admin-console/src-tauri/target/release/bundle/nsis/*.exe
+          path: MERCORA-Admin-Console-Windows.exe
           if-no-files-found: error
           retention-days: 14
