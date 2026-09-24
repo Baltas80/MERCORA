@@ -52,6 +52,7 @@ jobs:
           node --check server/admin-control-api.js
           node --check scripts/mercora-admin-api.mjs
           node --check scripts/mercora-admin.mjs
+          node --check scripts/mercora-admin-create.mjs
 
       - name: Check frontend syntax
         run: node --check web/app.js
@@ -67,9 +68,19 @@ jobs:
           BETTER_AUTH_SECRET: mercora-ci-auth-secret-0123456789-abcdef
           MERCORA_ADMIN_AUTH_DB: ${{ runner.temp }}/mercora-admin-auth.db
           MERCORA_ADMIN_TEST_PASSWORD: Mercora-CI-Password-2026!
+        shell: bash
         run: |
+          set -euo pipefail
           npm run admin:auth:migrate
-          npm run admin:auth:create -- --email admin@example.invalid --password "$MERCORA_ADMIN_TEST_PASSWORD" --name "CI Admin" --role admin --data '{"username":"ciadmin"}' --yes
+          OWNER_TOKEN="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+          OWNER_HASH="$(printf '%s' "$OWNER_TOKEN" | sha256sum | cut -d' ' -f1)"
+          echo "::add-mask::$OWNER_TOKEN"
+          MERCORA_OWNER_BOOTSTRAP_TOKEN_HASH="$OWNER_HASH" \
+          MERCORA_OWNER_BOOTSTRAP_TOKEN="$OWNER_TOKEN" \
+          MERCORA_BOOTSTRAP_USERNAME=ciadmin \
+          MERCORA_BOOTSTRAP_PASSWORD="$MERCORA_ADMIN_TEST_PASSWORD" \
+          MERCORA_BOOTSTRAP_PASSWORD_CONFIRM="$MERCORA_ADMIN_TEST_PASSWORD" \
+          npm run admin:auth:create -- --non-interactive
 
       - name: Run unit tests
         env:
