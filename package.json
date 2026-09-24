@@ -10,7 +10,8 @@
     "admin:api": "node scripts/mercora-admin-api.mjs",
     "admin": "node scripts/mercora-admin.mjs",
     "admin:auth:migrate": "auth migrate --yes --config ./server/auth/better-auth.js",
-    "admin:auth:create": "auth create-admin --config ./server/auth/better-auth.js",
+    "admin:auth:create": "node scripts/mercora-admin-create.mjs",
+    "admin:auth:hash-token": "node scripts/mercora-admin-create.mjs --hash-token",
     "backup": "node scripts/mercora-backup-scheduler.mjs",
     "backup:test": "node --test scripts/mercora-backup-scheduler.test.mjs"
   },
