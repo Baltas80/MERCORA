@@ -81,6 +81,29 @@ test('admin API does not expose arbitrary control endpoints', async () => {
   });
 });
 
+test('admin control API does not expose unexpected controller exception details', async () => {
+  const fakeAuth = {
+    api: {
+      getSession: async () => ({ user: { id: 'admin-1', username: 'admin', role: 'admin' } }),
+      signOut: async () => ({ ok: true }),
+    },
+    handler: async () => new Response('{}', { status: 401 }),
+  };
+  const controller = {
+    run: async () => { throw new Error('secret internal path C:\\MERCORA\\private\nTOKEN=must-not-leak'); },
+    healthCheck: async () => ({ ok: true }),
+  };
+  await withApi(controller, async (base) => {
+    const response = await fetch(`${base}/v1/control`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: 'session=admin-session' },
+      body: JSON.stringify({ action: 'RESTART', service: 'app' }),
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'control operation failed' });
+  }, fakeAuth);
+});
+
 test('admin login does not issue a session cookie to a non-admin user', async () => {
   let signOutCalls = 0;
   const fakeAuth = {
