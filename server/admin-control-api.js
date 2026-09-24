@@ -186,7 +186,7 @@ export function createAdminApi({ controller, auth, host = '127.0.0.1', port = 87
     } catch (error) {
       const status = error?.statusCode ?? 400;
       res.writeHead(status);
-      return res.end(JSON.stringify({ error: status === 413 ? 'request too large' : String(error.message ?? 'bad request') }));
+      return res.end(JSON.stringify({ error: status === 413 ? 'request too large' : 'control operation failed' }));
     }
   });
 
