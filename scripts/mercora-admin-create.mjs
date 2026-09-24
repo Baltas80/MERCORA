@@ -2,7 +2,6 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
 const MIN_PASSWORD_LENGTH = 12;
@@ -123,8 +122,13 @@ async function main() {
 
     const marker = bootstrapMarkerPath(databasePath);
     try {
-      await readFile(marker, 'utf8');
-      throw new Error('Owner bootstrap has already been consumed.');
+      const markerContent = JSON.parse(await readFile(marker, 'utf8'));
+      if (markerContent?.state === 'consumed') {
+        throw new Error('Owner bootstrap has already been consumed.');
+      }
+      if (markerContent?.state !== 'pending') {
+        throw new Error('Owner bootstrap state is invalid; refusing to continue.');
+      }
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
     }
