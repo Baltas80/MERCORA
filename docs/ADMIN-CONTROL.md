@@ -39,7 +39,7 @@ Diagnostics are truncated and filtered to remove common secret-bearing lines and
 
 `RECOVER` without a component first performs a health diagnosis and selects only the affected component in dependency order: PostgreSQL, backend/app, then Tor. If the entire stack is healthy, no restart is performed. It does not restart the entire stack unnecessarily.
 
-Before any recovery Docker operation, the controller performs a non-secret Compose configuration preflight. The current Compose stack requires `POSTGRES_PASSWORD`; if it is missing, recovery is blocked before Docker is invoked and the console receives only the configuration diagnosis, never the password value.
+Before any recovery Docker operation, the controller performs a non-secret Compose configuration preflight. The current Compose stack requires `POSTGRES_PASSWORD`; the preflight accepts that variable from the Admin Control process environment or from the project `.env` file used by Docker Compose. If it is missing or empty, recovery is blocked before Docker is invoked and the console receives only the configuration diagnosis, never the password value.
 
 After a targeted repair, the controller verifies the operational chain:
 
@@ -68,7 +68,8 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** targeted recovery with diagnosis-first selection when no component is specified.
 - **IMPLEMENTED:** no-restart path when the stack is already healthy.
 - **IMPLEMENTED:** Compose configuration preflight before recovery Docker operations.
-- **IMPLEMENTED:** regression tests for targeted recovery and missing Compose configuration.
+- **IMPLEMENTED:** Compose `.env` fallback detection without returning secret values.
+- **IMPLEMENTED:** regression tests for targeted recovery and missing/valid Compose configuration.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
