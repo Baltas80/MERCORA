@@ -13,16 +13,20 @@ const healthyStates = new Set(['ONLINE','OK','RUNNING','CONFIGURED']);
 const badStates = new Set(['OFFLINE','ERROR','STOPPED']);
 const SESSION_IDLE_MS = 15 * 60 * 1000;
 const ACTIONS = Object.freeze({
-  start: { action: 'START', service: 'app' },
-  restart: { action: 'RESTART', service: 'app' },
-  stop: { action: 'STOP', service: 'app' },
+  // MERCORA-wide controls intentionally omit `service` so the control API
+  // operates on the complete real stack rather than only the app container.
+  start: { action: 'START' },
+  restart: { action: 'RESTART' },
+  stop: { action: 'STOP' },
   postgresStart: { action: 'START', service: 'postgres' },
   postgresRestart: { action: 'RESTART', service: 'postgres' },
   postgresStop: { action: 'STOP', service: 'postgres' },
   torStart: { action: 'START', service: 'tor' },
   torRestart: { action: 'RESTART', service: 'tor' },
   torStop: { action: 'STOP', service: 'tor' },
-  recover: { action: 'RECOVER', service: 'app' },
+  // Default MERCORA recovery is diagnosis-first and selects only the affected
+  // component. Component-specific recovery remains explicitly available below.
+  recover: { action: 'RECOVER' },
   postgresRecover: { action: 'RECOVER', service: 'postgres' },
   torRecover: { action: 'RECOVER', service: 'tor' },
   health: { action: 'HEALTH_CHECK' }
