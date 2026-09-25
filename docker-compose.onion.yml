@@ -5,7 +5,7 @@ services:
       - onion_edge
 
   tor:
-    image: svengo/tor:0.4.9.11-1
+    image: svengo/tor:0.4.9.12
     restart: unless-stopped
     # The image entrypoint generates /etc/tor/torrc-defaults at startup,
     # so the container filesystem cannot be globally read-only.
