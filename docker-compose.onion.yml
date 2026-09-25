@@ -30,7 +30,7 @@ services:
       - ALL
     volumes:
       - tor_data:/data
-      - ./tor/torrc.onion:/data/torrc:ro
+      - ./tor/torrc.onion.secure:/data/torrc:ro
     depends_on:
       app:
         condition: service_healthy
