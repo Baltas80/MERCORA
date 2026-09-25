@@ -14,6 +14,16 @@ services:
       ORPORT: "0"
       DIRPORT: "0"
       EXITPOLICY: "reject *:*"
+    command:
+      - tor
+      - -f
+      - /data/torrc
+      - --ORPort
+      - "0"
+      - --DirPort
+      - "0"
+      - --ExitPolicy
+      - "reject *:*"
     security_opt:
       - no-new-privileges:true
     cap_drop:
