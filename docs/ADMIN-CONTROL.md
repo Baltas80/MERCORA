@@ -48,21 +48,28 @@ After a targeted repair, the controller verifies the operational chain:
 3. Backend health.
 4. PostgreSQL readiness.
 5. Required Compose services, including Tor.
-6. Onion Service hostname availability.
-7. Persistent storage definition (`postgres_data`) from the active Compose configuration.
-8. Aggregate health.
+6. Effective Tor relay configuration: `ORPort 0` and `DirPort 0`.
+7. Onion Service hostname availability.
+8. Persistent storage definition (`postgres_data`) from the active Compose configuration.
+9. Aggregate health.
 
 `HEALTH_CHECK` invokes this same full diagnostic path directly. It does not merely execute `docker compose ps`, so the console receives backend, database, Tor, Onion Service, storage, configuration, Node.js, Docker, and aggregate health results.
 
 The storage check deliberately does not assume Docker's project-name prefix, so `COMPOSE_PROJECT_NAME` or a different working-directory name cannot create a false storage failure.
 
-The recovery result includes the target component, whether the targeted repair succeeded, whether that target passed its health criteria, and the sanitized verification results.
-
 ## Tor / Onion Service runtime requirement
 
-The Tor Compose override uses `svengo/tor:0.4.9.11-1`. That image's entrypoint creates `/etc/tor/torrc-defaults` during startup, so the Tor service must not use a global container `read_only: true` filesystem setting.
+The observed Windows runtime showed the Tor image starting its default relay configuration: `ORPort 9001` and `DirPort 9030` were opened before the network bootstrap completed. For MERCORA this is incorrect: the service is an Onion Service, not a public Tor relay.
 
-The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps the persistent `tor_data` volume, and mounts the application Tor configuration read-only at `/data/torrc`. The base `app` and PostgreSQL services retain their existing hardening.
+The Compose override now explicitly sets:
+
+- `ORPORT=0`
+- `DIRPORT=0`
+- `EXITPOLICY=reject *:*`
+
+The Admin Control health check also reads the generated `/etc/tor/torrc-defaults` inside the real Tor container and fails unless both `ORPort` and `DirPort` are `0`. This prevents a future image/default change from silently turning MERCORA into a relay again.
+
+The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps the persistent `tor_data` volume, and mounts the application Tor configuration read-only at `/data/torrc`. The selected image's entrypoint creates `/etc/tor/torrc-defaults` during startup, so the Tor service must not use a global container `read_only: true` filesystem setting.
 
 ## Verification
 
@@ -75,10 +82,12 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** Compose `.env` fallback detection without returning secret values.
 - **IMPLEMENTED:** regression tests for targeted recovery and missing/valid Compose configuration.
 - **IMPLEMENTED:** project-name-independent persistent-storage health check.
+- **IMPLEMENTED:** effective Tor relay-listener health check.
+- **IMPLEMENTED:** Tor Compose override disables ORPort and DirPort.
 - **IMPLEMENTED:** `HEALTH_CHECK` full diagnostic path rather than a plain Compose status query.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
 - **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
-- **PENDING:** CI result for the latest recovery hardening commits.
-- **PENDING:** live Windows runtime verification of PostgreSQL + backend + Tor + Onion Service after the Tor compose change.
+- **PENDING:** CI result for the latest Tor/recovery hardening commits.
+- **PENDING:** live Windows runtime verification after recreating the Tor container with the new Compose environment.
