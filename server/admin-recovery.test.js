@@ -6,19 +6,25 @@ import path from 'node:path';
 import { createAdminController, configurationCheck } from './admin-control.js';
 
 const RUNNING = 'app\npostgres\ntor\n';
+const TOR_CONFIG = 'ORPort 0\nDirPort 0\nExitPolicy reject *:*\n';
 const ok = { ok: true, code: 0, stdout: '', stderr: '' };
 const configured = () => ({ ...ok, name: 'configuration' });
 
-test('HEALTH_CHECK runs the full infrastructure health check instead of a plain compose ps', async () => {
-  const calls = [];
-  const runner = async (file, args) => {
+function healthyRunner(calls) {
+  return async (file, args) => {
     calls.push([file, ...args]);
     if (args.includes('--services')) return { ...ok, stdout: RUNNING };
     if (args.includes('config') && args.includes('--volumes')) return { ...ok, stdout: 'postgres_data\n' };
+    if (args.includes('tor') && args.includes('grep')) return { ...ok, stdout: TOR_CONFIG };
+    if (args.includes('/data/mercora/hostname')) return ok;
     return ok;
   };
+}
+
+test('HEALTH_CHECK runs the full infrastructure health check instead of a plain compose ps', async () => {
+  const calls = [];
   const controller = createAdminController({
-    runner,
+    runner: healthyRunner(calls),
     probe: async () => ok,
     backendProbeFn: async () => ({ ...ok, code: 200 }),
     configurationProbe: configured
@@ -31,19 +37,15 @@ test('HEALTH_CHECK runs the full infrastructure health check instead of a plain 
   assert.ok(result.checks.some((check) => check.name === 'onionService'));
   assert.ok(result.checks.some((check) => check.name === 'storage'));
   assert.ok(calls.some((entry) => entry.includes('pg_isready')));
-  assert.ok(calls.some((entry) => entry.includes('/data/hostname')));
+  assert.ok(calls.some((entry) => entry.includes('/data/mercora/hostname')));
+  assert.ok(calls.some((entry) => entry.includes('/data/torrc')));
   assert.ok(calls.some((entry) => entry.includes('config') && entry.includes('--volumes')));
   assert.ok(!calls.some((entry) => entry.includes('ps') && !entry.includes('--services')));
 });
 
 test('RECOVER performs targeted repair then verifies every infrastructure dependency', async () => {
   const calls = [];
-  const runner = async (file, args) => {
-    calls.push([file, ...args]);
-    if (args.includes('--services')) return { ...ok, stdout: RUNNING };
-    if (args.includes('config') && args.includes('--volumes')) return { ...ok, stdout: 'postgres_data\n' };
-    return ok;
-  };
+  const runner = healthyRunner(calls);
   const probes = [];
   const probe = async (file, args) => {
     probes.push([file, ...args]);
@@ -63,21 +65,16 @@ test('RECOVER performs targeted repair then verifies every infrastructure depend
   assert.ok(probes.some(([file, ...args]) => file === 'docker' && args[0] === 'version'));
   assert.ok(calls.some((entry) => entry.includes('--services')));
   assert.ok(calls.some((entry) => entry.includes('pg_isready')));
-  assert.ok(calls.some((entry) => entry.includes('/data/hostname')));
+  assert.ok(calls.some((entry) => entry.includes('/data/mercora/hostname')));
+  assert.ok(calls.some((entry) => entry.includes('/data/torrc')));
   assert.ok(calls.some((entry) => entry.includes('config') && entry.includes('--volumes')));
   assert.ok(result.steps.some((step) => step.step === 'health'));
 });
 
 test('RECOVER does not restart unrelated services when a target is supplied', async () => {
   const calls = [];
-  const runner = async (file, args) => {
-    calls.push([file, ...args]);
-    if (args.includes('--services')) return { ...ok, stdout: RUNNING };
-    if (args.includes('config') && args.includes('--volumes')) return { ...ok, stdout: 'postgres_data\n' };
-    return ok;
-  };
   const controller = createAdminController({
-    runner,
+    runner: healthyRunner(calls),
     probe: async () => ok,
     backendProbeFn: async () => ({ ...ok, code: 200 }),
     configurationProbe: configured
