@@ -2,7 +2,7 @@
 
 The administrative path is intentionally separated:
 
-`Admin Console -> Tauri/Rust bridge -> localhost Admin Control API -> allowlisted operations -> Docker Compose`
+`Admin Console -> localhost Admin Control API -> allowlisted operations -> Docker Compose`
 
 The admin surface does **not** expose a shell or arbitrary command execution.
 
@@ -15,43 +15,55 @@ The admin surface does **not** expose a shell or arbitrary command execution.
 - `HEALTH_CHECK`
 - `RECOVER [app|postgres|tor]`
 
-## First-run administrative credential
+## Authentication
 
-A fresh MERCORA Admin Control API instance now creates a cryptographically random 32-byte bearer token when no `MERCORA_ADMIN_TOKEN` environment variable is supplied. The generated credential is persisted outside the repository at a per-user state path and is marked as **bootstrap pending**.
+The Admin Control API uses the production Better Auth session stack. Login is username/password based and only an authenticated user with the `admin` role can invoke control operations.
 
-On Windows the default path is under `%LOCALAPPDATA%\\MERCORA\\Admin\\admin-token.json`. On Unix-like systems it uses `$XDG_STATE_HOME/mercora/admin-token.json` or `~/.local/state/mercora/admin-token.json`.
+The API binds to `127.0.0.1:8787` by default and rejects non-loopback clients. Authentication requests are rate-limited by the authentication layer. The API does not expose an administrator bearer token and does not accept arbitrary command strings.
 
-The token file is created with restrictive file permissions where the operating system exposes them. The credential is never committed to Git, never baked into the installer, and is never printed. The Windows Admin Console performs the one-time localhost bootstrap and stores the resulting credential in Windows Credential Manager. Subsequent launches can load the stored credential without showing it in the UI.
+Initial owner provisioning is a separate, one-time bootstrap operation protected by the owner bootstrap token. After an administrator exists, owner bootstrap is permanently disabled for that installation.
 
-The bootstrap endpoint is `POST /v1/bootstrap`, is localhost-only, returns the generated token only while bootstrap is pending, and permanently disables bootstrap for that credential after it is claimed. When an explicit `MERCORA_ADMIN_TOKEN` is configured, bootstrap is disabled and the console can use that configured token manually.
+## Privileged control boundary
 
-For automated/headless deployments, retain the existing explicit environment-variable path:
+The Admin Control API accepts only the six operations above and only the service names `app`, `postgres`, and `tor`. Docker is invoked through Node.js `execFile` with `shell: false`; command arguments are constructed from fixed allowlists.
 
-```text
-MERCORA_ADMIN_TOKEN=<local-secret> npm run admin:api
-```
+No interface field is converted into a shell command. Invalid actions and service names are rejected before Docker is invoked.
 
-Do not place the token in a script, Docker image, GitHub Actions file, repository secret committed to source, or installer resource.
+Requests larger than 4 KiB are rejected before authentication/control execution. Responses use defensive headers including `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
 
-## Existing control-plane guarantees
+Diagnostics are truncated and filtered to remove common secret-bearing lines and embedded credentials before they are returned to the console.
 
-`RECOVER` first restarts only the requested component. If that fails, it attempts to start that same component. It then runs the health sequence rather than restarting unrelated services.
+## Recovery model
 
-`STATUS` returns a structured, secret-free summary for MERCORA, Node.js, PostgreSQL, backend, Tor, Onion Service, storage, and overall health.
+`RECOVER` repairs only the requested component first. A failed restart falls back to starting that same component. It does not restart the entire stack unnecessarily.
 
-Authentication uses a length-checked constant-time token comparison. The API binds to `127.0.0.1:8787` by default and rejects non-loopback clients. Requests larger than 4 KiB are rejected before privileged operations.
+After the targeted repair, the controller verifies the operational chain:
 
-The control implementation invokes `docker` with `execFile` and `shell: false`. Arguments are generated exclusively from fixed allowlists. No user-supplied command string is passed to a shell.
+1. Node.js and Docker availability.
+2. Backend health.
+3. PostgreSQL readiness.
+4. Required Compose services, including Tor.
+5. Onion Service hostname availability.
+6. Persistent storage availability.
+7. Aggregate health.
 
-Diagnostics are truncated and filter common secret-bearing lines before they are returned to the console.
+The recovery result includes the target component, whether the targeted repair succeeded, whether that target passed its health criteria, and the sanitized verification results.
+
+## Tor / Onion Service runtime requirement
+
+The Tor Compose override uses `svengo/tor:0.4.9.11-1`. That image's entrypoint creates `/etc/tor/torrc-defaults` during startup, so the Tor service must not use a global container `read_only: true` filesystem setting.
+
+The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps the persistent `tor_data` volume, and mounts the application Tor configuration read-only at `/data/torrc`. The base `app` and PostgreSQL services retain their existing hardening.
 
 ## Verification
 
-- **IMPLEMENTED:** first-run random admin credential generation.
-- **IMPLEMENTED:** credential persistence outside the repository.
-- **IMPLEMENTED:** one-time localhost bootstrap.
-- **IMPLEMENTED:** Windows Credential Manager storage for the desktop console.
-- **IMPLEMENTED:** explicit environment-token mode for headless deployments.
-- **IMPLEMENTED:** tests for generation, persistence, one-time bootstrap and environment mode.
-- **PENDING:** live Windows installer build after the credential-store dependency is compiled and tested by CI.
-- **PENDING:** live runtime health checks require the actual MERCORA Docker/PostgreSQL/Tor environment.
+- **IMPLEMENTED:** allowlisted START/STOP/RESTART/STATUS/HEALTH_CHECK/RECOVER operations.
+- **IMPLEMENTED:** loopback-only Admin Control API.
+- **IMPLEMENTED:** Better Auth username/password session authentication with admin-role authorization.
+- **IMPLEMENTED:** targeted recovery with dependency verification.
+- **IMPLEMENTED:** secret-safe diagnostic sanitization.
+- **IMPLEMENTED:** no-shell Docker invocation.
+- **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
+- **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
+- **PENDING:** live Windows runtime verification of PostgreSQL + backend + Tor + Onion Service after the Tor compose change.
+- **PENDING:** successful CI run for the latest commit; the previous CI run failed because the owner-bootstrap path test hard-coded Windows path separators. The test has now been corrected and a new CI run is queued.
