@@ -134,7 +134,7 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
       node: state(checks.node?.ok),
       postgresql: state(checks.postgresql?.ok),
       backend: state(checks.backend?.ok),
-      tor: state(checks.services?.torRunning && checks.onionService?.ok),
+      tor: state(checks.services?.torRunning && checks.torConfig?.ok && checks.onionService?.ok),
       onionService: state(checks.onionService?.ok, 'CONFIGURED'),
       storage: state(checks.storage?.ok, 'OK'),
       health: state(health.ok, 'OK'),
@@ -204,6 +204,21 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
       torRunning: Boolean(composeServices?.ok) && serviceRunning(composeServices?.stdout, 'tor')
     });
     checks.at(-1).ok = checks.at(-1).ok && allServicesRunning(composeServices?.stdout);
+
+    const torConfigProbe = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'grep', '-E', '^(ORPort|DirPort)[[:space:]]+'], { cwd });
+    const torConfig = sanitizeResult(torConfigProbe);
+    const torListeners = String(torConfigProbe?.stdout ?? '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const torListenerValues = Object.fromEntries(torListeners.map((line) => line.split(/\s+/, 2)));
+    checks.push({
+      name: 'torConfig',
+      ...torConfig,
+      ok: torConfig.ok && torListenerValues.ORPort === '0' && torListenerValues.DirPort === '0',
+      stdout: torConfig.ok ? torConfig.stdout : torConfig.stdout
+    });
+
     checks.push(named('onionService', await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd })));
 
     // Verify the Compose-defined persistent volume without assuming Docker's
@@ -231,14 +246,14 @@ function selectRecoveryTarget(health) {
   if (!checks.configuration?.ok) return null;
   if (!checks.postgresql?.ok || !checks.services?.postgresRunning) return 'postgres';
   if (!checks.backend?.ok || !checks.services?.appRunning) return 'app';
-  if (!checks.onionService?.ok || !checks.services?.torRunning) return 'tor';
+  if (!checks.onionService?.ok || !checks.services?.torRunning || !checks.torConfig?.ok) return 'tor';
   return null;
 }
 
 function targetHealthyFromChecks(health, target) {
   const checks = Object.fromEntries(health.checks.map((check) => [check.name, check]));
   if (target === 'postgres') return Boolean(checks.services?.postgresRunning && checks.postgresql?.ok);
-  if (target === 'tor') return Boolean(checks.services?.torRunning && checks.onionService?.ok);
+  if (target === 'tor') return Boolean(checks.services?.torRunning && checks.torConfig?.ok && checks.onionService?.ok);
   return Boolean(checks.services?.appRunning && checks.backend?.ok);
 }
 
