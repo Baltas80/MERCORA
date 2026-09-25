@@ -39,15 +39,18 @@ Diagnostics are truncated and filtered to remove common secret-bearing lines and
 
 `RECOVER` without a component first performs a health diagnosis and selects only the affected component in dependency order: PostgreSQL, backend/app, then Tor. If the entire stack is healthy, no restart is performed. It does not restart the entire stack unnecessarily.
 
+Before any recovery Docker operation, the controller performs a non-secret Compose configuration preflight. The current Compose stack requires `POSTGRES_PASSWORD`; if it is missing, recovery is blocked before Docker is invoked and the console receives only the configuration diagnosis, never the password value.
+
 After a targeted repair, the controller verifies the operational chain:
 
-1. Node.js and Docker availability.
-2. Backend health.
-3. PostgreSQL readiness.
-4. Required Compose services, including Tor.
-5. Onion Service hostname availability.
-6. Persistent storage availability.
-7. Aggregate health.
+1. Required Compose configuration.
+2. Node.js and Docker availability.
+3. Backend health.
+4. PostgreSQL readiness.
+5. Required Compose services, including Tor.
+6. Onion Service hostname availability.
+7. Persistent storage availability.
+8. Aggregate health.
 
 The recovery result includes the target component, whether the targeted repair succeeded, whether that target passed its health criteria, and the sanitized verification results.
 
@@ -64,10 +67,11 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** Better Auth username/password session authentication with admin-role authorization.
 - **IMPLEMENTED:** targeted recovery with diagnosis-first selection when no component is specified.
 - **IMPLEMENTED:** no-restart path when the stack is already healthy.
-- **IMPLEMENTED:** regression tests for targeted recovery and unsupported services.
+- **IMPLEMENTED:** Compose configuration preflight before recovery Docker operations.
+- **IMPLEMENTED:** regression tests for targeted recovery and missing Compose configuration.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
 - **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
-- **PENDING:** CI result for the latest recovery hardening commit; GitHub currently reports no status yet.
+- **PENDING:** CI result for the latest recovery hardening commits.
 - **PENDING:** live Windows runtime verification of PostgreSQL + backend + Tor + Onion Service after the Tor compose change.
