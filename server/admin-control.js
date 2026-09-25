@@ -78,7 +78,7 @@ function configurationCheck() {
   };
 }
 
-export function createAdminController({ cwd = path.resolve(process.cwd()), runner = defaultRunner, probe = defaultProbe, backendProbeFn = backendProbe } = {}) {
+export function createAdminController({ cwd = path.resolve(process.cwd()), runner = defaultRunner, probe = defaultProbe, backendProbeFn = backendProbe, configurationProbe = configurationCheck } = {}) {
   async function run(action, service) {
     const args = composeArgs(action, service);
     if (action === 'STATUS') return status();
@@ -107,7 +107,7 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
   async function recover(service) {
     if (service !== undefined && !ALLOWED_SERVICES.has(service)) throw new Error('Unsupported service');
 
-    const configuration = configurationCheck();
+    const configuration = configurationProbe();
     if (!configuration.ok) {
       return {
         ok: false,
@@ -115,7 +115,7 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
         targetHealthy: false,
         repaired: false,
         blocked: true,
-        steps: [{ step: 'configuration', result: configuration }]
+        steps: [{ step: 'configuration', result: sanitizeResult(configuration) }]
       };
     }
 
@@ -150,7 +150,8 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
 
   async function healthCheck() {
     const checks = [];
-    checks.push(configurationCheck());
+    checks.push(sanitizeResult(configurationProbe()));
+    checks[0].name = 'configuration';
     checks.push(named('node', await probe('node', ['--version'], { cwd })));
     checks.push(named('docker', await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd })));
     checks.push(named('backend', await backendProbeFn()));
