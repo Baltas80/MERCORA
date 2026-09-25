@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import {
   bootstrapMarkerPath,
   databaseStateDir,
@@ -27,8 +28,9 @@ test('username normalization rejects unsafe identifiers', () => {
   assert.throws(() => normalizeUsername('bad/slash'), /3-64/);
 });
 
-test('bootstrap state remains inside the authentication state directory', () => {
-  const databasePath = 'C:\\MERCORA\\Admin\\admin-auth.db';
-  assert.equal(databaseStateDir(databasePath), 'C:\\MERCORA\\Admin');
-  assert.equal(bootstrapMarkerPath(databasePath), 'C:\\MERCORA\\Admin\\owner-bootstrap-used');
+test('bootstrap state remains inside the authentication state directory on the current platform', () => {
+  const databasePath = path.resolve('MERCORA', 'Admin', 'admin-auth.db');
+  const expectedDir = path.dirname(databasePath);
+  assert.equal(databaseStateDir(databasePath), expectedDir);
+  assert.equal(bootstrapMarkerPath(databasePath), path.join(expectedDir, 'owner-bootstrap-used'));
 });
