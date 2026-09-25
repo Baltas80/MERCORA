@@ -95,8 +95,22 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
 
   async function recover(service) {
     if (service !== undefined && !ALLOWED_SERVICES.has(service)) throw new Error('Unsupported service');
-    const target = service ?? 'app';
+
+    let target = service;
     const steps = [];
+
+    // With no explicit target, diagnose first and repair only the first affected
+    // component in dependency order: PostgreSQL -> backend/app -> Tor.
+    // This avoids restarting healthy services or the whole stack unnecessarily.
+    if (target === undefined) {
+      const diagnosis = await healthCheck();
+      steps.push({ step: 'diagnosis', result: diagnosis });
+      target = selectRecoveryTarget(diagnosis);
+      if (target === null) {
+        return { ok: diagnosis.ok, target: null, targetHealthy: diagnosis.ok, repaired: false, steps };
+      }
+    }
+
     const restart = await run('RESTART', target);
     steps.push({ step: `restart:${target}`, result: restart });
     let repaired = restart.ok;
@@ -137,6 +151,14 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
 }
 
 function named(name, result) { return { name, ...sanitizeResult(result) }; }
+
+function selectRecoveryTarget(health) {
+  const checks = Object.fromEntries(health.checks.map((check) => [check.name, check]));
+  if (!checks.postgresql?.ok || !checks.services?.postgresRunning) return 'postgres';
+  if (!checks.backend?.ok || !checks.services?.appRunning) return 'app';
+  if (!checks.onionService?.ok || !checks.services?.torRunning) return 'tor';
+  return null;
+}
 
 function targetHealthyFromChecks(health, target) {
   const checks = Object.fromEntries(health.checks.map((check) => [check.name, check]));
