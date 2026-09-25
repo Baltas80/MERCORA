@@ -45,6 +45,80 @@ fn action_payload(method: &str, path: &str, body: &str) -> Result<String, String
     Ok(json!({ "action": action }).to_string())
 }
 
+fn decode_chunked_body(body: &[u8]) -> Result<Vec<u8>, String> {
+    let mut decoded = Vec::with_capacity(body.len());
+    let mut cursor = 0usize;
+
+    loop {
+        let line_end = body[cursor..]
+            .windows(2)
+            .position(|window| window == b"\r\n")
+            .ok_or_else(|| "Malformed chunked Admin API response".to_string())?;
+        let line_end = cursor + line_end;
+        let size_line = std::str::from_utf8(&body[cursor..line_end])
+            .map_err(|_| "Invalid chunk size in Admin API response".to_string())?;
+        let size_text = size_line.split(';').next().unwrap_or("").trim();
+        let chunk_size = usize::from_str_radix(size_text, 16)
+            .map_err(|_| "Invalid chunk size in Admin API response".to_string())?;
+        cursor = line_end + 2;
+
+        if chunk_size == 0 {
+            if body.len() >= cursor + 2 && &body[cursor..cursor + 2] == b"\r\n" {
+                cursor += 2;
+            }
+            return Ok(decoded);
+        }
+
+        if chunk_size > MAX_RESPONSE_BYTES.saturating_sub(decoded.len()) {
+            return Err("Admin API response is too large".into());
+        }
+        if body.len() < cursor + chunk_size + 2 {
+            return Err("Truncated chunked Admin API response".into());
+        }
+
+        decoded.extend_from_slice(&body[cursor..cursor + chunk_size]);
+        cursor += chunk_size;
+        if &body[cursor..cursor + 2] != b"\r\n" {
+            return Err("Malformed chunked Admin API response".into());
+        }
+        cursor += 2;
+    }
+}
+
+fn normalize_http_response(response: String) -> Result<String, String> {
+    let header_end = response
+        .find("\r\n\r\n")
+        .ok_or_else(|| "Malformed Admin API response".to_string())?;
+    let body_start = header_end + 4;
+    let headers = &response[..header_end];
+    let body = response.as_bytes()[body_start..].to_vec();
+
+    let chunked = headers.lines().any(|line| {
+        line.split_once(':')
+            .map(|(name, value)| {
+                name.eq_ignore_ascii_case("transfer-encoding")
+                    && value
+                        .split(',')
+                        .any(|encoding| encoding.trim().eq_ignore_ascii_case("chunked"))
+            })
+            .unwrap_or(false)
+    });
+
+    if !chunked {
+        return Ok(response);
+    }
+
+    let decoded = decode_chunked_body(&body)?;
+    let mut normalized = String::with_capacity(headers.len() + 4 + decoded.len());
+    normalized.push_str(headers);
+    normalized.push_str("\r\n\r\n");
+    normalized.push_str(
+        std::str::from_utf8(&decoded)
+            .map_err(|_| "Admin API response body is not valid UTF-8".to_string())?,
+    );
+    Ok(normalized)
+}
+
 fn raw_http_request(
     method: &str,
     path: &str,
@@ -68,17 +142,10 @@ fn raw_http_request(
 
     let cookie_header = cookie
         .filter(|value| !value.is_empty())
-        .map(|value| format!("Cookie: {value}
-"))
+        .map(|value| format!("Cookie: {value}\r\n"))
         .unwrap_or_default();
     let request = format!(
-        "{method} {path} HTTP/1.1
-Host: {CONTROL_HOST}
-{cookie_header}Content-Type: application/json
-Content-Length: {}
-Connection: close
-
-{payload}",
+        "{method} {path} HTTP/1.1\r\nHost: {CONTROL_HOST}\r\n{cookie_header}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
         payload.as_bytes().len()
     );
     stream
@@ -94,12 +161,15 @@ Connection: close
         if read == 0 {
             break;
         }
-        if response.len() + read > MAX_RESPONSE_BYTES {
+        if response.len() + read > MAX_RESPONSE_BYTES * 2 {
             return Err("Admin API response is too large".into());
         }
         response.extend_from_slice(&chunk[..read]);
     }
-    String::from_utf8(response).map_err(|_| "Admin API response is not valid UTF-8".to_string())
+
+    let response = String::from_utf8(response)
+        .map_err(|_| "Admin API response is not valid UTF-8".to_string())?;
+    normalize_http_response(response)
 }
 
 fn response_status_line(response: &str) -> &str {
@@ -115,18 +185,14 @@ fn response_status_code(response: &str) -> Option<u16> {
 
 fn response_body(response: &str) -> Result<&str, String> {
     let start = response
-        .find("
-
-")
+        .find("\r\n\r\n")
         .ok_or_else(|| "Malformed Admin API response".to_string())?
         + 4;
     Ok(&response[start..])
 }
 
 fn response_cookie_header(response: &str) -> Option<String> {
-    let header_block = response.split("
-
-").next().unwrap_or_default();
+    let header_block = response.split("\r\n\r\n").next().unwrap_or_default();
     let cookies = header_block
         .lines()
         .filter_map(|line| {
@@ -258,6 +324,25 @@ fn admin_request(
     let _: Value = serde_json::from_str(response_body)
         .map_err(|_| "Invalid Admin API JSON".to_string())?;
     Ok(response_body.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_chunked_body;
+
+    #[test]
+    fn decodes_chunked_json_response_body() {
+        let encoded = b"7\r\n{\"ok\":\r\n5\ntrue}\r\n0\r\n\r\n";
+        let decoded = decode_chunked_body(encoded).expect("chunked response should decode");
+        assert_eq!(decoded, b"{\"ok\":true}");
+    }
+
+    #[test]
+    fn accepts_chunk_extensions() {
+        let encoded = b"5;foo=bar\r\nhello\r\n0\r\n\r\n";
+        let decoded = decode_chunked_body(encoded).expect("chunk extension should be accepted");
+        assert_eq!(decoded, b"hello");
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
