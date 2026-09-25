@@ -9,11 +9,39 @@ const RUNNING = 'app\npostgres\ntor\n';
 const ok = { ok: true, code: 0, stdout: '', stderr: '' };
 const configured = () => ({ ...ok, name: 'configuration' });
 
+test('HEALTH_CHECK runs the full infrastructure health check instead of a plain compose ps', async () => {
+  const calls = [];
+  const runner = async (file, args) => {
+    calls.push([file, ...args]);
+    if (args.includes('--services')) return { ...ok, stdout: RUNNING };
+    if (args.includes('config') && args.includes('--volumes')) return { ...ok, stdout: 'postgres_data\n' };
+    return ok;
+  };
+  const controller = createAdminController({
+    runner,
+    probe: async () => ok,
+    backendProbeFn: async () => ({ ...ok, code: 200 }),
+    configurationProbe: configured
+  });
+
+  const result = await controller.run('HEALTH_CHECK');
+
+  assert.equal(result.ok, true);
+  assert.ok(result.checks.some((check) => check.name === 'postgresql'));
+  assert.ok(result.checks.some((check) => check.name === 'onionService'));
+  assert.ok(result.checks.some((check) => check.name === 'storage'));
+  assert.ok(calls.some((entry) => entry.includes('pg_isready')));
+  assert.ok(calls.some((entry) => entry.includes('/data/hostname')));
+  assert.ok(calls.some((entry) => entry.includes('config') && entry.includes('--volumes')));
+  assert.ok(!calls.some((entry) => entry.includes('ps') && !entry.includes('--services')));
+});
+
 test('RECOVER performs targeted repair then verifies every infrastructure dependency', async () => {
   const calls = [];
   const runner = async (file, args) => {
     calls.push([file, ...args]);
     if (args.includes('--services')) return { ...ok, stdout: RUNNING };
+    if (args.includes('config') && args.includes('--volumes')) return { ...ok, stdout: 'postgres_data\n' };
     return ok;
   };
   const probes = [];
@@ -45,6 +73,7 @@ test('RECOVER does not restart unrelated services when a target is supplied', as
   const runner = async (file, args) => {
     calls.push([file, ...args]);
     if (args.includes('--services')) return { ...ok, stdout: RUNNING };
+    if (args.includes('config') && args.includes('--volumes')) return { ...ok, stdout: 'postgres_data\n' };
     return ok;
   };
   const controller = createAdminController({
