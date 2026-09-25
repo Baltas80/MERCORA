@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAdminController } from './admin-control.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createAdminController, configurationCheck } from './admin-control.js';
 
 const RUNNING = 'app\npostgres\ntor\n';
 const ok = { ok: true, code: 0, stdout: '', stderr: '' };
@@ -80,4 +83,30 @@ test('RECOVER blocks before Docker operations when required compose configuratio
   assert.equal(result.target, null);
   assert.deepEqual(calls, []);
   assert.match(result.steps[0].result.stderr, /POSTGRES_PASSWORD is not configured/);
+});
+
+test('configurationCheck accepts a non-empty POSTGRES_PASSWORD from the Compose .env file without exposing it', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'mercora-compose-'));
+  try {
+    fs.writeFileSync(path.join(cwd, '.env'), 'POSTGRES_PASSWORD=super-secret-value\n', 'utf8');
+    const result = configurationCheck(cwd);
+    assert.equal(result.ok, true);
+    assert.equal(result.stdout, 'required compose configuration detected');
+    assert.equal(result.stderr, '');
+    assert.doesNotMatch(result.stdout, /super-secret-value/);
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('configurationCheck rejects an empty Compose .env password', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'mercora-compose-'));
+  try {
+    fs.writeFileSync(path.join(cwd, '.env'), 'POSTGRES_PASSWORD=\n', 'utf8');
+    const result = configurationCheck(cwd);
+    assert.equal(result.ok, false);
+    assert.match(result.stderr, /POSTGRES_PASSWORD is not configured/);
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
 });
