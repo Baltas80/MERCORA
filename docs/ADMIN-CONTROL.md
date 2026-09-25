@@ -49,8 +49,10 @@ After a targeted repair, the controller verifies the operational chain:
 4. PostgreSQL readiness.
 5. Required Compose services, including Tor.
 6. Onion Service hostname availability.
-7. Persistent storage availability.
+7. Persistent storage definition (`postgres_data`) from the active Compose configuration.
 8. Aggregate health.
+
+The storage check deliberately does not assume Docker's project-name prefix, so `COMPOSE_PROJECT_NAME` or a different working-directory name cannot create a false storage failure.
 
 The recovery result includes the target component, whether the targeted repair succeeded, whether that target passed its health criteria, and the sanitized verification results.
 
@@ -70,6 +72,7 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** Compose configuration preflight before recovery Docker operations.
 - **IMPLEMENTED:** Compose `.env` fallback detection without returning secret values.
 - **IMPLEMENTED:** regression tests for targeted recovery and missing/valid Compose configuration.
+- **IMPLEMENTED:** project-name-independent persistent-storage health check.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
