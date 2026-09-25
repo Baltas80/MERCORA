@@ -52,6 +52,8 @@ After a targeted repair, the controller verifies the operational chain:
 7. Persistent storage definition (`postgres_data`) from the active Compose configuration.
 8. Aggregate health.
 
+`HEALTH_CHECK` invokes this same full diagnostic path directly. It does not merely execute `docker compose ps`, so the console receives backend, database, Tor, Onion Service, storage, configuration, Node.js, Docker, and aggregate health results.
+
 The storage check deliberately does not assume Docker's project-name prefix, so `COMPOSE_PROJECT_NAME` or a different working-directory name cannot create a false storage failure.
 
 The recovery result includes the target component, whether the targeted repair succeeded, whether that target passed its health criteria, and the sanitized verification results.
@@ -73,6 +75,7 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** Compose `.env` fallback detection without returning secret values.
 - **IMPLEMENTED:** regression tests for targeted recovery and missing/valid Compose configuration.
 - **IMPLEMENTED:** project-name-independent persistent-storage health check.
+- **IMPLEMENTED:** `HEALTH_CHECK` full diagnostic path rather than a plain Compose status query.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
