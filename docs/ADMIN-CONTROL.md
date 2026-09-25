@@ -67,6 +67,8 @@ The Compose override now explicitly sets:
 - `DIRPORT=0`
 - `EXITPOLICY=reject *:*`
 
+The Tor image is pinned to `svengo/tor:0.4.9.12`, the newest version currently published by the selected image maintainer. Tor 0.4.9.12 is a security release; keeping MERCORA on the older 0.4.9.11 image would leave it behind a known upstream security update.
+
 The Admin Control health check also reads the generated `/etc/tor/torrc-defaults` inside the real Tor container and fails unless both `ORPort` and `DirPort` are `0`. This prevents a future image/default change from silently turning MERCORA into a relay again.
 
 The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps the persistent `tor_data` volume, and mounts the application Tor configuration read-only at `/data/torrc`. The selected image's entrypoint creates `/etc/tor/torrc-defaults` during startup, so the Tor service must not use a global container `read_only: true` filesystem setting.
@@ -84,6 +86,7 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** project-name-independent persistent-storage health check.
 - **IMPLEMENTED:** effective Tor relay-listener health check.
 - **IMPLEMENTED:** Tor Compose override disables ORPort and DirPort.
+- **IMPLEMENTED:** Tor image upgraded to `0.4.9.12`.
 - **IMPLEMENTED:** `HEALTH_CHECK` full diagnostic path rather than a plain Compose status query.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
 - **IMPLEMENTED:** no-shell Docker invocation.
