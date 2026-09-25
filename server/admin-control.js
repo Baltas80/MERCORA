@@ -111,12 +111,15 @@ function configurationCheck(cwd = process.cwd()) {
   };
 }
 
+export { configurationCheck };
+
 export function createAdminController({ cwd = path.resolve(process.cwd()), runner = defaultRunner, probe = defaultProbe, backendProbeFn = backendProbe, configurationProbe } = {}) {
   const configurationProbeFn = configurationProbe ?? (() => configurationCheck(cwd));
 
   async function run(action, service) {
-    const args = composeArgs(action, service);
     if (action === 'STATUS') return status();
+    if (action === 'HEALTH_CHECK') return healthCheck();
+    const args = composeArgs(action, service);
     if (args) return sanitizeResult(await runner('docker', args, { cwd }));
     if (action === 'RECOVER') return recover(service);
     throw new Error('Unsupported admin action');
