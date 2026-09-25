@@ -4,6 +4,7 @@ import { createAdminController } from './admin-control.js';
 
 const RUNNING = 'app\npostgres\ntor\n';
 const ok = { ok: true, code: 0, stdout: '', stderr: '' };
+const configured = () => ({ ...ok, name: 'configuration' });
 
 test('RECOVER performs targeted repair then verifies every infrastructure dependency', async () => {
   const calls = [];
@@ -19,7 +20,7 @@ test('RECOVER performs targeted repair then verifies every infrastructure depend
   };
   const backendProbeFn = async () => ({ ...ok, code: 200, stdout: 'backend 200' });
 
-  const controller = createAdminController({ runner, probe, backendProbeFn });
+  const controller = createAdminController({ runner, probe, backendProbeFn, configurationProbe: configured });
   const result = await controller.run('RECOVER', 'tor');
 
   assert.equal(result.ok, true);
@@ -46,7 +47,8 @@ test('RECOVER does not restart unrelated services when a target is supplied', as
   const controller = createAdminController({
     runner,
     probe: async () => ok,
-    backendProbeFn: async () => ({ ...ok, code: 200 })
+    backendProbeFn: async () => ({ ...ok, code: 200 }),
+    configurationProbe: configured
   });
 
   const result = await controller.run('RECOVER', 'postgres');
@@ -55,4 +57,27 @@ test('RECOVER does not restart unrelated services when a target is supplied', as
   assert.deepEqual(repairCommands, [['docker', 'compose', '-f', 'docker-compose.yml', 'restart', 'postgres']]);
   assert.equal(calls.filter((entry) => entry.includes('restart')).length, 1);
   assert.equal(calls.filter((entry) => entry.includes('up')).length, 0);
+});
+
+test('RECOVER blocks before Docker operations when required compose configuration is missing', async () => {
+  const calls = [];
+  const controller = createAdminController({
+    runner: async (file, args) => {
+      calls.push([file, ...args]);
+      return ok;
+    },
+    configurationProbe: () => ({
+      ok: false,
+      code: null,
+      stdout: '',
+      stderr: 'POSTGRES_PASSWORD is not configured for Docker Compose'
+    })
+  });
+
+  const result = await controller.run('RECOVER', 'tor');
+  assert.equal(result.ok, false);
+  assert.equal(result.blocked, true);
+  assert.equal(result.target, null);
+  assert.deepEqual(calls, []);
+  assert.match(result.steps[0].result.stderr, /POSTGRES_PASSWORD is not configured/);
 });
