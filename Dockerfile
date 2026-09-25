@@ -12,8 +12,7 @@ RUN npm ci --omit=dev --ignore-scripts \
 
 COPY server ./server
 COPY web ./web
-COPY docker-compose.yml docker-compose.onion.yml ./
-COPY tor ./tor
+COPY docker-compose.onion.yml ./
 
 RUN addgroup -S mercora && adduser -S mercora -G mercora \
     && chown -R mercora:mercora /app
