@@ -36,7 +36,7 @@ test('RECOVER performs targeted repair then verifies every infrastructure depend
   assert.ok(calls.some((entry) => entry.includes('--services')));
   assert.ok(calls.some((entry) => entry.includes('pg_isready')));
   assert.ok(calls.some((entry) => entry.includes('/data/hostname')));
-  assert.ok(probes.some(([file, ...args]) => file === 'docker' && args[0] === 'volume'));
+  assert.ok(calls.some((entry) => entry.includes('config') && entry.includes('--volumes')));
   assert.ok(result.steps.some((step) => step.step === 'health'));
 });
 
