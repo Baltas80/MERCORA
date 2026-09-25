@@ -67,6 +67,17 @@ function allServicesRunning(stdout = '') {
   return REQUIRED_SERVICES.every((service) => serviceRunning(stdout, service));
 }
 
+function configurationCheck() {
+  const configured = typeof process.env.POSTGRES_PASSWORD === 'string' && process.env.POSTGRES_PASSWORD.length > 0;
+  return {
+    name: 'configuration',
+    ok: configured,
+    code: configured ? 0 : null,
+    stdout: configured ? 'required compose secrets configured' : '',
+    stderr: configured ? '' : 'POSTGRES_PASSWORD is not configured for Docker Compose'
+  };
+}
+
 export function createAdminController({ cwd = path.resolve(process.cwd()), runner = defaultRunner, probe = defaultProbe, backendProbeFn = backendProbe } = {}) {
   async function run(action, service) {
     const args = composeArgs(action, service);
@@ -95,6 +106,18 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
 
   async function recover(service) {
     if (service !== undefined && !ALLOWED_SERVICES.has(service)) throw new Error('Unsupported service');
+
+    const configuration = configurationCheck();
+    if (!configuration.ok) {
+      return {
+        ok: false,
+        target: null,
+        targetHealthy: false,
+        repaired: false,
+        blocked: true,
+        steps: [{ step: 'configuration', result: configuration }]
+      };
+    }
 
     let target = service;
     const steps = [];
@@ -127,6 +150,7 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
 
   async function healthCheck() {
     const checks = [];
+    checks.push(configurationCheck());
     checks.push(named('node', await probe('node', ['--version'], { cwd })));
     checks.push(named('docker', await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd })));
     checks.push(named('backend', await backendProbeFn()));
@@ -154,6 +178,7 @@ function named(name, result) { return { name, ...sanitizeResult(result) }; }
 
 function selectRecoveryTarget(health) {
   const checks = Object.fromEntries(health.checks.map((check) => [check.name, check]));
+  if (!checks.configuration?.ok) return null;
   if (!checks.postgresql?.ok || !checks.services?.postgresRunning) return 'postgres';
   if (!checks.backend?.ok || !checks.services?.appRunning) return 'app';
   if (!checks.onionService?.ok || !checks.services?.torRunning) return 'tor';
