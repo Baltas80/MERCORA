@@ -35,9 +35,11 @@ Diagnostics are truncated and filtered to remove common secret-bearing lines and
 
 ## Recovery model
 
-`RECOVER` repairs only the requested component first. A failed restart falls back to starting that same component. It does not restart the entire stack unnecessarily.
+`RECOVER` with an explicit component repairs only that requested component first. A failed restart falls back to starting that same component.
 
-After the targeted repair, the controller verifies the operational chain:
+`RECOVER` without a component first performs a health diagnosis and selects only the affected component in dependency order: PostgreSQL, backend/app, then Tor. If the entire stack is healthy, no restart is performed. It does not restart the entire stack unnecessarily.
+
+After a targeted repair, the controller verifies the operational chain:
 
 1. Node.js and Docker availability.
 2. Backend health.
@@ -60,10 +62,12 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** allowlisted START/STOP/RESTART/STATUS/HEALTH_CHECK/RECOVER operations.
 - **IMPLEMENTED:** loopback-only Admin Control API.
 - **IMPLEMENTED:** Better Auth username/password session authentication with admin-role authorization.
-- **IMPLEMENTED:** targeted recovery with dependency verification.
+- **IMPLEMENTED:** targeted recovery with diagnosis-first selection when no component is specified.
+- **IMPLEMENTED:** no-restart path when the stack is already healthy.
+- **IMPLEMENTED:** regression tests for targeted recovery and unsupported services.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
 - **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
+- **PENDING:** CI result for the latest recovery hardening commit; GitHub currently reports no status yet.
 - **PENDING:** live Windows runtime verification of PostgreSQL + backend + Tor + Onion Service after the Tor compose change.
-- **PENDING:** successful CI run for the latest commit; the previous CI run failed because the owner-bootstrap path test hard-coded Windows path separators. The test has now been corrected and a new CI run is queued.
