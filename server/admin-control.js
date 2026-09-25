@@ -73,7 +73,7 @@ function hasNonEmptyEnvAssignment(content, name) {
   const match = String(content).match(new RegExp(`^\\s*${escaped}\\s*=\\s*(.*?)\\s*$`, 'm'));
   if (!match) return false;
   const value = match[1].trim();
-  return value.length > 0 && value !== '""' && value !== "''";
+  return value.length > 0 && value !== '\"\"' && value !== "''";
 }
 
 function configurationCheck(cwd = process.cwd()) {
@@ -202,7 +202,18 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
     });
     checks.at(-1).ok = checks.at(-1).ok && allServicesRunning(composeServices?.stdout);
     checks.push(named('onionService', await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd })));
-    checks.push(named('storage', await probe('docker', ['volume', 'inspect', 'mercora_postgres_data'], { cwd })));
+
+    // Verify the Compose-defined persistent volume without assuming Docker's
+    // project-name prefix (which varies with directory/COMPOSE_PROJECT_NAME).
+    const volumes = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'config', '--volumes'], { cwd });
+    const volumeCheck = sanitizeResult(volumes);
+    const definedVolumes = new Set(String(volumes?.stdout ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+    checks.push({
+      name: 'storage',
+      ...volumeCheck,
+      ok: volumeCheck.ok && definedVolumes.has('postgres_data'),
+      stdout: volumeCheck.ok ? 'postgres_data configured' : volumeCheck.stdout
+    });
 
     return { ok: checks.every((item) => item.ok), checks, platform: os.platform() };
   }
