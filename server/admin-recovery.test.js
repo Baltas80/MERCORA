@@ -136,3 +136,11 @@ test('configurationCheck rejects an empty Compose .env password', () => {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test('Onion Compose enforces non-relay Tor configuration', () => {
+  const compose = fs.readFileSync(path.resolve(process.cwd(), 'docker-compose.onion.yml'), 'utf8');
+  assert.match(compose, /tor\/torrc\.onion\.secure:\/data\/torrc:ro/);
+  assert.match(compose, /--ORPort[\s\S]*?"0"/);
+  assert.match(compose, /--DirPort[\s\S]*?"0"/);
+  assert.match(compose, /--ExitPolicy[\s\S]*?reject \*:\*/);
+});
