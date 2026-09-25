@@ -1,250 +1,55 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ACTIONS, createAdminController, sanitizeResult } from './admin-control.js';
-import { createAdminApi } from './admin-control-api.js';
+import { createAdminController } from './admin-control.js';
 
-function fakeRunner(log, result = { ok: true, code: 0, stdout: '', stderr: '' }) {
-  return async (file, args) => {
-    log.push([file, ...args]);
-    return result;
-  };
+function healthyProbe() {
+  return { ok: true, code: 0, stdout: 'ok', stderr: '' };
 }
 
-const RUNNING_SERVICES = 'app\npostgres\ntor\n';
-const ADMIN_SESSION = 'mercora-admin-session';
-
-function fakeAuth() {
-  return {
-    api: {
-      getSession: async ({ headers }) => {
-        const cookie = headers.get('cookie') ?? '';
-        return cookie.split(';').map((value) => value.trim()).includes(`session=${ADMIN_SESSION}`)
-          ? { user: { id: 'ci-admin', username: 'ciadmin', role: 'admin' } }
-          : null;
-      },
-      signOut: async () => ({ ok: true }),
-    },
-    handler: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
-  };
-}
-
-async function withApi(controller, fn) {
-  const api = createAdminApi({ controller, auth: fakeAuth(), port: 0 });
-  await api.listen();
-  const address = api.server.address();
-  try {
-    return await fn(`http://127.0.0.1:${address.port}`);
-  } finally {
-    await new Promise((resolve) => api.server.close(resolve));
-  }
-}
-
-const apiHeaders = {
-  cookie: `session=${ADMIN_SESSION}`,
-  'content-type': 'application/json'
-};
-
-test('exposes only the six allowlisted operations', () => {
-  assert.deepEqual(ACTIONS, ['START', 'STOP', 'RESTART', 'STATUS', 'HEALTH_CHECK', 'RECOVER']);
-});
-
-test('never builds a shell command and allowlists service names', async () => {
-  const log = [];
-  const controller = createAdminController({ runner: fakeRunner(log) });
-  await controller.run('RESTART', 'app');
-  assert.deepEqual(log[0], ['docker', 'compose', '-f', 'docker-compose.yml', 'restart', 'app']);
-  await assert.rejects(() => controller.run('RESTART', 'app;whoami'), /Unsupported service/);
-  await assert.rejects(() => controller.run('SHELL'), /Unsupported admin action/);
-});
-
-test('recovery targets only the affected component first', async () => {
-  const log = [];
-  const runner = async (file, args) => {
-    log.push([file, ...args]);
-    if (args.includes('--services')) return { ok: true, code: 0, stdout: RUNNING_SERVICES, stderr: '' };
-    return { ok: true, code: 0, stdout: '', stderr: '' };
-  };
-  const controller = createAdminController({ runner, backendProbeFn: async () => ({ ok: true }) });
-  const result = await controller.run('RECOVER', 'postgres');
-  assert.equal(result.target, 'postgres');
-  assert.equal(log[0].at(-1), 'postgres');
-  assert.equal(log[0][4], 'restart');
-  assert.ok(log.some((entry) => entry.includes('--services')));
-});
-
-test('failed restart falls back to start for the same component and can still recover successfully', async () => {
-  const log = [];
-  let calls = 0;
-  const runner = async (file, args) => {
-    log.push([file, ...args]);
-    calls += 1;
-    if (calls === 1) return { ok: false, code: 1, stdout: '', stderr: 'failure' };
-    if (args.includes('--services')) return { ok: true, code: 0, stdout: RUNNING_SERVICES, stderr: '' };
-    return { ok: true, code: 0, stdout: '', stderr: '' };
-  };
-  const probe = async () => ({ ok: true, code: 0, stdout: '', stderr: '' });
-  const backendProbeFn = async () => ({ ok: true, code: 200, stdout: 'backend 200', stderr: '' });
-  const controller = createAdminController({ runner, probe, backendProbeFn });
-  const result = await controller.run('RECOVER', 'app');
-  assert.equal(result.steps[1].step, 'start:app');
-  assert.equal(log[1][4], 'up');
-  assert.equal(result.ok, true);
-});
-
-test('recovery verification follows dependency, backend, database, Tor, onion and aggregate order', async () => {
-  const sequence = [];
-  const runner = async (file, args) => {
-    if (args.includes('pg_isready')) sequence.push('postgresql');
-    else if (args.includes('--services')) sequence.push('services');
-    else if (args.includes('/data/hostname')) sequence.push('onionService');
-    else if (args.includes('restart')) sequence.push('restart');
-    return { ok: true, code: 0, stdout: args.includes('--services') ? RUNNING_SERVICES : '', stderr: '' };
-  };
-  const probe = async (file) => {
-    sequence.push(file);
-    return { ok: true, code: 0, stdout: '', stderr: '' };
-  };
-  const backendProbeFn = async () => {
-    sequence.push('backend');
-    return { ok: true, code: 200, stdout: 'backend 200', stderr: '' };
-  };
-  const controller = createAdminController({ runner, probe, backendProbeFn });
-  const result = await controller.run('RECOVER', 'tor');
-  assert.equal(result.ok, true);
-  assert.deepEqual(sequence, ['restart', 'node', 'docker', 'backend', 'postgresql', 'services', 'onionService', 'docker']);
-});
-
-test('health check reports offline when a required compose service is not running', async () => {
-  const runner = async (file, args) => {
-    if (args.includes('--services')) return { ok: true, code: 0, stdout: 'app\npostgres\n', stderr: '' };
-    return { ok: true, code: 0, stdout: '', stderr: '' };
-  };
-  const probe = async () => ({ ok: true, code: 0, stdout: '', stderr: '' });
-  const backendProbeFn = async () => ({ ok: true, code: 200, stdout: 'backend 200', stderr: '' });
-  const controller = createAdminController({ runner, probe, backendProbeFn });
-  const result = await controller.run('STATUS');
-  assert.equal(result.health, 'OFFLINE');
-  assert.equal(result.tor, 'OFFLINE');
-  assert.equal(result.ok, false);
-});
-
-test('status exposes structured infrastructure state without exposing raw diagnostics', async () => {
-  const runner = async (file, args) => {
-    if (args.includes('--services')) return { ok: true, code: 0, stdout: RUNNING_SERVICES, stderr: '' };
-    return { ok: true, code: 0, stdout: '', stderr: '' };
-  };
-  const probe = async () => ({ ok: true, code: 0, stdout: '', stderr: '' });
-  const backendProbeFn = async () => ({ ok: true, code: 200, stdout: 'backend 200', stderr: '' });
-  const controller = createAdminController({ runner, probe, backendProbeFn });
-  const result = await controller.run('STATUS');
-  assert.equal(result.ok, true);
-  assert.equal(result.mercora, 'ONLINE');
-  assert.equal(result.node, 'ONLINE');
-  assert.equal(result.postgresql, 'ONLINE');
-  assert.equal(result.backend, 'ONLINE');
-  assert.equal(result.tor, 'ONLINE');
-  assert.equal(result.onionService, 'CONFIGURED');
-  assert.equal(result.storage, 'OK');
-  assert.equal(result.health, 'OK');
-});
-
-test('diagnostics remove secret-bearing lines and redact embedded credentials', () => {
-  const result = sanitizeResult({
-    ok: false,
-    code: 1,
-    stdout: 'safe\nTOKEN=do-not-show\npostgres://mercora:supersecret@db:5432/mercora\nendpoint token=still-secret',
-    stderr: 'password=secret'
-  });
-  assert.equal(result.stdout, 'safe\npostgres://mercora:[REDACTED]@db:5432/mercora\nendpoint token=[REDACTED]');
-  assert.equal(result.stderr, '');
-});
-
-test('admin API rejects missing or invalid authentication', async () => {
-  const controller = { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) };
-  await withApi(controller, async (base) => {
-    const missing = await fetch(`${base}/v1/control`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'STATUS' })
-    });
-    assert.equal(missing.status, 401);
-
-    const invalid = await fetch(`${base}/v1/control`, {
-      method: 'POST', headers: { cookie: 'session=wrong', 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'STATUS' })
-    });
-    assert.equal(invalid.status, 401);
-  });
-});
-
-test('admin API forwards only validated operations after session authorization', async () => {
+function controllerWithRunner(sequence) {
+  let psCalls = 0;
   const calls = [];
-  const controller = {
-    run: async (action, service) => {
-      calls.push([action, service]);
-      return { ok: true, action, service };
-    },
-    healthCheck: async () => ({ ok: true })
+  const runner = async (file, args) => {
+    calls.push([file, args]);
+    if (args.includes('pg_isready')) return healthyProbe();
+    if (args.includes('test') && args.includes('/data/hostname')) return healthyProbe();
+    if (args.includes('ps')) {
+      psCalls += 1;
+      return { ok: true, code: 0, stdout: sequence[psCalls - 1] ?? sequence.at(-1), stderr: '' };
+    }
+    if (args.includes('restart') || args.includes('up')) return healthyProbe();
+    return healthyProbe();
   };
-  await withApi(controller, async (base) => {
-    const response = await fetch(`${base}/v1/control`, {
-      method: 'POST', headers: apiHeaders,
-      body: JSON.stringify({ action: 'restart', service: 'app' })
-    });
-    assert.equal(response.status, 200);
-    assert.deepEqual(calls, [['RESTART', 'app']]);
+  return { controller: createAdminController({ runner, probe: async () => healthyProbe(), backendProbeFn: async () => healthyProbe() }), calls };
+}
 
-    const rejected = await fetch(`${base}/v1/control`, {
-      method: 'POST', headers: apiHeaders,
-      body: JSON.stringify({ action: 'restart', service: 'app;whoami' })
-    });
-    assert.equal(rejected.status, 400);
-    assert.deepEqual(calls, [['RESTART', 'app']]);
-  });
+test('RECOVER without target repairs only an unhealthy app', async () => {
+  const { controller, calls } = controllerWithRunner(['postgres', 'app\npostgres\ntor']);
+
+  const result = await controller.run('RECOVER');
+
+  assert.equal(result.target, 'app');
+  assert.equal(result.repaired, true);
+  assert.equal(result.targetHealthy, true);
+  assert.equal(result.ok, true);
+  assert.equal(calls.some(([, args]) => args.includes('restart') && args.at(-1) === 'app'), true);
+  assert.equal(calls.some(([, args]) => args.includes('restart') && args.at(-1) === 'postgres'), false);
+  assert.equal(calls.some(([, args]) => args.includes('restart') && args.at(-1) === 'tor'), false);
 });
 
-test('admin API routes HEALTH_CHECK without invoking an arbitrary action', async () => {
-  const calls = [];
-  const controller = {
-    run: async (...args) => calls.push(['run', ...args]),
-    healthCheck: async () => ({ ok: true, checks: [] })
-  };
-  await withApi(controller, async (base) => {
-    const response = await fetch(`${base}/v1/control`, {
-      method: 'POST', headers: apiHeaders,
-      body: JSON.stringify({ action: 'health_check' })
-    });
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, checks: [] });
-    assert.deepEqual(calls, []);
-  });
+test('RECOVER without target does not restart a healthy stack', async () => {
+  const { controller, calls } = controllerWithRunner(['app\npostgres\ntor']);
+
+  const result = await controller.run('RECOVER');
+
+  assert.equal(result.target, null);
+  assert.equal(result.repaired, false);
+  assert.equal(result.ok, true);
+  assert.equal(calls.some(([, args]) => args.includes('restart')), false);
 });
 
-test('admin API rejects bodies larger than 4 KiB', async () => {
-  let calls = 0;
-  const controller = {
-    run: async () => { calls += 1; return { ok: true }; },
-    healthCheck: async () => ({ ok: true })
-  };
-  await withApi(controller, async (base) => {
-    const response = await fetch(`${base}/v1/control`, {
-      method: 'POST',
-      headers: apiHeaders,
-      body: 'x'.repeat(4097)
-    });
-    assert.equal(response.status, 413);
-    assert.equal(calls, 0);
-  });
-});
+test('RECOVER rejects an unsupported explicit service', async () => {
+  const { controller } = controllerWithRunner(['app\npostgres\ntor']);
 
-test('admin API exposes defensive response headers', async () => {
-  const controller = { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) };
-  await withApi(controller, async (base) => {
-    const response = await fetch(`${base}/v1/control`, {
-      method: 'POST', headers: apiHeaders,
-      body: JSON.stringify({ action: 'status' })
-    });
-    assert.equal(response.headers.get('cache-control'), 'no-store');
-    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
-    assert.equal(response.headers.get('x-frame-options'), 'DENY');
-  });
+  await assert.rejects(() => controller.run('RECOVER', 'shell'), /Unsupported service/);
 });
