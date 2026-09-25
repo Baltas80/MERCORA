@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -67,18 +68,52 @@ function allServicesRunning(stdout = '') {
   return REQUIRED_SERVICES.every((service) => serviceRunning(stdout, service));
 }
 
-function configurationCheck() {
-  const configured = typeof process.env.POSTGRES_PASSWORD === 'string' && process.env.POSTGRES_PASSWORD.length > 0;
+function hasNonEmptyEnvAssignment(content, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = String(content).match(new RegExp(`^\\s*${escaped}\\s*=\\s*(.*?)\\s*$`, 'm'));
+  if (!match) return false;
+  const value = match[1].trim();
+  return value.length > 0 && value !== '""' && value !== "''";
+}
+
+function configurationCheck(cwd = process.cwd()) {
+  if (typeof process.env.POSTGRES_PASSWORD === 'string' && process.env.POSTGRES_PASSWORD.length > 0) {
+    return {
+      name: 'configuration',
+      ok: true,
+      code: 0,
+      stdout: 'required compose configuration detected',
+      stderr: ''
+    };
+  }
+
+  try {
+    const envFile = fs.readFileSync(path.join(cwd, '.env'), 'utf8');
+    if (hasNonEmptyEnvAssignment(envFile, 'POSTGRES_PASSWORD')) {
+      return {
+        name: 'configuration',
+        ok: true,
+        code: 0,
+        stdout: 'required compose configuration detected',
+        stderr: ''
+      };
+    }
+  } catch {
+    // Missing or unreadable .env is handled as missing configuration below.
+  }
+
   return {
     name: 'configuration',
-    ok: configured,
-    code: configured ? 0 : null,
-    stdout: configured ? 'required compose secrets configured' : '',
-    stderr: configured ? '' : 'POSTGRES_PASSWORD is not configured for Docker Compose'
+    ok: false,
+    code: null,
+    stdout: '',
+    stderr: 'POSTGRES_PASSWORD is not configured for Docker Compose'
   };
 }
 
-export function createAdminController({ cwd = path.resolve(process.cwd()), runner = defaultRunner, probe = defaultProbe, backendProbeFn = backendProbe, configurationProbe = configurationCheck } = {}) {
+export function createAdminController({ cwd = path.resolve(process.cwd()), runner = defaultRunner, probe = defaultProbe, backendProbeFn = backendProbe, configurationProbe } = {}) {
+  const configurationProbeFn = configurationProbe ?? (() => configurationCheck(cwd));
+
   async function run(action, service) {
     const args = composeArgs(action, service);
     if (action === 'STATUS') return status();
@@ -107,7 +142,7 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
   async function recover(service) {
     if (service !== undefined && !ALLOWED_SERVICES.has(service)) throw new Error('Unsupported service');
 
-    const configuration = configurationProbe();
+    const configuration = configurationProbeFn();
     if (!configuration.ok) {
       return {
         ok: false,
@@ -150,7 +185,7 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
 
   async function healthCheck() {
     const checks = [];
-    checks.push(sanitizeResult(configurationProbe()));
+    checks.push(sanitizeResult(configurationProbeFn()));
     checks[0].name = 'configuration';
     checks.push(named('node', await probe('node', ['--version'], { cwd })));
     checks.push(named('docker', await probe('docker', ['version', '--format', '{{.Server.Version}}'], { cwd })));
