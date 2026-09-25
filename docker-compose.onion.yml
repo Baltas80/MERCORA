@@ -10,6 +10,10 @@ services:
     # The image entrypoint generates /etc/tor/torrc-defaults at startup,
     # so the container filesystem cannot be globally read-only.
     # Keep privilege reduction in place and expose only the persistent /data volume.
+    environment:
+      ORPORT: "0"
+      DIRPORT: "0"
+      EXITPOLICY: "reject *:*"
     security_opt:
       - no-new-privileges:true
     cap_drop:
