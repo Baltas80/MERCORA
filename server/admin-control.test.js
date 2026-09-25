@@ -26,7 +26,15 @@ function controllerWithRunner(sequence) {
     if (args.includes('restart') || args.includes('up')) return healthyProbe();
     return healthyProbe();
   };
-  return { controller: createAdminController({ runner, probe: async () => healthyProbe(), backendProbeFn: async () => healthyProbe() }), calls };
+  return {
+    controller: createAdminController({
+      runner,
+      probe: async () => healthyProbe(),
+      backendProbeFn: async () => healthyProbe(),
+      configurationProbe: () => ({ ok: true, code: 0, stdout: 'required compose configuration detected', stderr: '' })
+    }),
+    calls
+  };
 }
 
 test('RECOVER without target repairs only an unhealthy app', async () => {
