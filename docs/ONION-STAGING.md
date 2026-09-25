@@ -17,6 +17,8 @@ docker compose -f docker-compose.yml -f docker-compose.onion.yml up -d --build
 
 The application remains bound to loopback on the host and is reachable by the Tor container only through the private Docker `onion_edge` network. The Tor container has a separate egress network so it can join the Tor network without giving the application direct Internet egress.
 
+The Onion Service container is explicitly configured as a client/Onion-Service process, not a public relay: `ORPort 0`, `DirPort 0`, and `ExitPolicy reject *:*` are enforced in the service configuration and again on the Tor command line. Image defaults are not treated as the effective MERCORA configuration.
+
 ## Obtain the Onion address
 
 ```bash
@@ -54,9 +56,19 @@ Do not expose or commit `hs_ed25519_secret_key` or any other generated Onion Ser
 
 ```bash
 curl --fail http://127.0.0.1:8080/api/healthz
+docker compose -f docker-compose.yml -f docker-compose.onion.yml exec tor grep -E '^(ORPort|DirPort|ExitPolicy)[[:space:]]+' /data/torrc
+docker compose -f docker-compose.yml -f docker-compose.onion.yml exec tor test -s /data/mercora/hostname
 ```
 
-Expected response:
+Expected Tor configuration includes:
+
+```text
+ORPort 0
+DirPort 0
+ExitPolicy reject *:*
+```
+
+Expected application response:
 
 ```json
 {"status":"ok"}
@@ -66,6 +78,8 @@ Expected response:
 
 - `SocksPort 0`: no Tor SOCKS proxy is exposed by the service configuration.
 - `ControlPort 0`: no Tor control interface is exposed by the service configuration.
+- `ORPort 0` and `DirPort 0`: the staging process does not accept public relay or directory traffic.
+- `ExitPolicy reject *:*`: the process is not configured as an exit relay.
 - The v3 service keys are generated in the local Tor service directory/volume and are never committed to Git.
 - The recommended Docker staging path keeps the application behind the private `onion_edge` network rather than exposing it directly to the Internet.
 - The application container uses a read-only filesystem, drops Linux capabilities and enables `no-new-privileges`.
