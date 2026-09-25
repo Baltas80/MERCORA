@@ -13,6 +13,9 @@ function controllerWithRunner(sequence) {
     calls.push([file, args]);
     if (args.includes('pg_isready')) return healthyProbe();
     if (args.includes('test') && args.includes('/data/hostname')) return healthyProbe();
+    if (args.includes('config') && args.includes('--volumes')) {
+      return { ok: true, code: 0, stdout: 'postgres_data\n', stderr: '' };
+    }
     if (args.includes('ps')) {
       psCalls += 1;
       return { ok: true, code: 0, stdout: sequence[psCalls - 1] ?? sequence.at(-1), stderr: '' };
@@ -52,4 +55,14 @@ test('RECOVER rejects an unsupported explicit service', async () => {
   const { controller } = controllerWithRunner(['app\npostgres\ntor']);
 
   await assert.rejects(() => controller.run('RECOVER', 'shell'), /Unsupported service/);
+});
+
+test('HEALTH_CHECK validates the Compose-defined persistent storage without hardcoding a project prefix', async () => {
+  const { controller } = controllerWithRunner(['app\npostgres\ntor']);
+
+  const result = await controller.run('HEALTH_CHECK');
+  const storage = result.checks.find((check) => check.name === 'storage');
+
+  assert.equal(storage.ok, true);
+  assert.equal(storage.stdout, 'postgres_data configured');
 });
