@@ -160,9 +160,6 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
     let target = service;
     const steps = [];
 
-    // With no explicit target, diagnose first and repair only the first affected
-    // component in dependency order: PostgreSQL -> backend/app -> Tor.
-    // This avoids restarting healthy services or the whole stack unnecessarily.
     if (target === undefined) {
       const diagnosis = await healthCheck();
       steps.push({ step: 'diagnosis', result: diagnosis });
@@ -205,24 +202,24 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
     });
     checks.at(-1).ok = checks.at(-1).ok && allServicesRunning(composeServices?.stdout);
 
-    const torConfigProbe = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'grep', '-E', '^(ORPort|DirPort)[[:space:]]+'], { cwd });
+    // Check the actual Tor configuration file used by the Onion Service.
+    // Do not inspect image defaults: those defaults may contain relay listeners
+    // that are intentionally overridden by MERCORA's service configuration.
+    const torConfigProbe = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'grep', '-E', '^(ORPort|DirPort|ExitPolicy)[[:space:]]+', '/data/torrc'], { cwd });
     const torConfig = sanitizeResult(torConfigProbe);
-    const torListeners = String(torConfigProbe?.stdout ?? '')
+    const torConfigLines = String(torConfigProbe?.stdout ?? '')
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
-    const torListenerValues = Object.fromEntries(torListeners.map((line) => line.split(/\s+/, 2)));
+    const torConfigValues = Object.fromEntries(torConfigLines.map((line) => line.split(/\s+/, 2)));
     checks.push({
       name: 'torConfig',
       ...torConfig,
-      ok: torConfig.ok && torListenerValues.ORPort === '0' && torListenerValues.DirPort === '0',
-      stdout: torConfig.ok ? torConfig.stdout : torConfig.stdout
+      ok: torConfig.ok && torConfigValues.ORPort === '0' && torConfigValues.DirPort === '0' && torConfigLines.some((line) => line === 'ExitPolicy reject *:*')
     });
 
-    checks.push(named('onionService', await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/hostname'], { cwd })));
+    checks.push(named('onionService', await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'tor', 'test', '-s', '/data/mercora/hostname'], { cwd })));
 
-    // Verify the Compose-defined persistent volume without assuming Docker's
-    // project-name prefix (which varies with directory/COMPOSE_PROJECT_NAME).
     const volumes = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'config', '--volumes'], { cwd });
     const volumeCheck = sanitizeResult(volumes);
     const definedVolumes = new Set(String(volumes?.stdout ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
