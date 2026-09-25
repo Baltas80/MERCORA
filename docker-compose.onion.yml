@@ -34,6 +34,13 @@ services:
     depends_on:
       app:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -s /data/mercora/hostname &&
+          tor --verify-config -f /data/torrc >/dev/null 2>&1 &&
+          wget -qO- --timeout=5 http://app:8080/api/healthz >/dev/null 2>&1
     networks:
       - onion_edge
       - tor_egress
