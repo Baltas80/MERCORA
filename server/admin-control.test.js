@@ -13,8 +13,8 @@ function controllerWithRunner(sequence) {
     calls.push([file, args]);
     if (args.includes('pg_isready')) return healthyProbe();
     if (args.includes('test') && args.includes('/data/hostname')) return healthyProbe();
-    if (args.includes('grep') && args.includes('/torrc-defaults')) {
-      return { ok: true, code: 0, stdout: 'ORPort 0\nDirPort 0\n', stderr: '' };
+    if (args.includes('grep') && args.includes('/data/torrc')) {
+      return { ok: true, code: 0, stdout: 'ORPort 0\nDirPort 0\nExitPolicy reject *:*\n', stderr: '' };
     }
     if (args.includes('config') && args.includes('--volumes')) {
       return { ok: true, code: 0, stdout: 'postgres_data\n', stderr: '' };
