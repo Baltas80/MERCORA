@@ -52,7 +52,6 @@ fn decode_chunked_body(body: &[u8]) -> Result<Vec<u8>, String> {
         let chunk_size = usize::from_str_radix(size_text, 16)
             .map_err(|_| "Invalid chunk size in Admin API response".to_string())?;
         cursor = line_end + 2;
-
         if chunk_size == 0 {
             return Ok(decoded);
         }
@@ -108,7 +107,6 @@ fn raw_http_request(method: &str, path: &str, cookie: Option<&str>, payload: &st
     stream
         .set_write_timeout(Some(std::time::Duration::from_secs(5)))
         .map_err(|e| format!("Unable to configure write timeout: {e}"))?;
-
     let cookie_header = cookie
         .filter(|value| !value.is_empty())
         .map(|value| format!("Cookie: {value}\r\n"))
@@ -120,7 +118,6 @@ fn raw_http_request(method: &str, path: &str, cookie: Option<&str>, payload: &st
     stream
         .write_all(request.as_bytes())
         .map_err(|e| format!("Request failed: {e}"))?;
-
     let mut response = Vec::with_capacity(4096);
     let mut chunk = [0_u8; 8192];
     loop {
@@ -257,7 +254,7 @@ mod tests {
 
     #[test]
     fn decodes_chunked_json_response_body() {
-        let encoded = b"5\r\n{\"ok\r\n5\r\n\":true}\r\n0\r\n\r\n";
+        let encoded = b"4\r\n{\"ok\r\n7\r\n\":true}\r\n0\r\n\r\n";
         let decoded = decode_chunked_body(encoded).expect("chunked response should decode");
         assert_eq!(decoded, b"{\"ok\":true}");
     }
