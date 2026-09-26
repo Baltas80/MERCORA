@@ -14,6 +14,7 @@ const COMPOSE_BASE = Object.freeze(['compose', '-f', 'docker-compose.yml']);
 const ONION_COMPOSE = 'docker-compose.onion.yml';
 const ALLOWED_SERVICES = new Set(['app', 'postgres', 'tor']);
 const REQUIRED_SERVICES = Object.freeze(['app', 'postgres', 'tor']);
+const BACKEND_HEALTH_URL = process.env.MERCORA_BACKEND_HEALTH_URL || 'http://127.0.0.1:18080/api/healthz';
 const SENSITIVE_LINE = /^\s*(password|secret|token|seed|private.?key|mnemonic|authorization)\s*[:=]/i;
 const CREDENTIAL_URL = /([a-z][a-z\d+.-]*:\/\/[^\s:/@]+:)[^\s/@]+(@)/gi;
 const INLINE_SECRET = /((?:password|secret|token|api[_-]?key|private[_-]?key)\s*[:=]\s*)[^\s,;]+/gi;
@@ -256,7 +257,7 @@ function targetHealthyFromChecks(health, target) {
 
 async function backendProbe() {
   try {
-    const response = await fetch('http://127.0.0.1:8080/api/healthz', { signal: AbortSignal.timeout(5_000) });
+    const response = await fetch(BACKEND_HEALTH_URL, { signal: AbortSignal.timeout(5_000) });
     return { ok: response.ok, code: response.status, stdout: `backend ${response.status}`, stderr: '' };
   } catch (error) {
     return { ok: false, code: null, stdout: '', stderr: error?.message ?? 'backend unavailable' };
