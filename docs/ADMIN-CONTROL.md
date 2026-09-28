@@ -48,12 +48,20 @@ After a targeted repair, the controller verifies the operational chain:
 3. Backend health.
 4. PostgreSQL readiness.
 5. Required Compose services, including Tor.
-6. Effective Tor relay configuration: `ORPort 0` and `DirPort 0`.
+6. Effective Tor relay configuration: `ORPort 0`, `DirPort 0`, and `ExitPolicy reject *:*`.
 7. Onion Service hostname availability.
 8. Persistent storage definition (`postgres_data`) from the active Compose configuration.
 9. Aggregate health.
 
 `HEALTH_CHECK` invokes this same full diagnostic path directly. It does not merely execute `docker compose ps`, so the console receives backend, database, Tor, Onion Service, storage, configuration, Node.js, Docker, and aggregate health results.
+
+### Backend health probe
+
+The Admin Control API does not depend on a host-published backend port for its backend health decision. It executes one fixed, non-interactive health probe inside the allowlisted `app` Compose service:
+
+`docker compose -f docker-compose.yml -f docker-compose.onion.yml exec -T app node -e <fixed health probe>`
+
+The fixed probe requests `http://127.0.0.1:8080/api/healthz` from inside the application container. No user-controlled command, URL, or service name is interpolated into the probe. This avoids false `fetch failed` results caused by differences in host port publishing while preserving the strict Admin Control privilege boundary.
 
 The storage check deliberately does not assume Docker's project-name prefix, so `COMPOSE_PROJECT_NAME` or a different working-directory name cannot create a false storage failure.
 
@@ -69,7 +77,7 @@ The Compose override now explicitly sets:
 
 The Tor image is pinned to `svengo/tor:0.4.9.12`, the newest version currently published by the selected image maintainer. Tor 0.4.9.12 is a security release; keeping MERCORA on the older 0.4.9.11 image would leave it behind a known upstream security update.
 
-The Admin Control health check also reads the generated `/etc/tor/torrc-defaults` inside the real Tor container and fails unless both `ORPort` and `DirPort` are `0`. This prevents a future image/default change from silently turning MERCORA into a relay again.
+The Admin Control health check reads the effective application Tor configuration at `/data/torrc` inside the real Tor container and fails unless `ORPort` and `DirPort` are `0` and the effective policy is `ExitPolicy reject *:*`. This prevents a future image/default change from silently turning MERCORA into a relay again.
 
 The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps the persistent `tor_data` volume, and mounts the application Tor configuration read-only at `/data/torrc`. The selected image's entrypoint creates `/etc/tor/torrc-defaults` during startup, so the Tor service must not use a global container `read_only: true` filesystem setting.
 
@@ -88,9 +96,10 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** Tor Compose override disables ORPort and DirPort.
 - **IMPLEMENTED:** Tor image upgraded to `0.4.9.12`.
 - **IMPLEMENTED:** `HEALTH_CHECK` full diagnostic path rather than a plain Compose status query.
+- **IMPLEMENTED:** controlled in-container backend health probe.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
 - **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
-- **PENDING:** CI result for the latest Tor/recovery hardening commits.
-- **PENDING:** live Windows runtime verification after recreating the Tor container with the new Compose environment.
+- **PENDING:** CI result for the latest backend-probe and admin-console changes.
+- **PENDING:** live Windows runtime verification after installing the resulting console build and recreating the affected containers if required.
