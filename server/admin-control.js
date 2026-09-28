@@ -17,7 +17,7 @@ const REQUIRED_SERVICES = Object.freeze(['app', 'postgres', 'tor']);
 const BACKEND_HEALTH_COMMAND = Object.freeze([
   'node',
   '-e',
-  "fetch('http://127.0.0.1:8080/api/healthz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+  "fetch('http://127.0.0.1:8080/api/healthz').then(async (response) => { console.log(JSON.stringify({ status: response.status, statusText: response.statusText, ok: response.ok })); process.exit(response.ok ? 0 : 1); }).catch((error) => { console.error(`${error.name}: ${error.message}`); process.exit(1); })"
 ]);
 const SENSITIVE_LINE = /^\s*(password|secret|token|seed|private.?key|mnemonic|authorization)\s*[:=]/i;
 const CREDENTIAL_URL = /([a-z][a-z\d+.-]*:\/\/[^\s:/@]+:)[^\s/@]+(@)/gi;
