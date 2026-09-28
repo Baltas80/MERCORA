@@ -165,13 +165,27 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
 
     let target = service;
     const steps = [];
+    const diagnosis = await healthCheck();
 
     if (target === undefined) {
-      const diagnosis = await healthCheck();
       steps.push({ step: 'diagnosis', result: diagnosis });
       target = selectRecoveryTarget(diagnosis);
       if (target === null) {
         return { ok: diagnosis.ok, target: null, targetHealthy: diagnosis.ok, repaired: false, steps };
+      }
+    } else {
+      steps.push({ step: 'dependency-check', result: diagnosis });
+      const dependencyFailure = dependencyFailureForTarget(diagnosis, target);
+      if (dependencyFailure) {
+        steps.push({ step: 'dependency-block', result: dependencyFailure });
+        return {
+          ok: false,
+          target,
+          targetHealthy: false,
+          repaired: false,
+          blocked: true,
+          steps
+        };
       }
     }
 
@@ -250,6 +264,20 @@ function selectRecoveryTarget(health) {
   if (!checks.postgresql?.ok || !checks.services?.postgresRunning) return 'postgres';
   if (!checks.backend?.ok || !checks.services?.appRunning) return 'app';
   if (!checks.onionService?.ok || !checks.services?.torRunning || !checks.torConfig?.ok) return 'tor';
+  return null;
+}
+
+function dependencyFailureForTarget(health, target) {
+  const checks = Object.fromEntries(health.checks.map((check) => [check.name, check]));
+  if (target === 'app' && (!checks.postgresql?.ok || !checks.services?.postgresRunning)) {
+    return {
+      ok: false,
+      dependency: 'postgres',
+      reason: 'backend recovery blocked because PostgreSQL is not healthy',
+      postgresql: checks.postgresql ?? null,
+      services: checks.services ?? null
+    };
+  }
   return null;
 }
 
