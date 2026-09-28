@@ -5,7 +5,8 @@
   "description": "MERCORA desktop administration console",
   "scripts": {
     "tauri": "tauri",
-    "build": "tauri build",
+    "icons": "tauri icon src-tauri/icons/icon.svg",
+    "build": "npm run icons && tauri build",
     "dev": "tauri dev"
   },
   "devDependencies": {
