@@ -63,6 +63,8 @@ The Admin Control API does not depend on a host-published backend port for its b
 
 The fixed probe requests `http://127.0.0.1:8080/api/healthz` from inside the application container. No user-controlled command, URL, or service name is interpolated into the probe. This avoids false `fetch failed` results caused by differences in host port publishing while preserving the strict Admin Control privilege boundary.
 
+For HTTP-level failures, the fixed probe reports only the HTTP status, status text, and boolean `ok` flag. Network/runtime failures are reported as the error name and message. It never returns the health endpoint body, response headers, cookies, authorization material, or application secrets. The existing diagnostic sanitizer still applies before data reaches the console.
+
 The storage check deliberately does not assume Docker's project-name prefix, so `COMPOSE_PROJECT_NAME` or a different working-directory name cannot create a false storage failure.
 
 ## Tor / Onion Service runtime requirement
@@ -100,8 +102,9 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** `HEALTH_CHECK` full diagnostic path rather than a plain Compose status query.
 - **IMPLEMENTED:** controlled in-container backend health probe.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
+- **IMPLEMENTED:** sanitized HTTP status diagnostics for backend failures.
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
 - **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
-- **PENDING:** CI result for the latest dependency-gated recovery change.
+- **PENDING:** CI result for the latest backend diagnostic change.
 - **PENDING:** live Windows runtime verification after installing the resulting console build and recreating the affected containers if required.
