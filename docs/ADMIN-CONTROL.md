@@ -106,5 +106,6 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
 - **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
-- **PENDING:** CI result for the latest backend diagnostic change.
-- **PENDING:** live Windows runtime verification after installing the resulting console build and recreating the affected containers if required.
+- **IMPLEMENTED:** CI #581 completed successfully for the backend diagnostic change.
+- **IMPLEMENTED:** Windows Admin Console build is now a required CI job and publishes the real Tauri Windows bundle as a workflow artifact.
+- **PENDING:** validation of the Windows bundle on the user's physical Windows/Docker environment, including HEALTH CHECK and RECOVER against the live stack.
