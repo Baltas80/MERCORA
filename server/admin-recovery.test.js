@@ -59,8 +59,9 @@ test('RECOVER performs targeted repair then verifies every infrastructure depend
   assert.equal(result.ok, true);
   assert.equal(result.target, 'tor');
   assert.equal(result.targetHealthy, true);
-  assert.equal(result.steps[0].step, 'restart:tor');
-  assert.deepEqual(calls[0], ['docker', 'compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.onion.yml', 'restart', 'tor']);
+  assert.equal(result.steps[0].step, 'dependency-check');
+  assert.ok(result.steps.some((step) => step.step === 'restart:tor'));
+  assert.deepEqual(calls.find((entry) => entry.includes('restart') && entry.at(-1) === 'tor'), ['docker', 'compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.onion.yml', 'restart', 'tor']);
   assert.ok(probes.some(([file, ...args]) => file === 'node' && args[0] === '--version'));
   assert.ok(probes.some(([file, ...args]) => file === 'docker' && args[0] === 'version'));
   assert.ok(calls.some((entry) => entry.includes('--services')));
@@ -82,8 +83,8 @@ test('RECOVER does not restart unrelated services when a target is supplied', as
 
   const result = await controller.run('RECOVER', 'postgres');
   assert.equal(result.ok, true);
-  const repairCommands = calls.slice(0, 1);
-  assert.deepEqual(repairCommands, [['docker', 'compose', '-f', 'docker-compose.yml', 'restart', 'postgres']]);
+  const repairCommand = calls.find((entry) => entry.includes('restart'));
+  assert.deepEqual(repairCommand, ['docker', 'compose', '-f', 'docker-compose.yml', 'restart', 'postgres']);
   assert.equal(calls.filter((entry) => entry.includes('restart')).length, 1);
   assert.equal(calls.filter((entry) => entry.includes('up')).length, 0);
 });
