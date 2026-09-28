@@ -68,6 +68,34 @@ test('RECOVER rejects an unsupported explicit service', async () => {
   await assert.rejects(() => controller.run('RECOVER', 'shell'), /Unsupported service/);
 });
 
+test('RECOVER app is blocked when its PostgreSQL dependency is unhealthy', async () => {
+  const calls = [];
+  const runner = async (file, args) => {
+    calls.push([file, args]);
+    if (args.includes('pg_isready')) return { ok: false, code: 1, stdout: '', stderr: 'database unavailable' };
+    if (args.includes('ps')) return { ok: true, code: 0, stdout: 'app\ntor\n', stderr: '' };
+    if (args.includes('grep')) return { ok: true, code: 0, stdout: 'ORPort 0\nDirPort 0\nExitPolicy reject *:*\n', stderr: '' };
+    if (args.includes('test')) return healthyProbe();
+    if (args.includes('config')) return { ok: true, code: 0, stdout: 'postgres_data\n', stderr: '' };
+    return healthyProbe();
+  };
+  const controller = createAdminController({
+    runner,
+    probe: async () => healthyProbe(),
+    backendProbeFn: async () => healthyProbe(),
+    configurationProbe: () => ({ ok: true, code: 0, stdout: 'required compose configuration detected', stderr: '' })
+  });
+
+  const result = await controller.run('RECOVER', 'app');
+
+  assert.equal(result.ok, false);
+  assert.equal(result.blocked, true);
+  assert.equal(result.target, 'app');
+  assert.equal(result.repaired, false);
+  assert.equal(result.steps.at(-1).step, 'dependency-block');
+  assert.equal(calls.some(([, args]) => args.includes('restart') && args.at(-1) === 'app'), false);
+});
+
 test('HEALTH_CHECK validates effective Tor relay listeners are disabled', async () => {
   const { controller } = controllerWithRunner(['app\npostgres\ntor']);
 
