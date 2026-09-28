@@ -89,3 +89,29 @@ test('HEALTH_CHECK validates the Compose-defined persistent storage without hard
   assert.equal(storage.ok, true);
   assert.equal(storage.stdout, 'postgres_data configured');
 });
+
+test('HEALTH_CHECK uses the controlled Docker app probe by default', async () => {
+  const calls = [];
+  const runner = async (file, args) => {
+    calls.push([file, args]);
+    if (args.includes('pg_isready')) return healthyProbe();
+    if (args.includes('ps')) return { ok: true, code: 0, stdout: 'app\npostgres\ntor\n', stderr: '' };
+    if (args.includes('grep')) return { ok: true, code: 0, stdout: 'ORPort 0\nDirPort 0\nExitPolicy reject *:*\n', stderr: '' };
+    if (args.includes('test')) return healthyProbe();
+    if (args.includes('config')) return { ok: true, code: 0, stdout: 'postgres_data\n', stderr: '' };
+    return healthyProbe();
+  };
+  const controller = createAdminController({
+    runner,
+    probe: async () => healthyProbe(),
+    configurationProbe: () => ({ ok: true, code: 0, stdout: 'required compose configuration detected', stderr: '' })
+  });
+
+  const result = await controller.run('HEALTH_CHECK');
+  const backendCall = calls.find(([, args]) => args.includes('exec') && args.includes('app') && args.includes('node'));
+
+  assert.equal(result.checks.find((check) => check.name === 'backend')?.ok, true);
+  assert.equal(backendCall?.[0], 'docker');
+  assert.equal(backendCall?.[1].at(-2), '-e');
+  assert.match(backendCall?.[1].at(-1) ?? '', /127\.0\.0\.1:8080\/api\/healthz/);
+});
