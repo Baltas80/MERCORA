@@ -35,7 +35,7 @@ Diagnostics are truncated and filtered to remove common secret-bearing lines and
 
 ## Recovery model
 
-`RECOVER` with an explicit component repairs only that requested component first. A failed restart falls back to starting that same component.
+`RECOVER` with an explicit component repairs only that requested component first, but it now performs a full dependency diagnosis before changing anything. If the requested `app` depends on an unhealthy PostgreSQL service, app recovery is blocked and the console receives the dependency diagnosis instead of unnecessarily restarting the app. A failed restart falls back to starting that same component.
 
 `RECOVER` without a component first performs a health diagnosis and selects only the affected component in dependency order: PostgreSQL, backend/app, then Tor. If the entire stack is healthy, no restart is performed. It does not restart the entire stack unnecessarily.
 
@@ -87,10 +87,12 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** loopback-only Admin Control API.
 - **IMPLEMENTED:** Better Auth username/password session authentication with admin-role authorization.
 - **IMPLEMENTED:** targeted recovery with diagnosis-first selection when no component is specified.
+- **IMPLEMENTED:** dependency-gated explicit app recovery; unhealthy PostgreSQL blocks an unnecessary app restart.
 - **IMPLEMENTED:** no-restart path when the stack is already healthy.
 - **IMPLEMENTED:** Compose configuration preflight before recovery Docker operations.
 - **IMPLEMENTED:** Compose `.env` fallback detection without returning secret values.
 - **IMPLEMENTED:** regression tests for targeted recovery and missing/valid Compose configuration.
+- **IMPLEMENTED:** regression test for dependency-gated app recovery.
 - **IMPLEMENTED:** project-name-independent persistent-storage health check.
 - **IMPLEMENTED:** effective Tor relay-listener health check.
 - **IMPLEMENTED:** Tor Compose override disables ORPort and DirPort.
@@ -101,5 +103,5 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** no-shell Docker invocation.
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
 - **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
-- **PENDING:** CI result for the latest backend-probe and admin-console changes.
+- **PENDING:** CI result for the latest dependency-gated recovery change.
 - **PENDING:** live Windows runtime verification after installing the resulting console build and recreating the affected containers if required.
