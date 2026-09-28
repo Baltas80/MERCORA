@@ -104,3 +104,29 @@ jobs:
         with:
           languages: javascript
       - uses: github/codeql-action/analyze@v4
+
+  admin-console-windows:
+    name: Admin Console Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Tauri frontend dependencies
+        working-directory: admin-console
+        run: npm install --no-audit
+
+      - name: Build Windows Admin Console
+        working-directory: admin-console
+        run: npm run build
+
+      - name: Upload Windows console bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: mercora-admin-console-windows
+          path: admin-console/src-tauri/target/release/bundle/**
+          if-no-files-found: error
