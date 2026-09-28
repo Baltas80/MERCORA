@@ -12,6 +12,6 @@ test('Tor Onion Service disables public relay and directory listeners', () => {
   assert.match(compose, /EXITPOLICY:\s*"reject \*:\*"/);
 });
 
-test('Tor Onion Service keeps the torrc configuration read-only', () => {
-  assert.match(compose, /\.\/tor\/torrc\.onion:\/data\/torrc:ro/);
+test('Tor Onion Service keeps the secure torrc configuration read-only', () => {
+  assert.match(compose, /\.\/tor\/torrc\.onion\.secure:\/data\/torrc:ro/);
 });
