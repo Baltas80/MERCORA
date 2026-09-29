@@ -29,12 +29,15 @@
 ## Phase 3 — Payments
 - [x] Custody architecture and ledger design
 - [x] Emergency custody model
-- [ ] Payment adapter interface
+- [x] Payment adapter interface and validation contracts
+- [x] Blockchain observer contract
+- [x] Withdrawal/confirmation state machine
+- [x] Deposit-address and reconciliation schema
 - [ ] Bitcoin integration
 - [ ] Litecoin integration
 - [ ] Monero integration
-- [ ] Confirmation/state machine
-- [ ] Reconciliation and audit automation
+- [ ] Confirmation/reconciliation automation
+- [ ] Independent custody security review
 
 ## Phase 4 — Tor and infrastructure
 - [x] Initial Onion Service configuration template
@@ -62,4 +65,4 @@
 
 ## Current priority
 
-Build the authenticated application core and authorization boundary before connecting any real blockchain wallets or production funds.
+Finish authentication/authorization and the custody policy boundary before connecting real blockchain wallets or production funds.

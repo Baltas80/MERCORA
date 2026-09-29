@@ -1,7 +1,8 @@
 # MERCORA Custody Architecture
 
 ## Status
-Design baseline. No production funds or private keys belong in this repository.
+
+Design baseline plus executable custody contracts. No production funds or private keys belong in this repository.
 
 ## Objectives
 
@@ -18,9 +19,22 @@ MERCORA may provide custodial balances for supported digital assets. The marketp
 7. Emergency custody uses one destination wallet per blockchain/asset, not one cross-chain wallet.
 8. Emergency procedures preserve the complete user-to-asset-to-amount accounting record.
 
+## Executable boundary
+
+The application now exposes no real wallet implementation. Instead, it has explicit contracts for:
+
+- asset and amount validation;
+- payment adapter operations;
+- blockchain observation;
+- transaction confirmation;
+- withdrawal state transitions;
+- external signing boundary.
+
+The default adapter, observer and signer deliberately fail closed until an isolated production service is configured.
+
 ## Logical model
 
-```text
+```
 User account
    |
    +-- BTC sub-ledger
@@ -56,13 +70,11 @@ Every external transaction should carry a stable idempotency key and chain/netwo
 
 The web/API tier can request a payment operation but must not possess private signing material. Wallet/node services run in a separate trust boundary with narrowly scoped interfaces. Production signing keys should be held by dedicated key-management infrastructure and protected with independent authorization.
 
-Hot-wallet exposure should be limited. Reserve/cold custody should be separated from routine transaction processing.
-
 ## Emergency mode
 
 Emergency mode is a state machine, not a database flag that silently changes balances.
 
-```text
+```
 NORMAL
   |
   v

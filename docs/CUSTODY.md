@@ -4,6 +4,18 @@
 
 Define the custody boundary for BTC, XMR and LTC while keeping marketplace services isolated from key material.
 
+## Current implementation status
+
+The repository now contains executable contracts for the custody boundary:
+
+- payment adapter contract;
+- blockchain observer contract;
+- isolated signing boundary;
+- monotonic withdrawal and confirmation state machines;
+- operational database tables for deposit-address metadata and reconciliation runs.
+
+These contracts do not connect to production blockchains and do not contain wallet keys.
+
 ## Core rules
 
 - The marketplace never handles private keys.
@@ -25,6 +37,16 @@ The ledger retains the mapping between user, asset, amount and transaction/event
 `NORMAL -> FREEZE_REQUESTED -> FROZEN -> RECOVERY_AUTHORIZED -> RECOVERY_IN_PROGRESS -> RECONCILIATION -> NORMAL`
 
 A failed recovery remains frozen until explicitly resolved.
+
+## Production wallet boundary
+
+The application process must not sign transactions. A production asset adapter must delegate chain operations to an isolated observer/wallet service and a separately authorized signing boundary.
+
+Required separation:
+
+`web/API -> custody domain -> isolated observer/wallet service -> signing boundary`
+
+The signing boundary receives only the minimum operation metadata required to authorize a withdrawal. It must never expose key material to the application.
 
 ## Required controls before production
 
