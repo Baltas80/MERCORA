@@ -3,7 +3,6 @@ const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 
 export const SUPPORTED_ASSETS = Object.freeze({
   BTC: Object.freeze({ code: "BTC", atomicScale: 8 }),
-  LTC: Object.freeze({ code: "LTC", atomicScale: 8 }),
   XMR: Object.freeze({ code: "XMR", atomicScale: 12 })
 });
 
