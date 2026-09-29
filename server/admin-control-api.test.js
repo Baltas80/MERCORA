@@ -37,6 +37,19 @@ test('admin API remains loopback-only and rejects unauthenticated control reques
   });
 });
 
+test('admin API emits non-cacheable, non-executable JSON response headers', async () => {
+  const controller = { run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) };
+  await withApi(controller, async (base) => {
+    const response = await fetch(`${base}/v1/control`, { method: 'POST', body: '{}' });
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(response.headers.get('x-frame-options'), 'DENY');
+    assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+    assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  });
+});
+
 test('admin API rejects browser requests from untrusted origins before authentication', async () => {
   let authCalls = 0;
   const fakeAuth = {
