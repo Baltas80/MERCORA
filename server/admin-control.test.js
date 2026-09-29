@@ -96,6 +96,38 @@ test('RECOVER app is blocked when its PostgreSQL dependency is unhealthy', async
   assert.equal(calls.some(([, args]) => args.includes('restart') && args.at(-1) === 'app'), false);
 });
 
+test('RECOVER records post-recovery verification in the required operational order', async () => {
+  const { controller } = controllerWithRunner(['postgres', 'app\npostgres\ntor']);
+
+  const result = await controller.run('RECOVER');
+  const steps = result.steps.map(({ step }) => step);
+  const expected = [
+    'restart:app',
+    'verify:dependencies',
+    'verify:backend',
+    'verify:database',
+    'verify:tor',
+    'verify:onion-service',
+    'health'
+  ];
+
+  assert.deepEqual(steps.slice(-expected.length), expected);
+  assert.equal(result.steps.find((entry) => entry.step === 'verify:dependencies')?.result?.ok, true);
+  assert.equal(result.steps.find((entry) => entry.step === 'verify:backend')?.result?.ok, true);
+  assert.equal(result.steps.find((entry) => entry.step === 'verify:database')?.result?.ok, true);
+  assert.equal(result.steps.find((entry) => entry.step === 'verify:tor')?.result?.ok, true);
+  assert.equal(result.steps.find((entry) => entry.step === 'verify:onion-service')?.result?.ok, true);
+});
+
+test('RECOVER verification does not expose diagnostic secrets', async () => {
+  const { controller } = controllerWithRunner(['postgres', 'app\npostgres\ntor']);
+
+  const result = await controller.run('RECOVER');
+  const serialized = JSON.stringify(result);
+
+  assert.doesNotMatch(serialized, /password|secret|token|authorization/i);
+});
+
 test('HEALTH_CHECK validates effective Tor relay listeners are disabled', async () => {
   const { controller } = controllerWithRunner(['app\npostgres\ntor']);
 
