@@ -13,7 +13,7 @@ Optimize MERCORA for the maximum technically achievable level of security, priva
 - Security-first web application architecture.
 - PostgreSQL for persistent data.
 - Containerized deployment with Docker.
-- Modular payment adapters for BTC, LTC and XMR.
+- Modular payment/custody adapters for BTC and XMR only.
 - No secrets, wallet keys, seeds, tokens, or credentials in source control.
 - Minimal data collection and minimal application logging.
 - Security testing aligned with OWASP ASVS.
