@@ -10,7 +10,13 @@ const CONTROL_HOST: &str = "127.0.0.1";
 const CONTROL_PORT: &str = "8787";
 
 fn allowed_endpoint(method: &str, path: &str) -> bool {
-    matches!((method, path), ("GET", "/api/admin/status") | ("POST", "/api/admin/action"))
+    matches!(
+        (method, path),
+        ("GET", "/api/admin/status")
+            | ("GET", "/api/admin/auth/status")
+            | ("POST", "/api/admin/action")
+            | ("POST", "/api/admin/auth/verify-2fa")
+    )
 }
 
 fn action_payload(method: &str, path: &str, body: &str) -> Result<String, String> {
@@ -240,7 +246,14 @@ fn admin_request(state: State<'_, AdminSession>, method: String, path: String, b
         .map_err(|_| "Session state unavailable")?
         .clone()
         .ok_or_else(|| "Not authenticated".to_string())?;
-    let response = raw_http_request("POST", "/v1/control", Some(&cookie), &payload)?;
+    let upstream = match (method.as_str(), path.as_str()) {
+        ("GET", "/api/admin/status") => (method.as_str(), "/v1/control"),
+        ("GET", "/api/admin/auth/status") => (method.as_str(), "/v1/session"),
+        ("POST", "/api/admin/action") => (method.as_str(), "/v1/control"),
+        ("POST", "/api/admin/auth/verify-2fa") => (method.as_str(), "/v1/verify-2fa"),
+        _ => return Err("Administrative endpoint is not allow-listed".into()),
+    };
+    let response = raw_http_request(upstream.0, upstream.1, Some(&cookie), &payload)?;
     let status = response_status_code(&response);
     if status != Some(200) && status != Some(503) {
         return Err(detailed_api_error("Admin API request failed", &response));
