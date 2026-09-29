@@ -31,7 +31,7 @@ No interface field is converted into a shell command. Invalid actions and servic
 
 Requests larger than 4 KiB are rejected before authentication/control execution. Responses use defensive headers including `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
 
-Diagnostics are truncated and filtered to remove common secret-bearing lines and embedded credentials before they are returned to the console.
+Diagnostics are truncated and filtered to remove common secret-bearing lines and embedded credentials before they are returned to the console. The native Admin Console adds a second disclosure boundary: non-success HTTP error bodies are never displayed by the desktop client, so a future API error path cannot accidentally expose implementation details or credentials through the UI.
 
 ## Recovery model
 
@@ -108,4 +108,6 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
 - **IMPLEMENTED:** CI #581 completed successfully for the backend diagnostic change.
 - **IMPLEMENTED:** Windows Admin Console build is now a required CI job and publishes the real Tauri Windows bundle as a workflow artifact.
+- **IMPLEMENTED:** native Admin Console error-body disclosure defense with regression tests.
+- **PENDING:** execution of the new Rust unit tests and Windows bundle validation in this environment. The execution host cannot resolve `github.com`, so the repository could not be cloned locally to run Cargo/Tauri tests. The authoritative CI run for commit `1e72dd8258a2e61849c7e2961c4847345c84741f` had not been created yet at verification time.
 - **PENDING:** validation of the Windows bundle on the user's physical Windows/Docker environment, including HEALTH CHECK and RECOVER against the live stack.
