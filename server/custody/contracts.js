@@ -56,7 +56,7 @@ export function assertIdempotencyKey(key) {
 }
 
 export function assertExternalIdentifier(value, field) {
-  if (typeof value !== "string" || value.length < 1 || value.length > 256 || !CONTROL_PATTERN.test(value)) {
+  if (typeof value !== "string" || value.length < 1 || value.length > 256 || CONTROL_CHAR_PATTERN.test(value)) {
     throw new TypeError(`Invalid ${field}`);
   }
   return value;
