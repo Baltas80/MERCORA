@@ -41,19 +41,18 @@ Diagnostics are truncated and filtered to remove common secret-bearing lines and
 
 Before any recovery Docker operation, the controller performs a non-secret Compose configuration preflight. The current Compose stack requires `POSTGRES_PASSWORD`; the preflight accepts that variable from the Admin Control process environment or from the project `.env` file used by Docker Compose. If it is missing or empty, recovery is blocked before Docker is invoked and the console receives only the configuration diagnosis, never the password value.
 
-After a targeted repair, the controller verifies the operational chain:
+After a targeted repair, the controller verifies the operational chain and exposes the verification as explicit ordered checkpoints:
 
-1. Required Compose configuration.
-2. Node.js and Docker availability.
-3. Backend health.
-4. PostgreSQL readiness.
-5. Required Compose services, including Tor.
-6. Effective Tor relay configuration: `ORPort 0`, `DirPort 0`, and `ExitPolicy reject *:*`.
-7. Onion Service hostname availability.
-8. Persistent storage definition (`postgres_data`) from the active Compose configuration.
-9. Aggregate health.
+1. Required Compose configuration, Node.js, Docker, and required running services.
+2. Backend health.
+3. PostgreSQL readiness.
+4. Tor runtime/configuration.
+5. Onion Service hostname availability.
+6. Aggregate health.
 
-`HEALTH_CHECK` invokes this same full diagnostic path directly. It does not merely execute `docker compose ps`, so the console receives backend, database, Tor, Onion Service, storage, configuration, Node.js, Docker, and aggregate health results.
+The final recovery result contains only sanitized diagnostics. It does not expose command execution details beyond the fixed operation/checkpoint names, and the existing sanitizer remains the last disclosure boundary.
+
+`HEALTH_CHECK` invokes the same full diagnostic path directly. It does not merely execute `docker compose ps`, so the console receives backend, database, Tor, Onion Service, storage, configuration, Node.js, Docker, and aggregate health results.
 
 ### Backend health probe
 
@@ -109,5 +108,7 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** CI #581 completed successfully for the backend diagnostic change.
 - **IMPLEMENTED:** Windows Admin Console build is now a required CI job and publishes the real Tauri Windows bundle as a workflow artifact.
 - **IMPLEMENTED:** native Admin Console error-body disclosure defense with regression tests.
-- **PENDING:** execution of the new Rust unit tests and Windows bundle validation in this environment. The execution host cannot resolve `github.com`, so the repository could not be cloned locally to run Cargo/Tauri tests. The authoritative CI run for commit `1e72dd8258a2e61849c7e2961c4847345c84741f` had not been created yet at verification time.
-- **PENDING:** validation of the Windows bundle on the user's physical Windows/Docker environment, including HEALTH CHECK and RECOVER against the live stack.
+- **IMPLEMENTED:** explicit ordered post-recovery verification checkpoints with regression coverage for ordering and secret-safe diagnostics.
+- **PENDING:** authoritative CI execution for the latest commits could not be observed through the available GitHub workflow-run endpoint; no run was returned for the latest commit at verification time.
+- **PENDING:** execution of the Rust Admin Console unit tests in this environment because the execution host cannot resolve `github.com` and therefore cannot clone/build the Tauri project locally.
+- **PENDING:** validation of the Windows bundle on the physical Windows/Docker environment, including HEALTH CHECK and RECOVER against the live stack.
