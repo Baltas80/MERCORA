@@ -20,6 +20,8 @@ Updated 2026-09-29.
 - PostgreSQL persistent-volume configuration is checked through the active Compose configuration.
 - Custody asset contract is restricted to BTC and XMR.
 - Architecture documentation defines the eight console tabs and the custody/emergency boundary.
+- Windows service-manager boundary is now implemented as an allowlisted PowerShell adapter for installations where Docker is not the execution boundary. It accepts only `START`, `STOP`, `RESTART`, `STATUS`, `HEALTH_CHECK`, `RECOVER` and only the fixed `backend`, `postgres`, `tor` service identities.
+- Windows service-manager tests statically verify the action/service allowlists, absence of arbitrary command execution primitives, targeted recovery ordering and the fixed loopback backend health endpoint.
 
 ## Pending before production sign-off
 
@@ -30,7 +32,7 @@ Updated 2026-09-29.
 - Emergency destination registry and per-asset validation for BTC/XMR.
 - Immutable audit-chain migration and verification endpoint.
 - Fresh WebAuthn/TOTP step-up enforcement for emergency actions; the login TOTP challenge is implemented, but emergency-action step-up is not yet complete.
-- Service-manager integration for Windows start/stop/status/recovery where Docker is not the execution boundary.
+- Admin Control API integration with the Windows service-manager adapter and verification against the actual installed Windows service names.
 - End-to-end tests against a real PostgreSQL/Tor test environment.
 - Windows packaging and installer verification.
 
@@ -40,4 +42,4 @@ The console must never return private keys, seeds, mnemonics, wallet credentials
 
 ## Verification note
 
-Repository-level inspection and implementation were performed against the current `master` branch. The Admin Control tests cover targeted recovery, dependency blocking, ordered verification and diagnostic sanitisation. New Tauri tests cover extraction of rotated session cookies without retaining cookie attributes. GitHub Actions was triggered for the implementation commits; runtime execution against the local Docker/PostgreSQL/Tor stack and physical Windows packaging remain pending because the repository connector cannot start that local environment.
+Repository-level inspection and implementation were performed against the current `master` branch. The Admin Control tests cover targeted recovery, dependency blocking, ordered verification and diagnostic sanitisation. New Tauri tests cover extraction of rotated session cookies without retaining cookie attributes. The new Windows service-manager test suite is repository-level/static and does not require privileged Windows services. Runtime execution against the local Docker/PostgreSQL/Tor stack, Windows service installation, physical packaging and end-to-end recovery remain pending because the repository connector cannot start that local environment.
