@@ -21,6 +21,8 @@ The Admin Control API uses the production Better Auth session stack. Login is us
 
 The API binds to `127.0.0.1:8787` by default and rejects non-loopback clients. Authentication requests are rate-limited by the authentication layer. The API does not expose an administrator bearer token and does not accept arbitrary command strings.
 
+The API also validates a supplied browser `Origin` against the actual Admin Console origins (`tauri://localhost`, `http://127.0.0.1`, and `http://localhost`) before authentication or privileged control handling. Requests without an `Origin` remain supported for local non-browser tooling; they are still protected by the loopback and authentication boundaries.
+
 Initial owner provisioning is a separate, one-time bootstrap operation protected by the owner bootstrap token. After an administrator exists, owner bootstrap is permanently disabled for that installation.
 
 ## Privileged control boundary
@@ -101,6 +103,7 @@ The backend CI installation uses `npm ci` against the committed root lockfile. T
 - **IMPLEMENTED:** allowlisted START/STOP/RESTART/STATUS/HEALTH_CHECK/RECOVER operations.
 - **IMPLEMENTED:** loopback-only Admin Control API.
 - **IMPLEMENTED:** Better Auth username/password session authentication with admin-role authorization.
+- **IMPLEMENTED:** supplied browser Origin validation for the local Admin Control API.
 - **IMPLEMENTED:** targeted recovery with diagnosis-first selection when no component is specified.
 - **IMPLEMENTED:** dependency-gated explicit app recovery; unhealthy PostgreSQL blocks an unnecessary app restart.
 - **IMPLEMENTED:** no-restart path when the stack is already healthy.
