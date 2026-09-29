@@ -4,6 +4,7 @@ on:
   push:
     branches: ["master", "admin-fix-413", "admin-recovery-hardening"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -123,6 +124,10 @@ jobs:
       - name: Install Tauri frontend dependencies
         working-directory: admin-console
         run: npm install --no-audit
+
+      - name: Run Rust unit tests
+        working-directory: admin-console/src-tauri
+        run: cargo test --lib
 
       - name: Build Windows Admin Console
         working-directory: admin-console
