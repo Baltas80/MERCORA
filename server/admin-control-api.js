@@ -4,10 +4,15 @@ import { createAdminController } from './admin-control.js';
 
 const ACTIONS = new Set(['START', 'STOP', 'RESTART', 'STATUS', 'HEALTH_CHECK', 'RECOVER']);
 const SERVICES = new Set(['app', 'postgres', 'tor']);
+const TRUSTED_ORIGINS = new Set(['tauri://localhost', 'http://127.0.0.1', 'http://localhost']);
 const MAX_BODY = 4096;
 
 function isLoopback(address) {
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
+export function isTrustedOrigin(origin) {
+  return origin === undefined || origin === '' || TRUSTED_ORIGINS.has(origin);
 }
 
 function responseHeaders(res) {
@@ -114,7 +119,7 @@ async function authenticateLogin(auth, req, res) {
     return res.end(JSON.stringify({ ok: true, user: { id: parsed.user.id, username: parsed.user.username ?? null, role: parsed.user.role } }));
   } catch {
     res.writeHead(401);
-    res.end(JSON.stringify({ error: 'unauthorized' }));
+    return res.end(JSON.stringify({ error: 'unauthorized' }));
   }
 }
 
@@ -136,6 +141,10 @@ export function createAdminApi({ controller, auth, host = '127.0.0.1', port = 87
     if (!isLoopback(req.socket.remoteAddress)) {
       res.writeHead(403);
       return res.end(JSON.stringify({ error: 'local access only' }));
+    }
+    if (!isTrustedOrigin(req.headers.origin)) {
+      res.writeHead(403);
+      return res.end(JSON.stringify({ error: 'untrusted origin' }));
     }
     if (await rejectOversized(req, res)) return;
 
