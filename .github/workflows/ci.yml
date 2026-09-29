@@ -119,12 +119,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: admin-console/package-lock.json
 
       - name: Install Tauri frontend dependencies
         working-directory: admin-console
-        run: npm ci --no-audit
+        run: npm install --no-audit
 
       - name: Build Windows Admin Console
         working-directory: admin-console
