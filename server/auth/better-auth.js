@@ -4,8 +4,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { hash, verify } from '@node-rs/argon2';
 import { betterAuth } from 'better-auth';
-import { admin } from 'better-auth/plugins';
-import { username } from 'better-auth/plugins';
+import { admin, twoFactor, username } from 'better-auth/plugins';
 
 const DEFAULT_STATE_DIR = process.platform === 'win32'
   ? path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'MERCORA', 'Admin')
@@ -35,6 +34,7 @@ const argon2Options = {
 };
 
 export const auth = betterAuth({
+  appName: 'MERCORA Admin',
   database,
   secret,
   baseURL: process.env.BETTER_AUTH_URL ?? `http://127.0.0.1:${process.env.MERCORA_ADMIN_PORT ?? '8787'}`,
@@ -89,6 +89,15 @@ export const auth = betterAuth({
     admin({
       defaultRole: 'user',
       adminRoles: ['admin'],
+    }),
+    twoFactor({
+      issuer: 'MERCORA Admin',
+      skipVerificationOnEnable: false,
+      accountLockout: {
+        enabled: true,
+        maxFailedAttempts: 5,
+        durationSeconds: 900,
+      },
     }),
   ],
 });
