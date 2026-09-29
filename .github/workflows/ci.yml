@@ -110,6 +110,20 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
+      - name: Validate Windows service-manager PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            "$env:GITHUB_WORKSPACE/scripts/windows/mercora-service-manager.ps1",
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
       - name: Install Tauri frontend dependencies
         working-directory: admin-console
         run: npm install --no-audit
