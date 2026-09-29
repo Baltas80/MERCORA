@@ -1,4 +1,4 @@
-const CONTROL_PATTERN = /^[^\\u0000-\\u001F\\u007F]+$/u;
+const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/u;
 const IDEMPOTENCY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 
 export const SUPPORTED_ASSETS = Object.freeze({
