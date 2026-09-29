@@ -15,19 +15,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v6
       - name: Check for obvious secret material
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -nIE \
-            -- ':!*.md' ':!.gitignore' ':!.github/workflows/ci.yml' ':!.github/workflows/pages.yml' ':!scripts/verify-compose-security.mjs' \
-            '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' ; then
+          if git grep -nIE -- ':!*.md' ':!.gitignore' ':!.github/workflows/ci.yml' ':!.github/workflows/pages.yml' ':!scripts/verify-compose-security.mjs' '(BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY|mnemonic|seed phrase|private_key|wallet_seed|api[_-]?key[[:space:]]*[:=])' ; then
             echo "Potential secret material detected."
             exit 1
           fi
-
       - name: Check forbidden production artifacts
         shell: bash
         run: |
@@ -35,19 +31,16 @@ jobs:
           test ! -e .env
           test ! -e .env.production
           test ! -d tor/keys
-
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
-
+          package-manager-cache: false
       - name: Install Node dependencies
         run: npm ci --no-audit
-
       - name: Check server syntax
         run: node --check server/server.js
-
       - name: Check admin authentication syntax
         run: |
           node --check server/auth/better-auth.js
@@ -56,16 +49,12 @@ jobs:
           node --check scripts/mercora-admin-api.mjs
           node --check scripts/mercora-admin.mjs
           node --check scripts/mercora-admin-create.mjs
-
       - name: Check frontend syntax
         run: node --check web/app.js
-
       - name: Verify container network isolation
         run: node scripts/verify-compose-security.mjs
-
       - name: Dependency audit
         run: npm audit --audit-level=high
-
       - name: Prepare isolated admin authentication database
         env:
           BETTER_AUTH_SECRET: mercora-ci-auth-secret-0123456789-abcdef
@@ -78,13 +67,7 @@ jobs:
           OWNER_TOKEN="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
           OWNER_HASH="$(printf '%s' "$OWNER_TOKEN" | sha256sum | cut -d' ' -f1)"
           echo "::add-mask::$OWNER_TOKEN"
-          MERCORA_OWNER_BOOTSTRAP_TOKEN_HASH="$OWNER_HASH" \
-          MERCORA_OWNER_BOOTSTRAP_TOKEN="$OWNER_TOKEN" \
-          MERCORA_BOOTSTRAP_USERNAME=ciadmin \
-          MERCORA_BOOTSTRAP_PASSWORD="$MERCORA_ADMIN_TEST_PASSWORD" \
-          MERCORA_BOOTSTRAP_PASSWORD_CONFIRM="$MERCORA_ADMIN_TEST_PASSWORD" \
-          npm run admin:auth:create -- --non-interactive
-
+          MERCORA_OWNER_BOOTSTRAP_TOKEN_HASH="$OWNER_HASH" MERCORA_OWNER_BOOTSTRAP_TOKEN="$OWNER_TOKEN" MERCORA_BOOTSTRAP_USERNAME=ciadmin MERCORA_BOOTSTRAP_PASSWORD="$MERCORA_ADMIN_TEST_PASSWORD" MERCORA_BOOTSTRAP_PASSWORD_CONFIRM="$MERCORA_ADMIN_TEST_PASSWORD" npm run admin:auth:create -- --non-interactive
       - name: Run unit tests
         env:
           BETTER_AUTH_SECRET: mercora-ci-auth-secret-0123456789-abcdef
@@ -102,7 +85,7 @@ jobs:
       actions: read
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: github/codeql-action/init@v4
         with:
           languages: javascript
@@ -114,27 +97,23 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v6
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
-
+          package-manager-cache: false
       - name: Install Tauri frontend dependencies
         working-directory: admin-console
         run: npm install --no-audit
-
       - name: Run Rust unit tests
         working-directory: admin-console/src-tauri
         run: cargo test --lib
-
       - name: Build Windows Admin Console
         working-directory: admin-console
         run: npm run build
-
       - name: Upload Windows console bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mercora-admin-console-windows
           path: admin-console/src-tauri/target/release/bundle/**
