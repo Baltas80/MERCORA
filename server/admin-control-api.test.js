@@ -7,7 +7,7 @@ const adminSecret = process.env.BETTER_AUTH_SECRET ?? 'test-secret-for-better-au
 process.env.BETTER_AUTH_SECRET = adminSecret;
 process.env.MERCORA_ADMIN_AUTH_DB = process.env.MERCORA_ADMIN_AUTH_DB ?? path.join(os.tmpdir(), `mercora-admin-auth-test-${process.pid}.db`);
 
-const { createAdminApi } = await import('./admin-control-api.js');
+const { createAdminApi, isTrustedOrigin } = await import('./admin-control-api.js');
 const { auth } = await import('./auth/better-auth.js');
 const { getMigrations } = await import('better-auth/db/migration');
 const migrations = await getMigrations(auth.options);
@@ -35,6 +35,34 @@ test('admin API remains loopback-only and rejects unauthenticated control reques
     const response = await fetch(`${base}/v1/control`, { method: 'POST', body: '{}' });
     assert.equal(response.status, 401);
   });
+});
+
+test('admin API rejects browser requests from untrusted origins before authentication', async () => {
+  let authCalls = 0;
+  const fakeAuth = {
+    api: { getSession: async () => { authCalls += 1; return null; }, signOut: async () => ({ ok: true }) },
+    handler: async () => new Response('{}', { status: 401 }),
+  };
+  await withApi({ run: async () => ({ ok: true }), healthCheck: async () => ({ ok: true }) }, async (base) => {
+    const response = await fetch(`${base}/v1/control`, {
+      method: 'POST',
+      headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'STATUS' }),
+    });
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { error: 'untrusted origin' });
+    assert.equal(authCalls, 0);
+  }, fakeAuth);
+});
+
+test('admin API accepts the Tauri and local web origins', () => {
+  assert.equal(isTrustedOrigin('tauri://localhost'), true);
+  assert.equal(isTrustedOrigin('http://127.0.0.1'), true);
+  assert.equal(isTrustedOrigin('http://localhost'), true);
+  assert.equal(isTrustedOrigin(undefined), true);
+  assert.equal(isTrustedOrigin(''), true);
+  assert.equal(isTrustedOrigin('https://127.0.0.1'), false);
+  assert.equal(isTrustedOrigin('http://evil.example'), false);
 });
 
 test('admin API rejects oversized requests before authentication/controller execution', async () => {
