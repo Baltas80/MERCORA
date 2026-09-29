@@ -33,6 +33,7 @@
 - [x] Blockchain observer contract
 - [x] Withdrawal/confirmation state machine
 - [x] Deposit-address and reconciliation schema
+- [x] Withdrawal policy and limits contract
 - [ ] Bitcoin integration
 - [ ] Litecoin integration
 - [ ] Monero integration

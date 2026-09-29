@@ -7,6 +7,7 @@
 - Custodial ledger design for BTC, XMR and LTC.
 - Executable custody contracts for payment adapters, blockchain observers and signing boundary.
 - Withdrawal and confirmation state machines.
+- Withdrawal policy and limits contract with fail-closed defaults.
 - Deposit-address and reconciliation operational schema.
 - Emergency custody design.
 - Static dark marketplace shell.
