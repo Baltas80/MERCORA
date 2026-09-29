@@ -108,6 +108,12 @@ async function authenticateLogin(auth, req, res) {
       return res.end(JSON.stringify({ error: response.status === 429 ? 'too many authentication attempts' : 'unauthorized' }));
     }
     const parsed = JSON.parse(body || '{}');
+    if (parsed?.twoFactorRedirect === true) {
+      forwardSetCookies(res, response.headers);
+      res.writeHead(202);
+      return res.end(JSON.stringify({ ok: false, twoFactorRequired: true, methods: Array.isArray(parsed.twoFactorMethods) ? parsed.twoFactorMethods : ['totp'] }));
+    }
+
     if (parsed?.user?.role !== 'admin') {
       const cookie = response.headers.getSetCookie?.()[0]?.split(';', 1)[0] ?? response.headers.get('set-cookie')?.split(';', 1)[0];
       if (cookie) await auth.api.signOut({ headers: new Headers({ cookie }) }).catch(() => {});
@@ -122,6 +128,37 @@ async function authenticateLogin(auth, req, res) {
   } catch {
     res.writeHead(401);
     return res.end(JSON.stringify({ error: 'unauthorized' }));
+  }
+}
+
+async function verifyTotp(auth, req, res) {
+  const input = await readJson(req);
+  const code = typeof input.code === 'string' ? input.code : '';
+  if (!/^\d{6}$/.test(code)) {
+    res.writeHead(400);
+    return res.end(JSON.stringify({ error: 'invalid 2fa code' }));
+  }
+  try {
+    const headers = requestHeaders(req);
+    headers.delete('content-length');
+    headers.delete('host');
+    headers.set('content-type', 'application/json');
+    const request = new Request(
+      `http://127.0.0.1:${process.env.MERCORA_ADMIN_PORT ?? '8787'}/api/auth/two-factor/verify-totp`,
+      { method: 'POST', headers, body: JSON.stringify({ code, trustDevice: false }) }
+    );
+    const response = await auth.handler(request);
+    const body = await response.text();
+    if (!response.ok) {
+      res.writeHead(response.status || 401);
+      return res.end(JSON.stringify({ error: response.status === 429 ? 'too many 2fa attempts' : '2fa verification failed' }));
+    }
+    forwardSetCookies(res, response.headers);
+    res.writeHead(200);
+    return res.end(JSON.stringify({ ok: true, verified: true }));
+  } catch {
+    res.writeHead(401);
+    return res.end(JSON.stringify({ error: '2fa verification failed' }));
   }
 }
 
@@ -154,6 +191,15 @@ export function createAdminApi({ controller, auth, host = '127.0.0.1', port = 87
       try {
         return await authenticateLogin(authProvider, req, res);
       } catch (error) {
+        const status = Number.isInteger(error?.statusCode) ? error.statusCode : 400;
+        res.writeHead(status);
+        return res.end(JSON.stringify({ error: status === 413 ? 'request too large' : 'invalid request' }));
+      }
+    }
+
+    if (req.method === 'POST' && req.url === '/v1/verify-2fa') {
+      try { return await verifyTotp(authProvider, req, res); }
+      catch (error) {
         const status = Number.isInteger(error?.statusCode) ? error.statusCode : 400;
         res.writeHead(status);
         return res.end(JSON.stringify({ error: status === 413 ? 'request too large' : 'invalid request' }));
