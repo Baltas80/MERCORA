@@ -278,12 +278,22 @@ fn admin_request(state: State<'_, AdminSession>, method: String, path: String, b
     let response_body = response_body(&response)?;
     let _: Value = serde_json::from_str(response_body)
         .map_err(|_| "Invalid Admin API JSON".to_string())?;
+
+    // Better Auth can rotate the session cookie when a temporary 2FA challenge
+    // becomes a fully authenticated session. Preserve only the cookie pair,
+    // never Set-Cookie attributes or response bodies.
+    if method == "POST" && path == "/api/admin/auth/verify-2fa" {
+        if let Some(updated_cookie) = response_cookie_header(&response) {
+            *state.0.lock().map_err(|_| "Session state unavailable")? = Some(updated_cookie);
+        }
+    }
+
     Ok(response_body.to_string())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_chunked_body, detailed_api_error};
+    use super::{decode_chunked_body, detailed_api_error, response_cookie_header};
 
     #[test]
     fn decodes_chunked_json_response_body() {
@@ -297,6 +307,12 @@ mod tests {
         let encoded = b"5;foo=bar\r\nhello\r\n0\r\n\r\n";
         let decoded = decode_chunked_body(encoded).expect("chunk extension should be accepted");
         assert_eq!(decoded, b"hello");
+    }
+
+    #[test]
+    fn extracts_only_cookie_pairs_from_set_cookie_headers() {
+        let response = "HTTP/1.1 200 OK\r\nSet-Cookie: mercora_admin.session=abc123; Path=/; HttpOnly; SameSite=Strict\r\nSet-Cookie: mercora_admin.other=def456; Path=/\r\n\r\n{\"ok\":true}";
+        assert_eq!(response_cookie_header(response).as_deref(), Some("mercora_admin.session=abc123; mercora_admin.other=def456"));
     }
 
     #[test]
