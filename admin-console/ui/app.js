@@ -1,10 +1,14 @@
 const invoke = window.__TAURI__?.core?.invoke;
 const login = document.querySelector('#login');
+const twofa = document.querySelector('#twofa');
 const consoleRoot = document.querySelector('#console');
 const form = document.querySelector('#login-form');
+const twofaForm = document.querySelector('#twofa-form');
 const usernameInput = document.querySelector('#username');
 const passwordInput = document.querySelector('#password');
+const totpInput = document.querySelector('#totp');
 const loginError = document.querySelector('#login-error');
+const twofaError = document.querySelector('#twofa-error');
 const view = document.querySelector('#view');
 const toast = document.querySelector('#toast');
 
@@ -27,9 +31,10 @@ const TAB_META = Object.freeze({
 });
 
 function markActivity(){lastActivity=Date.now()}
-function esc(v){return String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function showLogin(){authenticated=false;if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null}consoleRoot.classList.add('hidden');login.classList.remove('hidden');passwordInput.value='';usernameInput.focus()}
-function showConsole(){login.classList.add('hidden');consoleRoot.classList.remove('hidden');authenticated=true;markActivity();loadTab('dashboard');if(refreshTimer)clearInterval(refreshTimer);refreshTimer=setInterval(()=>loadTab(activeTab),15000)}
+function esc(v){return String(v ?? '').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]))}
+function showLogin(){authenticated=false;if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null}consoleRoot.classList.add('hidden');twofa.classList.add('hidden');login.classList.remove('hidden');passwordInput.value='';totpInput.value='';loginError.hidden=true;twofaError.hidden=true;usernameInput.focus()}
+function showTwoFactor(){login.classList.add('hidden');consoleRoot.classList.add('hidden');twofa.classList.remove('hidden');twofaError.hidden=true;totpInput.value='';totpInput.focus()}
+function showConsole(){login.classList.add('hidden');twofa.classList.add('hidden');consoleRoot.classList.remove('hidden');authenticated=true;markActivity();loadTab('dashboard');if(refreshTimer)clearInterval(refreshTimer);refreshTimer=setInterval(()=>loadTab(activeTab),15000)}
 async function request(method,path,body){if(!invoke)throw new Error('Tauri runtime unavailable');markActivity();return JSON.parse(await invoke('admin_request',{method,path,body:body?JSON.stringify(body):null}))}
 function header(tab){const [title,subtitle]=TAB_META[tab];return `<div class="section-head"><div><p class="eyebrow">MERCORA ADMIN</p><h2>${esc(title)}</h2><p class="muted">${esc(subtitle)}</p></div></div>`}
 function card(title,value,meta=''){return `<article class="metric"><div class="metric-title">${esc(title)}</div><div class="metric-value">${esc(value)}</div><div class="metric-meta">${esc(meta)}</div></article>`}
@@ -60,7 +65,7 @@ function state(value){return String(value||'UNKNOWN').toUpperCase()}
 function renderStatus(tab,status){
   const names=['MERCORA','NODE.JS','POSTGRESQL','TOR','BACKEND','ONION SERVICE','STORAGE','HEALTH'];
   const values={'MERCORA':status.mercora,'NODE.JS':status.node,'POSTGRESQL':status.postgresql,'TOR':status.tor,'BACKEND':status.backend,'ONION SERVICE':status.onionService,'STORAGE':status.storage,'HEALTH':status.health};
-  view.innerHTML=header(tab)+'<div class="metrics">'+names.map(n=>card(n,state(values[n]))).join('')+'</div>'+
+  view.innerHTML=header(tab)+'<div class="metrics">'+names.map(n=>card(n,state(values[n]))).join('')+
     '<div class="card"><h3>Service actions</h3><div class="button-row">'+
     '<button data-action="HEALTH_CHECK">HEALTH CHECK</button><button data-action="RECOVER" class="secondary">RECOVER AFFECTED</button>'+
     '</div></div>'+
@@ -79,7 +84,8 @@ function renderSettings(){
 
 function showToast(message,kind='ok'){toast.textContent=message;toast.dataset.kind=kind;toast.hidden=false;setTimeout(()=>toast.hidden=true,3000)}
 async function logout(){authenticated=false;if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null}await invoke?.('admin_logout').catch(()=>{});showLogin()}
-form.addEventListener('submit',async e=>{e.preventDefault();loginError.hidden=true;try{const body=JSON.parse(await invoke('admin_login',{username:usernameInput.value.trim(),password:passwordInput.value}));if(body?.twoFactorRequired){loginError.textContent='2FA is required but the current UI build does not yet expose the verification step.';loginError.hidden=false;await invoke('admin_logout').catch(()=>{});return}showConsole()}catch{loginError.textContent='Authentication failed.';loginError.hidden=false}});
+form.addEventListener('submit',async e=>{e.preventDefault();loginError.hidden=true;try{const body=JSON.parse(await invoke('admin_login',{username:usernameInput.value.trim(),password:passwordInput.value}));if(body?.twoFactorRequired){showTwoFactor();return}showConsole()}catch{loginError.textContent='Authentication failed.';loginError.hidden=false}});
+twofaForm.addEventListener('submit',async e=>{e.preventDefault();twofaError.hidden=true;const code=totpInput.value.trim();if(!/^\d{6}$/.test(code)){twofaError.textContent='Enter the 6-digit authenticator code.';twofaError.hidden=false;return}setBusy(true);try{await request('POST','/api/admin/auth/verify-2fa',{code});const session=await request('GET','/api/admin/auth/status');if(session?.ok&&session?.user?.role==='admin'){showConsole()}else{throw new Error('Administrator session could not be verified.')}}catch{await invoke?.('admin_logout').catch(()=>{});twofaError.textContent='2FA verification failed.';twofaError.hidden=false;totpInput.select()}finally{setBusy(false)}});
 document.querySelector('#logout').addEventListener('click',logout);
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>loadTab(b.dataset.tab)));
 ['pointerdown','keydown'].forEach(name=>document.addEventListener(name,()=>{if(authenticated)markActivity()},{passive:true}));
