@@ -27,5 +27,6 @@ test('Windows recovery is targeted and blocks backend recovery on unhealthy Post
 
 test('Windows manager probes backend only through the fixed loopback health endpoint', () => {
   assert.match(script, /http:\/\/127\.0\.0\.1:8080\/api\/healthz/);
-  assert.doesNotMatch(script, /https?:\/\/[^'\"]+/i);
+  const urls = [...script.matchAll(/https?:\/\/[^'\"\s]+/gi)].map((match) => match[0]);
+  assert.deepEqual(urls, ['http://127.0.0.1:8080/api/healthz']);
 });
