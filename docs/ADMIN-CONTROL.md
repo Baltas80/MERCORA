@@ -82,6 +82,14 @@ The Admin Control health check reads the effective application Tor configuration
 
 The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps the persistent `tor_data` volume, and mounts the application Tor configuration read-only at `/data/torrc`. The selected image's entrypoint creates `/etc/tor/torrc-defaults` during startup, so the Tor service must not use a global container `read_only: true` filesystem setting.
 
+## CI / release security boundary
+
+The Windows Admin Console workflow follows least privilege. The Windows build job has only `contents: read`; it performs the Rust checks/tests, JavaScript syntax check, real Windows installer build, and artifact upload without repository write access.
+
+Publishing a Windows release is isolated into a separate job that runs only after the build job succeeds. Only that release job receives `contents: write`, and it receives the already-built installer through the GitHub Actions artifact channel. The build job therefore cannot publish or modify repository releases even if its build steps are compromised.
+
+The workflow now executes the Rust unit-test suite before producing the installer. A successful Windows release therefore requires both compilation and the Admin Console Rust tests to pass.
+
 ## Verification
 
 - **IMPLEMENTED:** allowlisted START/STOP/RESTART/STATUS/HEALTH_CHECK/RECOVER operations.
@@ -106,9 +114,12 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 - **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
 - **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
 - **IMPLEMENTED:** CI #581 completed successfully for the backend diagnostic change.
-- **IMPLEMENTED:** Windows Admin Console build is now a required CI job and publishes the real Tauri Windows bundle as a workflow artifact.
+- **IMPLEMENTED:** Windows Admin Console build is a required CI job and publishes the real Tauri Windows bundle as a workflow artifact.
 - **IMPLEMENTED:** native Admin Console error-body disclosure defense with regression tests.
 - **IMPLEMENTED:** explicit ordered post-recovery verification checkpoints with regression coverage for ordering and secret-safe diagnostics.
+- **IMPLEMENTED:** Windows CI build job reduced to `contents: read` permissions.
+- **IMPLEMENTED:** release publishing isolated to a separate post-build job with the minimum required `contents: write` permission.
+- **IMPLEMENTED:** Windows CI now runs the Rust Admin Console unit-test suite before packaging.
 - **PENDING:** authoritative CI execution for the latest commits could not be observed through the available GitHub workflow-run endpoint; no run was returned for the latest commit at verification time.
-- **PENDING:** execution of the Rust Admin Console unit tests in this environment because the execution host cannot resolve `github.com` and therefore cannot clone/build the Tauri project locally.
+- **PENDING:** local execution of the Rust Admin Console unit tests in this environment because the execution host cannot resolve `github.com` and therefore cannot clone/build the Tauri project locally.
 - **PENDING:** validation of the Windows bundle on the physical Windows/Docker environment, including HEALTH CHECK and RECOVER against the live stack.
