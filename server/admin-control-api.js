@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { auth as defaultAuth } from './auth/better-auth.js';
 import { createAdminController } from './admin-control.js';
+import { assertNoSecretFields, publicAdminCapabilities } from './admin-console-contract.js';
 
 const ACTIONS = new Set(['START', 'STOP', 'RESTART', 'STATUS', 'HEALTH_CHECK', 'RECOVER']);
 const SERVICES = new Set(['app', 'postgres', 'tor']);
@@ -29,8 +30,6 @@ function requestHeaders(req, cookie = null) {
   for (const [name, value] of Object.entries(req.headers)) {
     if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
   }
-  // This service is loopback-only. Never trust a client-supplied forwarded IP;
-  // Better Auth must receive the actual peer address for rate limiting.
   if (req.socket.remoteAddress) headers.set('x-forwarded-for', req.socket.remoteAddress);
   else headers.delete('x-forwarded-for');
   if (cookie !== null) headers.set('cookie', cookie);
@@ -87,20 +86,12 @@ async function authenticateLogin(auth, req, res) {
     res.end(JSON.stringify({ error: 'unauthorized' }));
     return;
   }
-
   try {
     const headers = requestHeaders(req);
     headers.delete('content-length');
     headers.delete('host');
     headers.set('content-type', 'application/json');
-    const request = new Request(
-      `http://127.0.0.1:${process.env.MERCORA_ADMIN_PORT ?? '8787'}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ username, password, rememberMe: false }),
-      },
-    );
+    const request = new Request(`http://127.0.0.1:${process.env.MERCORA_ADMIN_PORT ?? '8787'}/api/auth/sign-in/username`, { method: 'POST', headers, body: JSON.stringify({ username, password, rememberMe: false }) });
     const response = await auth.handler(request);
     const body = await response.text();
     if (!response.ok) {
@@ -113,15 +104,12 @@ async function authenticateLogin(auth, req, res) {
       res.writeHead(202);
       return res.end(JSON.stringify({ ok: false, twoFactorRequired: true, methods: Array.isArray(parsed.twoFactorMethods) ? parsed.twoFactorMethods : ['totp'] }));
     }
-
     if (parsed?.user?.role !== 'admin') {
       const cookie = response.headers.getSetCookie?.()[0]?.split(';', 1)[0] ?? response.headers.get('set-cookie')?.split(';', 1)[0];
       if (cookie) await auth.api.signOut({ headers: new Headers({ cookie }) }).catch(() => {});
       res.writeHead(403);
       return res.end(JSON.stringify({ error: 'admin role required' }));
     }
-    // Only establish the browser session after the authenticated identity has
-    // been confirmed to have the required admin role.
     forwardSetCookies(res, response.headers);
     res.writeHead(200);
     return res.end(JSON.stringify({ ok: true, user: { id: parsed.user.id, username: parsed.user.username ?? null, role: parsed.user.role } }));
@@ -143,10 +131,7 @@ async function verifyTotp(auth, req, res) {
     headers.delete('content-length');
     headers.delete('host');
     headers.set('content-type', 'application/json');
-    const request = new Request(
-      `http://127.0.0.1:${process.env.MERCORA_ADMIN_PORT ?? '8787'}/api/auth/two-factor/verify-totp`,
-      { method: 'POST', headers, body: JSON.stringify({ code, trustDevice: false }) }
-    );
+    const request = new Request(`http://127.0.0.1:${process.env.MERCORA_ADMIN_PORT ?? '8787'}/api/auth/two-factor/verify-totp`, { method: 'POST', headers, body: JSON.stringify({ code, trustDevice: false }) });
     const response = await auth.handler(request);
     const body = await response.text();
     if (!response.ok) {
@@ -174,7 +159,6 @@ async function logout(auth, req, res) {
 export function createAdminApi({ controller, auth, host = '127.0.0.1', port = 8787 } = {}) {
   const control = controller ?? createAdminController();
   const authProvider = auth ?? defaultAuth;
-
   const server = http.createServer(async (req, res) => {
     responseHeaders(res);
     if (!isLoopback(req.socket.remoteAddress)) {
@@ -188,56 +172,41 @@ export function createAdminApi({ controller, auth, host = '127.0.0.1', port = 87
     if (await rejectOversized(req, res)) return;
 
     if (req.method === 'POST' && req.url === '/v1/login') {
-      try {
-        return await authenticateLogin(authProvider, req, res);
-      } catch (error) {
-        const status = Number.isInteger(error?.statusCode) ? error.statusCode : 400;
-        res.writeHead(status);
-        return res.end(JSON.stringify({ error: status === 413 ? 'request too large' : 'invalid request' }));
-      }
+      try { return await authenticateLogin(authProvider, req, res); }
+      catch (error) { const status = Number.isInteger(error?.statusCode) ? error.statusCode : 400; res.writeHead(status); return res.end(JSON.stringify({ error: status === 413 ? 'request too large' : 'invalid request' })); }
     }
-
     if (req.method === 'POST' && req.url === '/v1/verify-2fa') {
       try { return await verifyTotp(authProvider, req, res); }
-      catch (error) {
-        const status = Number.isInteger(error?.statusCode) ? error.statusCode : 400;
-        res.writeHead(status);
-        return res.end(JSON.stringify({ error: status === 413 ? 'request too large' : 'invalid request' }));
-      }
+      catch (error) { const status = Number.isInteger(error?.statusCode) ? error.statusCode : 400; res.writeHead(status); return res.end(JSON.stringify({ error: status === 413 ? 'request too large' : 'invalid request' })); }
     }
-
     if (req.method === 'POST' && req.url === '/v1/logout') return logout(authProvider, req, res);
-
     if (req.method === 'GET' && req.url === '/v1/session') {
       const session = await requireAdmin(authProvider, req);
-      if (!session) {
-        res.writeHead(401);
-        return res.end(JSON.stringify({ error: 'unauthorized' }));
-      }
+      if (!session) { res.writeHead(401); return res.end(JSON.stringify({ error: 'unauthorized' })); }
       res.writeHead(200);
       return res.end(JSON.stringify({ ok: true, user: { id: session.user.id, username: session.user.username ?? null, role: session.user.role } }));
     }
 
     const authenticated = await requireAdmin(authProvider, req);
-    if (!authenticated) {
-      res.writeHead(401);
-      return res.end(JSON.stringify({ error: 'unauthorized' }));
+    if (!authenticated) { res.writeHead(401); return res.end(JSON.stringify({ error: 'unauthorized' })); }
+
+    if (req.method === 'GET' && req.url === '/v1/capabilities') {
+      const capabilities = assertNoSecretFields(publicAdminCapabilities());
+      res.writeHead(200);
+      return res.end(JSON.stringify(capabilities));
     }
 
     if (req.method !== 'POST' || req.url !== '/v1/control') {
       res.writeHead(404);
       return res.end(JSON.stringify({ error: 'not found' }));
     }
-
     try {
       const input = await readJson(req);
       const action = String(input.action ?? '').toUpperCase();
       const service = input.service === undefined ? undefined : String(input.service);
       if (!ACTIONS.has(action)) throw new Error('unsupported action');
       if (service !== undefined && !SERVICES.has(service)) throw new Error('unsupported service');
-      const result = action === 'HEALTH_CHECK'
-        ? await control.healthCheck()
-        : await control.run(action, service);
+      const result = action === 'HEALTH_CHECK' ? await control.healthCheck() : await control.run(action, service);
       res.writeHead(result.ok ? 200 : 503);
       return res.end(JSON.stringify(result));
     } catch (error) {
@@ -246,6 +215,5 @@ export function createAdminApi({ controller, auth, host = '127.0.0.1', port = 87
       return res.end(JSON.stringify({ error: status === 413 ? 'request too large' : 'control operation failed' }));
     }
   });
-
   return { server, listen: () => new Promise((resolve) => server.listen(port, host, resolve)) };
 }
