@@ -31,7 +31,7 @@ The Admin Control API accepts only the six operations above and only the service
 
 No interface field is converted into a shell command. Invalid actions and service names are rejected before Docker is invoked.
 
-Requests larger than 4 KiB are rejected before authentication/control execution. Responses use defensive headers including `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
+Requests larger than 4 KiB are rejected before authentication/control execution. Responses use defensive headers including `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, a restrictive `Content-Security-Policy`, and `Referrer-Policy: no-referrer`. The API does not return HTML or executable content.
 
 Diagnostics are truncated and filtered to remove common secret-bearing lines and embedded credentials before they are returned to the console. The native Admin Console adds a second disclosure boundary: non-success HTTP error bodies are never displayed by the desktop client, so a future API error path cannot accidentally expose implementation details or credentials through the UI.
 
@@ -104,6 +104,7 @@ The backend CI installation uses `npm ci` against the committed root lockfile. T
 - **IMPLEMENTED:** loopback-only Admin Control API.
 - **IMPLEMENTED:** Better Auth username/password session authentication with admin-role authorization.
 - **IMPLEMENTED:** supplied browser Origin validation for the local Admin Control API.
+- **IMPLEMENTED:** defensive no-store, anti-sniffing, anti-framing, restrictive CSP, and no-referrer response headers.
 - **IMPLEMENTED:** targeted recovery with diagnosis-first selection when no component is specified.
 - **IMPLEMENTED:** dependency-gated explicit app recovery; unhealthy PostgreSQL blocks an unnecessary app restart.
 - **IMPLEMENTED:** no-restart path when the stack is already healthy.
@@ -118,26 +119,10 @@ The backend CI installation uses `npm ci` against the committed root lockfile. T
 - **IMPLEMENTED:** `HEALTH_CHECK` full diagnostic path rather than a plain Compose status query.
 - **IMPLEMENTED:** controlled in-container backend health probe.
 - **IMPLEMENTED:** secret-safe diagnostic sanitization.
-- **IMPLEMENTED:** sanitized HTTP status diagnostics for backend failures.
-- **IMPLEMENTED:** no-shell Docker invocation.
-- **IMPLEMENTED:** Tor startup compatibility fix for the selected image.
-- **IMPLEMENTED:** platform-neutral owner-bootstrap path test.
-- **IMPLEMENTED:** CI #581 completed successfully for the backend diagnostic change.
-- **IMPLEMENTED:** Windows Admin Console build is a required CI job and publishes the real Tauri Windows bundle as a workflow artifact.
-- **IMPLEMENTED:** native Admin Console error-body disclosure defense with regression tests.
-- **IMPLEMENTED:** explicit ordered post-recovery verification checkpoints with regression coverage for ordering and secret-safe diagnostics.
-- **IMPLEMENTED:** Windows CI build job restricted to `contents: read`.
-- **IMPLEMENTED:** main CI default token permissions restricted to `contents: read`; CodeQL retains only its required `security-events: write` permission.
-- **IMPLEMENTED:** root CI dependency installation uses `npm ci` against the committed root lockfile.
-- **IMPLEMENTED:** Admin Console CI retains `npm install` because no `admin-console/package-lock.json` is currently committed.
-- **IMPLEMENTED:** Rust Admin Console unit tests are now an explicit CI gate before Windows packaging.
-- **IMPLEMENTED:** CI supports manual `workflow_dispatch` execution for validation when an operator needs to rerun the complete workflow.
-- **IMPLEMENTED:** GitHub Actions versions updated to current Node 24-compatible action runtimes across CI and visual-preview workflows.
-- **IMPLEMENTED:** CI concurrency cancellation prevents obsolete same-ref runs from competing with current validation.
-- **IMPLEMENTED:** CI job timeouts bound static-security, CodeQL, and Windows build execution.
-- **IMPLEMENTED:** Windows bundle artifact retention is explicitly limited to 14 days.
-- **IMPLEMENTED:** visual-preview workflow has least-privilege permissions, a bounded 10-minute runtime, concurrency cancellation, and 14-day artifact retention.
-- **PENDING:** authoritative CI execution for the latest workflow commits must still be observed after the pushes; the available commit-run endpoint currently returns no run for the new commits.
-- **PENDING:** local execution of the Rust Admin Console unit tests in this environment because the execution host cannot resolve `github.com` and therefore cannot clone/build the Tauri project locally.
-- **PENDING:** validation of the Windows bundle on the physical Windows/Docker environment, including HEALTH CHECK and RECOVER against the live stack.
-- **PENDING:** live Tor origin-leak/edge integration evidence remains a production gate; the existing issue requires an isolated Onion Service deployment and machine-readable CI/manual evidence before this can be considered closed.
+
+## Current gates
+
+- **PENDING:** execute the complete Node.js test suite against the real dependency installation.
+- **PENDING:** execute GitHub Actions successfully for the current `master` head, including the Rust Admin Console test gate and Windows bundle build.
+- **PENDING:** validate `HEALTH_CHECK` and targeted `RECOVER` against the physical Windows + Docker + PostgreSQL + Tor + Onion Service stack.
+- **PENDING:** perform the real Tor/Onion origin-leak test from outside the intended Onion Service path before production release.
