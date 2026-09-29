@@ -176,12 +176,15 @@ fn response_cookie_header(response: &str) -> Option<String> {
 }
 
 fn detailed_api_error(prefix: &str, response: &str) -> String {
+    // Error bodies are deliberately not surfaced by the desktop client. The
+    // Admin Control API owns diagnostic sanitization, while authentication and
+    // transport failures must remain fail-closed even if a future server-side
+    // error path accidentally contains implementation details or credentials.
     let status = response_status_line(response);
-    let body = response_body(response).unwrap_or("").trim().to_string();
-    if body.is_empty() {
-        format!("{prefix}: {status}")
+    if status.is_empty() {
+        prefix.to_string()
     } else {
-        format!("{prefix}: {status} - {body}")
+        format!("{prefix}: {status}")
     }
 }
 
@@ -250,7 +253,7 @@ fn admin_request(state: State<'_, AdminSession>, method: String, path: String, b
 
 #[cfg(test)]
 mod tests {
-    use super::decode_chunked_body;
+    use super::{decode_chunked_body, detailed_api_error};
 
     #[test]
     fn decodes_chunked_json_response_body() {
@@ -264,6 +267,20 @@ mod tests {
         let encoded = b"5;foo=bar\r\nhello\r\n0\r\n\r\n";
         let decoded = decode_chunked_body(encoded).expect("chunk extension should be accepted");
         assert_eq!(decoded, b"hello");
+    }
+
+    #[test]
+    fn never_exposes_error_body_to_desktop_ui() {
+        let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\n\r\n{\"error\":\"secret=do-not-disclose\"}";
+        let error = detailed_api_error("Admin API request failed", response);
+        assert_eq!(error, "Admin API request failed: HTTP/1.1 500 Internal Server Error");
+        assert!(!error.contains("secret"));
+    }
+
+    #[test]
+    fn preserves_generic_transport_error_when_status_is_missing() {
+        let error = detailed_api_error("Admin login failed", "");
+        assert_eq!(error, "Admin login failed");
     }
 }
 
