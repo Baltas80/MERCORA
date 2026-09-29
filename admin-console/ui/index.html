@@ -4,6 +4,7 @@
 <body>
 <main id="app">
 <section id="login" class="screen"><div class="brand">MERCORA</div><h1>ADMIN CONSOLE</h1><p class="muted">Private local control plane</p><form id="login-form" class="card login-card"><label for="username">Username</label><input id="username" type="text" autocomplete="username" maxlength="64" required><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" maxlength="256" required><button type="submit">SIGN IN</button><p id="login-error" class="error" hidden></p></form></section>
+<section id="twofa" class="screen hidden"><div class="brand">MERCORA</div><h1>2FA VERIFICATION</h1><p class="muted">Administrator second-factor verification required.</p><form id="twofa-form" class="card login-card"><label for="totp">Authenticator code</label><input id="totp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required><button type="submit">VERIFY</button><p id="twofa-error" class="error" hidden></p></form></section>
 <section id="console" class="hidden">
 <header class="topbar"><div><span class="brand">MERCORA</span><span class="divider">/</span><span>ADMIN CONSOLE</span></div><button id="logout" class="secondary">LOCK</button></header>
 <div class="shell">
