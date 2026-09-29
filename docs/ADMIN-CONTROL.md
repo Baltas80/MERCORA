@@ -88,7 +88,9 @@ The Windows Admin Console workflow follows least privilege. The Windows build jo
 
 Publishing a Windows release is isolated into a separate job that runs only after the build job succeeds. Only that release job receives `contents: write`, and it receives the already-built installer through the GitHub Actions artifact channel. The build job therefore cannot publish or modify repository releases even if its build steps are compromised.
 
-The workflow now executes the Rust unit-test suite before producing the installer. A successful Windows release therefore requires both compilation and the Admin Console Rust tests to pass.
+The workflow executes the Rust unit-test suite before producing the installer. A successful Windows release therefore requires both compilation and the Admin Console Rust tests to pass.
+
+The main CI workflow also has a repository-wide default of `contents: read`. CodeQL alone receives `security-events: write`; ordinary static-security, test, and Windows-build jobs do not receive that privilege. The backend CI installation uses `npm ci` against the committed root lockfile, while the Admin Console continues to use `npm install` because that subproject currently has no committed `package-lock.json`.
 
 ## Verification
 
@@ -119,7 +121,11 @@ The workflow now executes the Rust unit-test suite before producing the installe
 - **IMPLEMENTED:** explicit ordered post-recovery verification checkpoints with regression coverage for ordering and secret-safe diagnostics.
 - **IMPLEMENTED:** Windows CI build job reduced to `contents: read` permissions.
 - **IMPLEMENTED:** release publishing isolated to a separate post-build job with the minimum required `contents: write` permission.
-- **IMPLEMENTED:** Windows CI now runs the Rust Admin Console unit-test suite before packaging.
+- **IMPLEMENTED:** Windows CI runs the Rust Admin Console unit-test suite before packaging.
+- **IMPLEMENTED:** main CI default token permissions reduced to `contents: read`; CodeQL retains only its required `security-events: write` permission.
+- **IMPLEMENTED:** root CI dependency installation changed from mutable `npm install` to lockfile-enforced `npm ci`.
+- **IMPLEMENTED:** Admin Console CI retains `npm install` because no `admin-console/package-lock.json` is currently committed.
 - **PENDING:** authoritative CI execution for the latest commits could not be observed through the available GitHub workflow-run endpoint; no run was returned for the latest commit at verification time.
 - **PENDING:** local execution of the Rust Admin Console unit tests in this environment because the execution host cannot resolve `github.com` and therefore cannot clone/build the Tauri project locally.
 - **PENDING:** validation of the Windows bundle on the physical Windows/Docker environment, including HEALTH CHECK and RECOVER against the live stack.
+- **PENDING:** live Tor origin-leak/edge integration evidence remains a production gate; the existing issue requires an isolated Onion Service deployment and machine-readable CI/manual evidence before this can be considered closed.
