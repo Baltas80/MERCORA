@@ -197,10 +197,16 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
       steps.push({ step: `start:${target}`, result: start });
       repaired = start.ok;
     }
-    const health = await healthCheck();
-    steps.push({ step: 'health', result: health });
-    const targetHealthy = targetHealthyFromChecks(health, target);
-    return { ok: repaired && targetHealthy && health.ok, target, targetHealthy, repaired, steps };
+
+    // Recovery verification is deliberately exposed as ordered, sanitized
+    // checkpoints. This prevents the UI from treating one aggregate health
+    // result as proof that every required dependency was revalidated.
+    const verification = await healthCheck();
+    appendRecoveryVerificationSteps(steps, verification);
+    const targetHealthy = targetHealthyFromChecks(verification, target);
+    const finalHealth = { ok: verification.ok, checks: verification.checks, platform: verification.platform };
+    steps.push({ step: 'health', result: finalHealth });
+    return { ok: repaired && targetHealthy && verification.ok, target, targetHealthy, repaired, steps };
   }
 
   async function healthCheck() {
@@ -254,6 +260,26 @@ export function createAdminController({ cwd = path.resolve(process.cwd()), runne
   }
 
   return Object.freeze({ run, healthCheck, status });
+}
+
+function appendRecoveryVerificationSteps(steps, health) {
+  const checks = Object.fromEntries(health.checks.map((check) => [check.name, check]));
+  const dependencyOk = Boolean(checks.configuration?.ok && checks.docker?.ok && checks.node?.ok && checks.services?.ok);
+  steps.push({
+    step: 'verify:dependencies',
+    result: { ok: dependencyOk, configuration: checks.configuration, node: checks.node, docker: checks.docker, services: checks.services }
+  });
+  steps.push({ step: 'verify:backend', result: checks.backend ?? { ok: false, stderr: 'backend check unavailable' } });
+  steps.push({ step: 'verify:database', result: checks.postgresql ?? { ok: false, stderr: 'database check unavailable' } });
+  steps.push({
+    step: 'verify:tor',
+    result: {
+      ok: Boolean(checks.services?.torRunning && checks.torConfig?.ok),
+      services: checks.services ?? null,
+      torConfig: checks.torConfig ?? null
+    }
+  });
+  steps.push({ step: 'verify:onion-service', result: checks.onionService ?? { ok: false, stderr: 'onion service check unavailable' } });
 }
 
 function named(name, result) { return { name, ...sanitizeResult(result) }; }
