@@ -1,0 +1,89 @@
+name: Apply backend probe fix
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/apply-backend-probe-fix.yml
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fix
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('server/admin-control.js')
+          s = p.read_text()
+          old = """const BACKEND_HEALTH_COMMAND = Object.freeze([
+  'node',
+  '-e',
+  \"fetch('http://127.0.0.1:8080/api/healthz').then(async (response) => { console.log(JSON.stringify({ status: response.status, statusText: response.statusText, ok: response.ok })); process.exit(response.ok ? 0 : 1); }).catch((error) => { console.error(`${error.name}: ${error.message}`); process.exit(1); })\"
+]);"""
+          new = """const BACKEND_CONTAINER_PORT = '8080';
+const BACKEND_HEALTH_PATH = '/api/healthz';
+const BACKEND_HEALTH_COMMAND = Object.freeze([
+  'node',
+  '-e',
+  `fetch('http://127.0.0.1:${BACKEND_CONTAINER_PORT}${BACKEND_HEALTH_PATH}').then(async (response) => { console.log(JSON.stringify({ status: response.status, statusText: response.statusText, ok: response.ok })); process.exit(response.ok ? 0 : 1); }).catch((error) => { console.error(`${error.name}: ${error.message}${error.cause?.code ? ` (${error.cause.code})` : ''}`); process.exit(1); })`
+]);"""
+          if old not in s:
+              raise SystemExit('expected command block not found')
+          s = s.replace(old, new, 1)
+          old2 = """async function backendProbe(runner, cwd) {
+  return runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'app', ...BACKEND_HEALTH_COMMAND], { cwd });
+}"""
+          new2 = """function parsePublishedBackendUrl(stdout = '') {
+  const line = String(stdout).trim().split(/\\r?\\n/).find(Boolean);
+  if (!line) return null;
+  const match = line.match(/^(?:https?:\\/\\/)?(?:\\[([^\\]]+)\\]|([^:]+)):(\\d+)$/);
+  if (!match) return null;
+  const host = match[1] ?? match[2];
+  const port = match[3];
+  const localHosts = new Set(['127.0.0.1', 'localhost', '0.0.0.0', '::', '::1']);
+  if (!localHosts.has(host)) return null;
+  return `http://127.0.0.1:${port}${BACKEND_HEALTH_PATH}`;
+}
+
+async function probeBackendUrl(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+    return {
+      ok: response.ok,
+      code: response.status,
+      stdout: JSON.stringify({ status: response.status, statusText: response.statusText, ok: response.ok, url }),
+      stderr: ''
+    };
+  } catch (error) {
+    const cause = error?.cause?.code ? ` (${error.cause.code})` : '';
+    return { ok: false, code: null, stdout: '', stderr: `${error?.name ?? 'Error'}: ${error?.message ?? 'backend unavailable'}${cause}` };
+  }
+}
+
+async function backendProbe(runner, cwd) {
+  const publishedPort = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'port', 'app', BACKEND_CONTAINER_PORT], { cwd });
+  const publishedUrl = publishedPort.ok ? parsePublishedBackendUrl(publishedPort.stdout) : null;
+  if (publishedUrl) return probeBackendUrl(publishedUrl);
+
+  return runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'app', ...BACKEND_HEALTH_COMMAND], { cwd });
+}"""
+          if old2 not in s:
+              raise SystemExit('expected backendProbe function not found')
+          s = s.replace(old2, new2, 1)
+          p.write_text(s)
+      - name: Validate
+        run: |
+          node --check server/admin-control.js
+          node --test server/admin-control.test.js server/admin-control-api.test.js server/admin-recovery.test.js
+      - name: Commit fix and remove one-shot workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/apply-backend-probe-fix.yml
+          git add server/admin-control.js .github/workflows/apply-backend-probe-fix.yml
+          git diff --cached --quiet && exit 0 || true
+          git commit -m 'fix(admin): probe backend through published local port'
+          git push
