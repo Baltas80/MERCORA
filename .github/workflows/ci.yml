@@ -9,9 +9,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: mercora-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   static-security:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -79,6 +84,7 @@ jobs:
   codeql:
     name: CodeQL
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       security-events: write
       packages: read
@@ -94,6 +100,7 @@ jobs:
   admin-console-windows:
     name: Admin Console Windows
     runs-on: windows-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -118,3 +125,4 @@ jobs:
           name: mercora-admin-console-windows
           path: admin-console/src-tauri/target/release/bundle/**
           if-no-files-found: error
+          retention-days: 14
