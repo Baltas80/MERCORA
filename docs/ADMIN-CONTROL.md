@@ -84,13 +84,11 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 
 ## CI / release security boundary
 
-The Windows Admin Console workflow follows least privilege. The Windows build job has only `contents: read`; it performs the Rust checks/tests, JavaScript syntax check, real Windows installer build, and artifact upload without repository write access.
+The main CI workflow has a repository-wide default of `contents: read`. CodeQL alone receives `security-events: write`; ordinary static-security, test, and Windows-build jobs do not receive that privilege. The workflow can run on pushes, pull requests, and manual `workflow_dispatch` invocations.
 
-Publishing a Windows release is isolated into a separate job that runs only after the build job succeeds. Only that release job receives `contents: write`, and it receives the already-built installer through the GitHub Actions artifact channel. The build job therefore cannot publish or modify repository releases even if its build steps are compromised.
+The Windows Admin Console job has only `contents: read`. It installs the Tauri dependencies, runs the Rust unit-test suite with `cargo test --lib`, builds the real Windows Tauri bundle, and uploads that bundle as a workflow artifact. There is currently no release-publishing job in this workflow; release publication is therefore not represented as an implemented CI capability and must not be treated as such.
 
-The workflow executes the Rust unit-test suite before producing the installer. A successful Windows release therefore requires both compilation and the Admin Console Rust tests to pass.
-
-The main CI workflow also has a repository-wide default of `contents: read`. CodeQL alone receives `security-events: write`; ordinary static-security, test, and Windows-build jobs do not receive that privilege. The backend CI installation uses `npm ci` against the committed root lockfile, while the Admin Console continues to use `npm install` because that subproject currently has no committed `package-lock.json`.
+The backend CI installation uses `npm ci` against the committed root lockfile. The Admin Console continues to use `npm install` because that subproject currently has no committed `package-lock.json`.
 
 ## Verification
 
@@ -119,13 +117,13 @@ The main CI workflow also has a repository-wide default of `contents: read`. Cod
 - **IMPLEMENTED:** Windows Admin Console build is a required CI job and publishes the real Tauri Windows bundle as a workflow artifact.
 - **IMPLEMENTED:** native Admin Console error-body disclosure defense with regression tests.
 - **IMPLEMENTED:** explicit ordered post-recovery verification checkpoints with regression coverage for ordering and secret-safe diagnostics.
-- **IMPLEMENTED:** Windows CI build job reduced to `contents: read` permissions.
-- **IMPLEMENTED:** release publishing isolated to a separate post-build job with the minimum required `contents: write` permission.
-- **IMPLEMENTED:** Windows CI runs the Rust Admin Console unit-test suite before packaging.
-- **IMPLEMENTED:** main CI default token permissions reduced to `contents: read`; CodeQL retains only its required `security-events: write` permission.
-- **IMPLEMENTED:** root CI dependency installation changed from mutable `npm install` to lockfile-enforced `npm ci`.
+- **IMPLEMENTED:** Windows CI build job restricted to `contents: read`.
+- **IMPLEMENTED:** main CI default token permissions restricted to `contents: read`; CodeQL retains only its required `security-events: write` permission.
+- **IMPLEMENTED:** root CI dependency installation uses `npm ci` against the committed root lockfile.
 - **IMPLEMENTED:** Admin Console CI retains `npm install` because no `admin-console/package-lock.json` is currently committed.
-- **PENDING:** authoritative CI execution for the latest commits could not be observed through the available GitHub workflow-run endpoint; no run was returned for the latest commit at verification time.
+- **IMPLEMENTED:** Rust Admin Console unit tests are now an explicit CI gate before Windows packaging.
+- **IMPLEMENTED:** CI supports manual `workflow_dispatch` execution for validation when an operator needs to rerun the complete workflow.
+- **PENDING:** authoritative CI execution for commit `396fc63a38f85c7a3d5d115a06a8e6e07756200a` must still be observed after the push; the available commit-run endpoint previously returned no run for the preceding commit.
 - **PENDING:** local execution of the Rust Admin Console unit tests in this environment because the execution host cannot resolve `github.com` and therefore cannot clone/build the Tauri project locally.
 - **PENDING:** validation of the Windows bundle on the physical Windows/Docker environment, including HEALTH CHECK and RECOVER against the live stack.
 - **PENDING:** live Tor origin-leak/edge integration evidence remains a production gate; the existing issue requires an isolated Onion Service deployment and machine-readable CI/manual evidence before this can be considered closed.
