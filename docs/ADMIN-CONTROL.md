@@ -86,9 +86,11 @@ The Tor service retains `no-new-privileges`, drops all Linux capabilities, keeps
 
 The main CI workflow has a repository-wide default of `contents: read`. CodeQL alone receives `security-events: write`; ordinary static-security, test, and Windows-build jobs do not receive that privilege. The workflow can run on pushes, pull requests, and manual `workflow_dispatch` invocations.
 
+CI uses a branch/ref-scoped concurrency group with cancellation enabled, so obsolete in-flight runs for the same ref are stopped when a newer commit supersedes them. This avoids consuming a second Windows runner and prevents stale build artifacts from competing with the newest validation. Each job also has an explicit execution timeout to bound runaway builds/tests: 20 minutes for static security and CodeQL, and 30 minutes for the Windows Admin Console build.
+
 The CI action runtimes have been updated for the current GitHub-hosted runner environment: `actions/checkout@v6`, `actions/setup-node@v5`, `actions/upload-artifact@v7`, and `github/codeql-action@v4`. Node.js 22 remains the project runtime selected by the workflow; the action updates are specifically to avoid obsolete Node 20 action runtimes on current runners.
 
-The Windows Admin Console job has only `contents: read`. It installs the Tauri dependencies, runs the Rust unit-test suite with `cargo test --lib`, builds the real Windows Tauri bundle, and uploads that bundle as a workflow artifact. There is currently no release-publishing job in this workflow; release publication is therefore not represented as an implemented CI capability and must not be treated as such.
+The Windows Admin Console job has only `contents: read`. It installs the Tauri dependencies, runs the Rust unit-test suite with `cargo test --lib`, builds the real Windows Tauri bundle, and uploads that bundle as a workflow artifact. The artifact is retained for 14 days. There is currently no release-publishing job in this workflow; release publication is therefore not represented as an implemented CI capability and must not be treated as such.
 
 The backend CI installation uses `npm ci` against the committed root lockfile. The Admin Console continues to use `npm install` because that subproject currently has no committed `package-lock.json`.
 
@@ -126,6 +128,9 @@ The backend CI installation uses `npm ci` against the committed root lockfile. T
 - **IMPLEMENTED:** Rust Admin Console unit tests are now an explicit CI gate before Windows packaging.
 - **IMPLEMENTED:** CI supports manual `workflow_dispatch` execution for validation when an operator needs to rerun the complete workflow.
 - **IMPLEMENTED:** GitHub Actions versions updated to current Node 24-compatible action runtimes across CI and visual-preview workflows.
+- **IMPLEMENTED:** CI concurrency cancellation prevents obsolete same-ref runs from competing with current validation.
+- **IMPLEMENTED:** CI job timeouts bound static-security, CodeQL, and Windows build execution.
+- **IMPLEMENTED:** Windows bundle artifact retention is explicitly limited to 14 days.
 - **PENDING:** authoritative CI execution for the latest workflow commits must still be observed after the pushes; the available commit-run endpoint currently returns no run for the new commits.
 - **PENDING:** local execution of the Rust Admin Console unit tests in this environment because the execution host cannot resolve `github.com` and therefore cannot clone/build the Tauri project locally.
 - **PENDING:** validation of the Windows bundle on the physical Windows/Docker environment, including HEALTH CHECK and RECOVER against the live stack.
