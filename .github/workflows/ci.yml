@@ -7,11 +7,12 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   static-security:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -38,9 +39,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
 
       - name: Install Node dependencies
-        run: npm install --no-audit
+        run: npm ci --no-audit
 
       - name: Check server syntax
         run: node --check server/server.js
@@ -108,6 +110,8 @@ jobs:
   admin-console-windows:
     name: Admin Console Windows
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -115,10 +119,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: admin-console/package-lock.json
 
       - name: Install Tauri frontend dependencies
         working-directory: admin-console
-        run: npm install --no-audit
+        run: npm ci --no-audit
 
       - name: Build Windows Admin Console
         working-directory: admin-console
