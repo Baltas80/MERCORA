@@ -23,6 +23,15 @@ fn action_payload(method: &str, path: &str, body: &str) -> Result<String, String
     if method == "GET" && path == "/api/admin/status" {
         return Ok(json!({ "action": "STATUS" }).to_string());
     }
+    if method == "POST" && path == "/api/admin/auth/verify-2fa" {
+        let input: Value = serde_json::from_str(body)
+            .map_err(|_| "Invalid 2FA request JSON".to_string())?;
+        let code = input.get("code").and_then(Value::as_str).ok_or_else(|| "2FA code is required".to_string())?;
+        if code.len() != 6 || !code.chars().all(|c| c.is_ascii_digit()) {
+            return Err("Invalid 2FA code".into());
+        }
+        return Ok(json!({ "code": code }).to_string());
+    }
     let input: Value = serde_json::from_str(body)
         .map_err(|_| "Invalid administrative request JSON".to_string())?;
     let action = input
@@ -202,19 +211,27 @@ fn admin_login(state: State<'_, AdminSession>, username: String, password: Strin
     let payload = serde_json::to_string(&json!({ "username": username, "password": password }))
         .map_err(|_| "Unable to prepare login request".to_string())?;
     let response = raw_http_request("POST", "/v1/login", None, &payload)?;
-    if response_status_code(&response) != Some(200) {
+    let status = response_status_code(&response);
+    if status != Some(200) && status != Some(202) {
         return Err(detailed_api_error("Admin login failed", &response));
     }
     let body = response_body(&response)?.to_string();
     let parsed: Value = serde_json::from_str(&body)
         .map_err(|_| "Admin API returned invalid login JSON".to_string())?;
+    let cookie = response_cookie_header(&response)
+        .ok_or_else(|| "Admin login did not return an authentication cookie".to_string())?;
+    if status == Some(202) {
+        if parsed.get("twoFactorRequired") != Some(&Value::Bool(true)) {
+            return Err("Invalid 2FA challenge".into());
+        }
+        *state.0.lock().map_err(|_| "Session state unavailable")? = Some(cookie);
+        return Ok(body);
+    }
     if parsed.get("ok") != Some(&Value::Bool(true))
         || parsed.pointer("/user/role").and_then(Value::as_str) != Some("admin")
     {
         return Err("Admin API did not confirm an administrator session".into());
     }
-    let cookie = response_cookie_header(&response)
-        .ok_or_else(|| "Admin login succeeded but no session cookie was returned".to_string())?;
     let session_response = raw_http_request("GET", "/v1/session", Some(&cookie), "{}")?;
     if response_status_code(&session_response) != Some(200) {
         let _ = raw_http_request("POST", "/v1/logout", Some(&cookie), "{}");
@@ -247,7 +264,7 @@ fn admin_request(state: State<'_, AdminSession>, method: String, path: String, b
         .clone()
         .ok_or_else(|| "Not authenticated".to_string())?;
     let upstream = match (method.as_str(), path.as_str()) {
-        ("GET", "/api/admin/status") => (method.as_str(), "/v1/control"),
+        ("GET", "/api/admin/status") => ("POST", "/v1/control"),
         ("GET", "/api/admin/auth/status") => (method.as_str(), "/v1/session"),
         ("POST", "/api/admin/action") => (method.as_str(), "/v1/control"),
         ("POST", "/api/admin/auth/verify-2fa") => (method.as_str(), "/v1/verify-2fa"),
