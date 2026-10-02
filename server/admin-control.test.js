@@ -187,6 +187,43 @@ test('HEALTH_CHECK uses the controlled Docker app probe by default', async () =>
   }
 });
 
+test('HEALTH_CHECK falls back to the controlled Docker app probe when the published host probe fails', async () => {
+  const calls = [];
+  const runner = async (file, args) => {
+    calls.push([file, args]);
+    if (args.includes('port') && args.includes('app')) return { ok: true, code: 0, stdout: '127.0.0.1:8080\n', stderr: '' };
+    if (args.includes('pg_isready')) return healthyProbe();
+    if (args.includes('ps')) return { ok: true, code: 0, stdout: 'app\npostgres\ntor\n', stderr: '' };
+    if (args.includes('grep')) return { ok: true, code: 0, stdout: 'ORPort 0\nDirPort 0\nExitPolicy reject *:*\n', stderr: '' };
+    if (args.includes('test')) return healthyProbe();
+    if (args.includes('config')) return { ok: true, code: 0, stdout: 'postgres_data\n', stderr: '' };
+    if (args.includes('exec') && args.includes('app') && args.includes('node')) return healthyProbe();
+    return healthyProbe();
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw Object.assign(new Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
+  };
+
+  try {
+    const controller = createAdminController({
+      runner,
+      probe: async () => healthyProbe(),
+      configurationProbe: () => ({ ok: true, code: 0, stdout: 'required compose configuration detected', stderr: '' })
+    });
+
+    const result = await controller.run('HEALTH_CHECK');
+    const backendFallback = calls.find(([, args]) => args.includes('exec') && args.includes('app') && args.includes('node'));
+
+    assert.equal(result.checks.find((check) => check.name === 'backend')?.ok, true);
+    assert.equal(backendFallback?.[0], 'docker');
+    assert.equal(backendFallback?.[1].at(-2), '-e');
+    assert.match(backendFallback?.[1].at(-1) ?? '', /127\.0\.0\.1:8080\/api\/healthz/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('HEALTH_CHECK falls back to the controlled Docker app probe when no safe published port is available', async () => {
   const calls = [];
   const runner = async (file, args) => {
