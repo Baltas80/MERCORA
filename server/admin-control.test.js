@@ -154,11 +154,50 @@ test('HEALTH_CHECK uses the controlled Docker app probe by default', async () =>
   const calls = [];
   const runner = async (file, args) => {
     calls.push([file, args]);
+    if (args.includes('port') && args.includes('app')) return { ok: true, code: 0, stdout: '127.0.0.1:8080\n', stderr: '' };
     if (args.includes('pg_isready')) return healthyProbe();
     if (args.includes('ps')) return { ok: true, code: 0, stdout: 'app\npostgres\ntor\n', stderr: '' };
     if (args.includes('grep')) return { ok: true, code: 0, stdout: 'ORPort 0\nDirPort 0\nExitPolicy reject *:*\n', stderr: '' };
     if (args.includes('test')) return healthyProbe();
     if (args.includes('config')) return { ok: true, code: 0, stdout: 'postgres_data\n', stderr: '' };
+    return healthyProbe();
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    assert.equal(url, 'http://127.0.0.1:8080/api/healthz');
+    return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+  };
+
+  try {
+    const controller = createAdminController({
+      runner,
+      probe: async () => healthyProbe(),
+      configurationProbe: () => ({ ok: true, code: 0, stdout: 'required compose configuration detected', stderr: '' })
+    });
+
+    const result = await controller.run('HEALTH_CHECK');
+    const backendCall = calls.find(([, args]) => args.includes('port') && args.includes('app'));
+
+    assert.equal(result.checks.find((check) => check.name === 'backend')?.ok, true);
+    assert.equal(backendCall?.[0], 'docker');
+    assert.deepEqual(backendCall?.[1].slice(-2), ['app', '8080']);
+    assert.equal(calls.some(([, args]) => args.includes('exec') && args.includes('app') && args.includes('node')), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('HEALTH_CHECK falls back to the controlled Docker app probe when no safe published port is available', async () => {
+  const calls = [];
+  const runner = async (file, args) => {
+    calls.push([file, args]);
+    if (args.includes('port') && args.includes('app')) return { ok: false, code: 1, stdout: '', stderr: 'no port published' };
+    if (args.includes('pg_isready')) return healthyProbe();
+    if (args.includes('ps')) return { ok: true, code: 0, stdout: 'app\npostgres\ntor\n', stderr: '' };
+    if (args.includes('grep')) return { ok: true, code: 0, stdout: 'ORPort 0\nDirPort 0\nExitPolicy reject *:*\n', stderr: '' };
+    if (args.includes('test')) return healthyProbe();
+    if (args.includes('config')) return { ok: true, code: 0, stdout: 'postgres_data\n', stderr: '' };
+    if (args.includes('exec') && args.includes('app') && args.includes('node')) return healthyProbe();
     return healthyProbe();
   };
   const controller = createAdminController({
@@ -168,18 +207,19 @@ test('HEALTH_CHECK uses the controlled Docker app probe by default', async () =>
   });
 
   const result = await controller.run('HEALTH_CHECK');
-  const backendCall = calls.find(([, args]) => args.includes('exec') && args.includes('app') && args.includes('node'));
+  const backendFallback = calls.find(([, args]) => args.includes('exec') && args.includes('app') && args.includes('node'));
 
   assert.equal(result.checks.find((check) => check.name === 'backend')?.ok, true);
-  assert.equal(backendCall?.[0], 'docker');
-  assert.equal(backendCall?.[1].at(-2), '-e');
-  assert.match(backendCall?.[1].at(-1) ?? '', /127\.0\.0\.1:8080\/api\/healthz/);
+  assert.equal(backendFallback?.[0], 'docker');
+  assert.equal(backendFallback?.[1].at(-2), '-e');
+  assert.match(backendFallback?.[1].at(-1) ?? '', /127\.0\.0\.1:8080\/api\/healthz/);
 });
 
 test('HEALTH_CHECK exposes only sanitized backend HTTP diagnostics', async () => {
   const calls = [];
   const runner = async (file, args) => {
     calls.push([file, args]);
+    if (args.includes('port') && args.includes('app')) return { ok: true, code: 0, stdout: '127.0.0.1:8080\n', stderr: '' };
     if (args.includes('pg_isready')) return healthyProbe();
     if (args.includes('ps')) return { ok: true, code: 0, stdout: 'app\npostgres\ntor\n', stderr: '' };
     if (args.includes('grep')) return { ok: true, code: 0, stdout: 'ORPort 0\nDirPort 0\nExitPolicy reject *:*\n', stderr: '' };
@@ -190,19 +230,26 @@ test('HEALTH_CHECK exposes only sanitized backend HTTP diagnostics', async () =>
     }
     return healthyProbe();
   };
-  const controller = createAdminController({
-    runner,
-    probe: async () => healthyProbe(),
-    configurationProbe: () => ({ ok: true, code: 0, stdout: 'required compose configuration detected', stderr: '' })
-  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ status: 503 }), { status: 503, statusText: 'Service Unavailable' });
 
-  const result = await controller.run('HEALTH_CHECK');
-  const backend = result.checks.find((check) => check.name === 'backend');
+  try {
+    const controller = createAdminController({
+      runner,
+      probe: async () => healthyProbe(),
+      configurationProbe: () => ({ ok: true, code: 0, stdout: 'required compose configuration detected', stderr: '' })
+    });
 
-  assert.equal(result.ok, false);
-  assert.equal(backend?.ok, false);
-  assert.equal(backend?.code, 1);
-  assert.match(backend?.stdout ?? '', /"status":503/);
-  assert.doesNotMatch(backend?.stdout ?? '', /password|secret|token|authorization/i);
-  assert.doesNotMatch(backend?.stderr ?? '', /password|secret|token|authorization/i);
+    const result = await controller.run('HEALTH_CHECK');
+    const backend = result.checks.find((check) => check.name === 'backend');
+
+    assert.equal(result.ok, false);
+    assert.equal(backend?.ok, false);
+    assert.equal(backend?.code, 503);
+    assert.match(backend?.stdout ?? '', /"status":503/);
+    assert.doesNotMatch(backend?.stdout ?? '', /password|secret|token|authorization/i);
+    assert.doesNotMatch(backend?.stderr ?? '', /password|secret|token|authorization/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
