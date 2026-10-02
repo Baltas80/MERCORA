@@ -1,6 +1,6 @@
 # Admin Console implementation status
 
-Updated 2026-09-29.
+Updated 2026-10-02.
 
 ## Implemented / verified in repository
 
@@ -20,8 +20,12 @@ Updated 2026-09-29.
 - PostgreSQL persistent-volume configuration is checked through the active Compose configuration.
 - Custody asset contract is restricted to BTC and XMR.
 - Architecture documentation defines the eight console tabs and the custody/emergency boundary.
-- Windows service-manager boundary is now implemented as an allowlisted PowerShell adapter for installations where Docker is not the execution boundary. It accepts only `START`, `STOP`, `RESTART`, `STATUS`, `HEALTH_CHECK`, `RECOVER` and only the fixed `backend`, `postgres`, `tor` service identities.
+- Windows service-manager boundary is implemented as an allowlisted PowerShell adapter for installations where Docker is not the execution boundary. It accepts only `START`, `STOP`, `RESTART`, `STATUS`, `HEALTH_CHECK`, `RECOVER` and only the fixed `backend`, `postgres`, `tor` service identities.
 - Windows service-manager tests statically verify the action/service allowlists, absence of arbitrary command execution primitives, targeted recovery ordering and the fixed loopback backend health endpoint.
+- Backend health probing no longer assumes a single host port. The Admin Control API first asks Docker Compose for the `app` service's published port, accepts only loopback bindings, probes `/api/healthz` through that published local URL, and falls back to a fixed in-container health probe if no safe published port is available.
+- Backend probe diagnostics expose only HTTP status metadata and sanitized transport errors; response bodies are not surfaced by the desktop client.
+- Unit coverage now verifies both the published-port path and the controlled in-container fallback path.
+- Windows Admin Console packaging has been exercised by CI through the Tauri build workflow; the latest published installer is `admin-console-v0.1.129` from commit `1e72dd8258a2e61849c7e2961c4847345c84741f`.
 
 ## Pending before production sign-off
 
@@ -34,7 +38,7 @@ Updated 2026-09-29.
 - Fresh WebAuthn/TOTP step-up enforcement for emergency actions; the login TOTP challenge is implemented, but emergency-action step-up is not yet complete.
 - Admin Control API integration with the Windows service-manager adapter and verification against the actual installed Windows service names.
 - End-to-end tests against a real PostgreSQL/Tor test environment.
-- Windows packaging and installer verification.
+- A fresh Windows installer built from the current `master` commit after the latest server-side health-probe hardening; the existing `v0.1.129` installer predates those server-side changes because the Admin Console workflow is scoped to `admin-console/**`.
 
 ## Secret policy
 
@@ -42,4 +46,4 @@ The console must never return private keys, seeds, mnemonics, wallet credentials
 
 ## Verification note
 
-Repository-level inspection and implementation were performed against the current `master` branch. The Admin Control tests cover targeted recovery, dependency blocking, ordered verification and diagnostic sanitisation. New Tauri tests cover extraction of rotated session cookies without retaining cookie attributes. The new Windows service-manager test suite is repository-level/static and does not require privileged Windows services. Runtime execution against the local Docker/PostgreSQL/Tor stack, Windows service installation, physical packaging and end-to-end recovery remain pending because the repository connector cannot start that local environment.
+Repository-level inspection and implementation were performed against the current `master` branch. The Admin Control tests cover targeted recovery, dependency blocking, ordered verification, diagnostic sanitisation, the published local backend health path and the controlled in-container fallback. New Tauri tests cover extraction of rotated session cookies without retaining cookie attributes. The Windows service-manager test suite is repository-level/static and does not require privileged Windows services. Runtime execution against the local Docker/PostgreSQL/Tor stack, Windows service installation, physical packaging and end-to-end recovery remain pending because the repository connector cannot start that local environment.
