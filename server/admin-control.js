@@ -14,10 +14,12 @@ const COMPOSE_BASE = Object.freeze(['compose', '-f', 'docker-compose.yml']);
 const ONION_COMPOSE = 'docker-compose.onion.yml';
 const ALLOWED_SERVICES = new Set(['app', 'postgres', 'tor']);
 const REQUIRED_SERVICES = Object.freeze(['app', 'postgres', 'tor']);
+const BACKEND_CONTAINER_PORT = '8080';
+const BACKEND_HEALTH_PATH = '/api/healthz';
 const BACKEND_HEALTH_COMMAND = Object.freeze([
   'node',
   '-e',
-  "fetch('http://127.0.0.1:8080/api/healthz').then(async (response) => { console.log(JSON.stringify({ status: response.status, statusText: response.statusText, ok: response.ok })); process.exit(response.ok ? 0 : 1); }).catch((error) => { console.error(`${error.name}: ${error.message}`); process.exit(1); })"
+  `fetch('http://127.0.0.1:${BACKEND_CONTAINER_PORT}${BACKEND_HEALTH_PATH}').then(async (response) => { console.log(JSON.stringify({ status: response.status, statusText: response.statusText, ok: response.ok })); process.exit(response.ok ? 0 : 1); }).catch((error) => { console.error(`${error.name}: ${error.message}${error.cause?.code ? ` (${error.cause.code})` : ''}`); process.exit(1); })`
 ]);
 const SENSITIVE_LINE = /^\s*(password|secret|token|seed|private.?key|mnemonic|authorization)\s*[:=]/i;
 const CREDENTIAL_URL = /([a-z][a-z\d+.-]*:\/\/[^\s:/@]+:)[^\s/@]+(@)/gi;
@@ -314,7 +316,41 @@ function targetHealthyFromChecks(health, target) {
   return Boolean(checks.services?.appRunning && checks.backend?.ok);
 }
 
+function parsePublishedBackendUrl(stdout = '') {
+  const line = String(stdout).trim().split(/\r?\n/).find(Boolean);
+  if (!line) return null;
+  const match = line.match(/^(?:https?:\/\/)?(?:\[([^\]]+)\]|([^:]+)):(\d+)$/);
+  if (!match) return null;
+  const host = match[1] ?? match[2];
+  const port = match[3];
+  const localHosts = new Set(['127.0.0.1', 'localhost', '0.0.0.0', '::', '::1']);
+  if (!localHosts.has(host)) return null;
+  return `http://127.0.0.1:${port}${BACKEND_HEALTH_PATH}`;
+}
+
+async function probeBackendUrl(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+    return {
+      ok: response.ok,
+      code: response.status,
+      stdout: JSON.stringify({ status: response.status, statusText: response.statusText, ok: response.ok, url }),
+      stderr: ''
+    };
+  } catch (error) {
+    const cause = error?.cause?.code ? ` (${error.cause.code})` : '';
+    return { ok: false, code: null, stdout: '', stderr: `${error?.name ?? 'Error'}: ${error?.message ?? 'backend unavailable'}${cause}` };
+  }
+}
+
 async function backendProbe(runner, cwd) {
+  const publishedPort = await runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'port', 'app', BACKEND_CONTAINER_PORT], { cwd });
+  const publishedUrl = publishedPort.ok ? parsePublishedBackendUrl(publishedPort.stdout) : null;
+  if (publishedUrl) {
+    const publishedResult = await probeBackendUrl(publishedUrl);
+    if (publishedResult.ok) return publishedResult;
+  }
+
   return runner('docker', [...COMPOSE_BASE, '-f', ONION_COMPOSE, 'exec', '-T', 'app', ...BACKEND_HEALTH_COMMAND], { cwd });
 }
 
